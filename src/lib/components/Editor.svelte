@@ -22,9 +22,6 @@
 	let container: HTMLDivElement;
 	let view: EditorView | null = null;
 	let lastNoteId = '';
-	// Guard: when the editor's own keystroke updates value, suppress the
-	// $effect that would re-dispatch a full-doc replace (which resets caret).
-	let syncingFromEditor = false;
 
 	// Wikilink regex: [[Title]] or [[Title|Alias]]
 	const wikilinkRegex = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
@@ -141,10 +138,8 @@
 			darkTheme,
 			EditorView.updateListener.of((update: any) => {
 				if (update.docChanged) {
-					syncingFromEditor = true;
-					const newValue = update.state.doc.toString();
-					value = newValue;
-					onChange?.(newValue);
+					// Only emit outbound — parent owns the value prop.
+					onChange?.(update.state.doc.toString());
 				}
 			}),
 			keymap.of(defaultKeymap),
@@ -159,14 +154,8 @@
 	}
 
 	$effect(() => {
-		// Guard: if the value change originated from the editor's own keystroke,
-		// skip the re-dispatch (which would reset the caret). Clear flag and bail.
-		if (syncingFromEditor) {
-			syncingFromEditor = false;
-			return;
-		}
-
-		// Full reset when switching notes (different id)
+		// Only react to note switches. While the same note is open, the editor
+		// owns its document; typing flows out via onChange to the parent.
 		if (noteId !== lastNoteId) {
 			lastNoteId = noteId;
 			if (view) {
@@ -177,11 +166,6 @@
 			} else {
 				createEditor();
 			}
-		} else if (view && value !== view.state.doc.toString()) {
-			// External change for current note (rare with drafts)
-			view.dispatch({
-				changes: { from: 0, to: view.state.doc.length, insert: value },
-			});
 		}
 	});
 

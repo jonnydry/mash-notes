@@ -142,7 +142,7 @@
 		});
 		addNoteToSearch(note);
 		notes = [note, ...notes];
-		selectedId = note.id;
+		selectNote(note.id);
 		// Focus title
 		setTimeout(() => {
 			const titleInput = document.getElementById('note-title') as HTMLInputElement;
@@ -151,6 +151,14 @@
 	}
 
 	function selectNote(id: string) {
+		// Set drafts synchronously so Editor receives correct value same tick as noteId
+		const note = notes.find(n => n.id === id);
+		if (note) {
+			draftTitle = note.title;
+			draftBody = note.body;
+			draftFolder = note.folder;
+			draftTags = [...note.tags];
+		}
 		selectedId = id;
 	}
 
@@ -167,7 +175,7 @@
 			notes = [target, ...notes];
 		}
 
-		selectedId = target.id;
+		selectNote(target.id);
 	}
 
 	function scheduleAutoSave() {
@@ -225,7 +233,7 @@
 		await deleteNote(selectedId);
 		removeNoteFromSearch(selectedId);
 		notes = notes.filter(n => n.id !== selectedId);
-		selectedId = notes.length > 0 ? notes[0].id : null;
+		if (notes.length > 0) selectNote(notes[0].id); else selectedId = null;
 	}
 
 	function setFilter(type: 'folder' | 'tag' | 'pinned', value?: string) {
@@ -608,7 +616,7 @@
 						<div class="mt-1 border-t border-zinc-800 pt-1 text-[10px] text-zinc-500 px-3">Jump to note</div>
 						{#each notes.filter((n: Note) => n.title.toLowerCase().includes(paletteQuery.toLowerCase()) || n.body.toLowerCase().includes(paletteQuery.toLowerCase())).slice(0, 6) as note}
 							<button
-								onclick={() => { selectedId = note.id; showPalette = false; }}
+								onclick={() => { selectNote(note.id); showPalette = false; }}
 								class="flex w-full items-center justify-between rounded px-3 py-1.5 text-left hover:bg-zinc-800 text-xs"
 							>
 								<span class="truncate">{note.title}</span>
