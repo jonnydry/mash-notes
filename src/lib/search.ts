@@ -140,3 +140,12 @@ export function searchNotes(query: string, filters: SearchFilters = {}): SearchR
 export function getSearchIndexSize(): number {
 	return miniSearch.documentCount;
 }
+
+/**
+ * Test-only: reset the MiniSearch singleton and re-allow initialization.
+ * Production code should never call this.
+ */
+export function resetSearchIndexForTests(): void {
+	miniSearch.removeAll();
+	isInitialized = false;
+}
