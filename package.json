@@ -3,7 +3,7 @@
 	"private": true,
 	"version": "0.1.0",
 	"type": "module",
-	"description": "Mash — Cute, fast, minimal web notes. Mash your ideas together in a reliable place. Open source Obsidian-light PWA.",
+	"description": "Mash \u2014 Cute, fast, minimal web notes. Mash your ideas together in a reliable place. Open source Obsidian-light PWA.",
 	"scripts": {
 		"dev": "vite dev",
 		"build": "vite build",
@@ -14,7 +14,8 @@
 		"lint": "prettier --check . && eslint .",
 		"format": "prettier --write .",
 		"test:unit": "vitest",
-		"test": "npm run test:unit -- --run"
+		"test": "npm run test:unit -- --run",
+		"ci": "npm run check && npm run build && npm run test"
 	},
 	"devDependencies": {
 		"@eslint/compat": "^2.0.4",
