@@ -67,10 +67,28 @@ export async function initSearchIndex(): Promise<void> {
 // INCREMENTAL UPDATES — called by the UI layer after DB mutations
 // =============================================================================
 
+/**
+ * Normalize text for consistent indexing and querying:
+ * - NFC Unicode normalization (canonical decomposition + composition)
+ * - Strip HTML tags to spaces (prevents word-merging across tag boundaries)
+ * - Remove zero-width / BOM characters that silently break matching
+ * - Collapse whitespace and trim
+ */
+function normalizeForSearch(s: string): string {
+	return s
+		.normalize('NFC')
+		.replace(/<[^>]+>/g, ' ')          // HTML tags → space
+		.replace(/[\u200B-\u200D\uFEFF]/g, '') // zero-width + BOM
+		.replace(/\s+/g, ' ')
+		.trim();
+}
+
 function prepareDocForIndex(note: Note) {
 	return {
 		...note,
-		tagsJoined: note.tags.join(' '),
+		title: normalizeForSearch(note.title),
+		body: normalizeForSearch(note.body),
+		tagsJoined: normalizeForSearch(note.tags.join(' ')),
 	};
 }
 
@@ -109,7 +127,7 @@ export function searchNotes(query: string, filters: SearchFilters = {}): SearchR
 		return [];
 	}
 
-	let results = miniSearch.search(query.trim() || '');
+	let results = miniSearch.search(normalizeForSearch(query.trim() || ''));
 
 	if (filters.folder) {
 		const folderPrefix = filters.folder;
