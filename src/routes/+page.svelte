@@ -62,10 +62,18 @@
 	let showPalette = $state(false);
 	let paletteQuery = $state('');
 	let paletteInput = $state<HTMLInputElement | null>(null);
+	let paletteHighlight = $state(0);
 
 	$effect(() => {
 		if (!showPalette) return;
+		paletteHighlight = 0;
 		void tick().then(() => paletteInput?.focus());
+	});
+
+	// Reset highlight when query changes
+	$effect(() => {
+		paletteQuery;
+		paletteHighlight = 0;
 	});
 	// Local draft for editing without constant writes
 	let draftTitle = $state('');
@@ -332,6 +340,41 @@
 			showPalette = false;
 		}, shortcut: '' },
 	];
+
+	function handlePaletteKeydown(e: KeyboardEvent): void {
+		const commands = paletteActions.filter(a =>
+			a.label.toLowerCase().includes(paletteQuery.toLowerCase())
+		);
+		const noteJumps = paletteQuery.length > 1
+			? notes.filter((n: Note) =>
+				n.title.toLowerCase().includes(paletteQuery.toLowerCase()) ||
+				n.body.toLowerCase().includes(paletteQuery.toLowerCase())
+			).slice(0, 6)
+			: [];
+		const total = commands.length + noteJumps.length;
+		if (total === 0) return;
+
+		if (e.key === 'ArrowDown') {
+			e.preventDefault();
+			paletteHighlight = Math.min(paletteHighlight + 1, total - 1);
+		} else if (e.key === 'ArrowUp') {
+			e.preventDefault();
+			paletteHighlight = Math.max(paletteHighlight - 1, 0);
+		} else if (e.key === 'Enter') {
+			e.preventDefault();
+		if (paletteHighlight < commands.length) {
+				commands[paletteHighlight].action();
+				showPalette = false;
+			} else {
+				const note = noteJumps[paletteHighlight - commands.length];
+				if (note) {
+					selectNote(note.id);
+					showPalette = false;
+				}
+			}
+		}
+	}
+
 
 	function handleVisibilityChange(): void {
 		if (document.visibilityState === 'hidden') flushPendingSave();
@@ -661,13 +704,14 @@
 						bind:value={paletteQuery}
 						placeholder="Type a command..."
 						class="w-full bg-transparent text-sm outline-none placeholder-zinc-500"
+						onkeydown={handlePaletteKeydown}
 					/>
 				</div>
 				<div class="max-h-80 overflow-auto p-1 text-sm">
-					{#each paletteActions.filter(a => a.label.toLowerCase().includes(paletteQuery.toLowerCase())) as action}
+					{#each paletteActions.filter(a => a.label.toLowerCase().includes(paletteQuery.toLowerCase())) as action, i}
 						<button
 							onclick={action.action}
-							class="flex w-full items-center justify-between rounded px-3 py-2 text-left hover:bg-zinc-800"
+							class="flex w-full items-center justify-between rounded px-3 py-2 text-left hover:bg-zinc-800 {i === paletteHighlight ? 'bg-zinc-800' : ''}"
 						>
 							<span>{action.label}</span>
 							<span class="text-xs text-zinc-500">{action.shortcut}</span>
@@ -677,10 +721,10 @@
 					<!-- Quick note jump from palette -->
 					{#if paletteQuery.length > 1}
 						<div class="mt-1 border-t border-zinc-800 pt-1 text-[10px] text-zinc-500 px-3">Jump to note</div>
-						{#each notes.filter((n: Note) => n.title.toLowerCase().includes(paletteQuery.toLowerCase()) || n.body.toLowerCase().includes(paletteQuery.toLowerCase())).slice(0, 6) as note}
+						{#each notes.filter((n: Note) => n.title.toLowerCase().includes(paletteQuery.toLowerCase()) || n.body.toLowerCase().includes(paletteQuery.toLowerCase())).slice(0, 6) as note, j}
 							<button
 								onclick={() => { selectNote(note.id); showPalette = false; }}
-								class="flex w-full items-center justify-between rounded px-3 py-1.5 text-left hover:bg-zinc-800 text-xs"
+								class="flex w-full items-center justify-between rounded px-3 py-1.5 text-left hover:bg-zinc-800 text-xs {j + paletteActions.filter(a => a.label.toLowerCase().includes(paletteQuery.toLowerCase())).length === paletteHighlight ? 'bg-zinc-800' : ''}"
 							>
 								<span class="truncate">{note.title}</span>
 								<span class="text-zinc-500 text-[10px]">{note.folder}</span>
