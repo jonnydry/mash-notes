@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import { createNote, updateNote, deleteNote, getActiveNotes, syncNoteUpdate } from '$lib/db';
+	import { onMount, tick } from 'svelte';
+	import { createNote, deleteNote, getActiveNotes, syncNoteUpdate } from '$lib/db';
 	import { initSearchIndex, searchNotes, updateNoteInSearch, addNoteToSearch, removeNoteFromSearch } from '$lib/search';
 	import type { Note } from '$lib/types';
 	import { Plus, Search, Trash2, Pin } from 'lucide-svelte';
@@ -61,6 +61,12 @@
 	let saveStatus = $state<'saved' | 'saving' | ''>('');
 	let showPalette = $state(false);
 	let paletteQuery = $state('');
+	let paletteInput = $state<HTMLInputElement | null>(null);
+
+	$effect(() => {
+		if (!showPalette) return;
+		void tick().then(() => paletteInput?.focus());
+	});
 	// Local draft for editing without constant writes
 	let draftTitle = $state('');
 	let draftBody = $state('');
@@ -589,15 +595,27 @@
 
 	<!-- Simple Command Palette -->
 	{#if showPalette}
-		<div class="fixed inset-0 z-50 flex items-start justify-center pt-[20vh] bg-black/60" onclick={() => showPalette = false}>
-			<div role="dialog" aria-modal="true" aria-label="Command palette" class="w-full max-w-md rounded-xl border border-zinc-800 bg-zinc-900 shadow-2xl" onclick={(e) => e.stopImmediatePropagation()}>
+		<div
+			class="fixed inset-0 z-50 flex items-start justify-center pt-[20vh] bg-black/60"
+			role="presentation"
+			tabindex="-1"
+			onclick={(e) => { if (e.target === e.currentTarget) showPalette = false; }}
+			onkeydown={(e) => { if (e.key === 'Escape') showPalette = false; }}
+		>
+			<div
+				role="dialog"
+				aria-modal="true"
+				tabindex="-1"
+				aria-label="Command palette"
+				class="relative z-10 w-full max-w-md rounded-xl border border-zinc-800 bg-zinc-900 shadow-2xl"
+			>
 				<div class="border-b border-zinc-800 p-3">
 					<input
+						bind:this={paletteInput}
 						type="text"
 						bind:value={paletteQuery}
 						placeholder="Type a command..."
 						class="w-full bg-transparent text-sm outline-none placeholder-zinc-500"
-						autofocus
 					/>
 				</div>
 				<div class="max-h-80 overflow-auto p-1 text-sm">
