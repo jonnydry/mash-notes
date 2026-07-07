@@ -413,7 +413,7 @@
 					placeholder="Search notes... (press /)"
 					bind:value={searchQuery}
 					oninput={handleGlobalSearch}
-					class="w-full rounded-lg border border-zinc-800 bg-zinc-900 py-1.5 pl-9 pr-4 text-sm placeholder-zinc-500 focus:border-zinc-700 focus:outline-none"
+					class="w-full rounded-lg border border-zinc-800 bg-zinc-900 py-1.5 pl-9 pr-4 text-sm placeholder-zinc-500 focus:border-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-600 focus-visible:border-zinc-600"
 				/>
 			</div>
 		</div>
@@ -421,7 +421,7 @@
 		<div class="flex items-center gap-2 text-xs text-zinc-500">
 			<button
 				onclick={handleNewNote}
-				class="flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-sm font-medium text-zinc-950 transition hover:bg-zinc-200 active:bg-zinc-300"
+				class="flex items-center gap-1.5 rounded-lg bg-zinc-100 px-3 py-1.5 text-sm font-medium text-zinc-950 transition hover:bg-white active:bg-zinc-200"
 			>
 				<Plus class="h-4 w-4" />
 				New
@@ -518,10 +518,10 @@
 						{#snippet children(note)}
 							<button
 							    onclick={() => selectNote(note.id)}
-							    class="group flex w-full flex-col border-b border-zinc-800 px-3 py-2.5 text-left hover:bg-zinc-900/60 h-full transition-colors {selectedId === note.id ? 'bg-zinc-900' : ''}"
+							    class="group flex w-full flex-col border-b border-zinc-800 px-3 py-2.5 text-left hover:bg-zinc-900/60 h-full transition-colors {selectedId === note.id ? 'bg-zinc-900 border-l-2 border-l-zinc-500/70' : ''}"
 							>
 							    <div class="flex items-start justify-between gap-2">
-							        <div class="flex-1 truncate font-medium text-sm pr-1 group-hover:text-white transition-colors">
+							        <div class="flex-1 truncate font-medium text-sm pr-1 group-hover:text-white transition-colors {selectedId === note.id ? 'text-zinc-100' : ''}">
 							            {note.title}
 							        </div>
 							        {#if note.pinned}
