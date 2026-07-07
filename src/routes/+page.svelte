@@ -437,14 +437,14 @@
 			<div class="mb-4">
 				<button
 					onclick={() => clearFilter()}
-					class="mb-1 flex w-full items-center gap-2 rounded px-2 py-1 text-left hover:bg-zinc-900"
+					class="mb-1 flex w-full items-center gap-2 rounded px-2 py-1 text-left hover:bg-zinc-900 focus-visible:ring-2 focus-visible:ring-zinc-600 focus-visible:ring-inset"
 					class:bg-zinc-900={currentFilter.type === null && !searchQuery}
 				>
 					All Notes
 				</button>
 				<button
 					onclick={() => setFilter('pinned')}
-					class="mb-1 flex w-full items-center gap-2 rounded px-2 py-1 text-left hover:bg-zinc-900"
+					class="mb-1 flex w-full items-center gap-2 rounded px-2 py-1 text-left hover:bg-zinc-900 focus-visible:ring-2 focus-visible:ring-zinc-600 focus-visible:ring-inset"
 					class:bg-zinc-900={currentFilter.type === 'pinned'}
 				>
 					<Pin class="h-3.5 w-3.5" /> Pinned
@@ -458,7 +458,7 @@
 					{@const depth = (folder || '').split('/').length - 1}
 					<button
 						onclick={() => setFilter('folder', folder || '')}
-						class="mb-px flex w-full items-center gap-2 truncate rounded px-2 py-1 text-left hover:bg-zinc-900"
+						class="mb-px flex w-full items-center gap-2 truncate rounded px-2 py-1 text-left hover:bg-zinc-900 focus-visible:ring-2 focus-visible:ring-zinc-600 focus-visible:ring-inset"
 						class:bg-zinc-900={currentFilter.type === 'folder' && currentFilter.value === (folder || '')}
 						class:text-white={currentFilter.type === 'folder' && currentFilter.value === (folder || '')}
 						style="padding-left: {depth * 12 + 8}px"
@@ -477,7 +477,7 @@
 				{#each uniqueTags as tag}
 					<button
 						onclick={() => setFilter('tag', tag)}
-						class="mb-px flex w-full items-center gap-1.5 truncate rounded px-2 py-0.5 text-left text-sm hover:bg-zinc-900"
+						class="mb-px flex w-full items-center gap-1.5 truncate rounded px-2 py-0.5 text-left text-sm hover:bg-zinc-900 focus-visible:ring-2 focus-visible:ring-zinc-600 focus-visible:ring-inset"
 						class:bg-zinc-900={currentFilter.type === 'tag' && currentFilter.value === tag}
 					>
 						<span class="text-zinc-400">#</span>{tag}
@@ -574,7 +574,7 @@
 							type="text"
 							value={draftTitle}
 							oninput={handleTitleInput}
-							class="flex-1 bg-transparent text-lg font-semibold outline-none placeholder-zinc-600"
+							class="flex-1 bg-transparent text-lg font-semibold outline-none placeholder-zinc-600 focus-visible:ring-2 focus-visible:ring-zinc-600 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950"
 							placeholder="Untitled"
 						/>
 
@@ -583,7 +583,7 @@
 							type="text"
 							bind:value={draftFolder}
 							placeholder="folder"
-							class="w-28 rounded bg-zinc-900 px-2 py-0.5 text-xs placeholder-zinc-500 outline-none focus:bg-zinc-800"
+							class="w-28 rounded bg-zinc-900 px-2 py-0.5 text-xs placeholder-zinc-500 outline-none focus:bg-zinc-800 focus-visible:ring-2 focus-visible:ring-zinc-600 focus-visible:ring-offset-1 focus-visible:ring-offset-zinc-950"
 							oninput={() => {
 								if (!selectedId) return;
 								const updated = { ...selectedNote, folder: draftFolder };
@@ -600,13 +600,13 @@
 									class="flex items-center gap-1 rounded bg-zinc-900 px-2 py-0.5 text-zinc-400"
 								>
 									#{tag}
-									<button onclick={() => removeTag(tag)} class="hover:text-white">×</button>
+									<button onclick={() => removeTag(tag)} class="hover:text-white focus-visible:ring-1 focus-visible:ring-zinc-600 rounded">×</button>
 								</span>
 							{/each}
 							<input
 								type="text"
 								placeholder="add tag"
-								class="w-20 bg-transparent text-xs placeholder-zinc-600 outline-none"
+								class="w-20 bg-transparent text-xs placeholder-zinc-600 outline-none focus-visible:ring-2 focus-visible:ring-zinc-600 focus-visible:ring-offset-1 focus-visible:ring-offset-zinc-950"
 								onkeydown={(e) => {
 									if (e.key === 'Enter') {
 										const target = e.currentTarget as HTMLInputElement;
