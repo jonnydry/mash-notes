@@ -74,6 +74,7 @@
 	let draftTags = $state<string[]>([]);
 
 	let autoSaveTimeout: ReturnType<typeof setTimeout> | null = null;
+	let pendingSnap: { id: string; title: string; body: string; tags: string[]; folder: string; links: string[] } | null = null;
 
 	function extractWikilinks(body: string): string[] {
 		const links: string[] = [];
@@ -157,6 +158,8 @@
 	}
 
 	function selectNote(id: string) {
+		// Flush any pending save from the previously selected note first
+		if (selectedId && selectedId !== id) flushPendingSave();
 		// Set drafts synchronously so Editor receives correct value same tick as noteId
 		const note = notes.find(n => n.id === id);
 		if (note) {
@@ -184,37 +187,58 @@
 		selectNote(target.id);
 	}
 
+	function applyDraftSave(snap: { id: string; title: string; body: string; tags: string[]; folder: string; links: string[] }): void {
+		const changes: Partial<Note> = {
+			title: snap.title,
+			body: snap.body,
+			tags: snap.tags,
+			folder: snap.folder,
+			links: snap.links,
+		};
+		syncNoteUpdate(snap.id, changes);
+
+		const updatedSnap = { ...notes.find(n => n.id === snap.id)!, ...changes, modified: Date.now() };
+		notes = notes.map(n => n.id === snap.id ? updatedSnap : n);
+		updateNoteInSearch({ id: snap.id, ...changes }, updatedSnap);
+	}
+
 	function scheduleAutoSave() {
+		if (!selectedId) return;
 		if (autoSaveTimeout) clearTimeout(autoSaveTimeout);
 		saveStatus = 'saving';
 
-		const snapId = selectedId;
-		const snapTitle = draftTitle;
-		const snapBody = draftBody;
-		const snapTags = [...draftTags];
-		const snapFolder = draftFolder;
-		const snapLinks = extractWikilinks(snapBody);
+		// Store pending snap so flushPendingSave can issue it immediately
+		pendingSnap = {
+			id: selectedId!,
+			title: draftTitle,
+			body: draftBody,
+			tags: [...draftTags],
+			folder: draftFolder,
+			links: extractWikilinks(draftBody),
+		};
 
 		autoSaveTimeout = setTimeout(() => {
-			if (!snapId) return;
-			const changes: Partial<Note> = {
-				title: snapTitle,
-				body: snapBody,
-				tags: snapTags,
-				folder: snapFolder,
-				links: snapLinks,
-			};
-			syncNoteUpdate(snapId, changes);
-
-			const updatedSnap = { ...notes.find(n => n.id === snapId)!, ...changes, modified: Date.now() };
-			notes = notes.map(n => n.id === snapId ? updatedSnap : n);
-			updateNoteInSearch({ id: snapId, ...changes }, updatedSnap);
+			autoSaveTimeout = null;
+			if (!pendingSnap) return;
+			applyDraftSave(pendingSnap);
+			pendingSnap = null;
 
 			saveStatus = 'saved';
 			setTimeout(() => {
 				if (saveStatus === 'saved') saveStatus = '';
 			}, 1200);
 		}, 400);
+	}
+
+	function flushPendingSave(): void {
+		if (autoSaveTimeout) {
+			clearTimeout(autoSaveTimeout);
+			autoSaveTimeout = null;
+		}
+		if (pendingSnap) {
+			applyDraftSave(pendingSnap);
+			pendingSnap = null;
+		}
 	}
 
 	function handleTitleInput(e: Event) {
@@ -309,10 +333,20 @@
 		}, shortcut: '' },
 	];
 
+	function handleVisibilityChange(): void {
+		if (document.visibilityState === 'hidden') flushPendingSave();
+	}
+
 	onMount(() => {
 		loadNotes();
 		window.addEventListener('keydown', handleKeydown);
-		return () => window.removeEventListener('keydown', handleKeydown);
+		window.addEventListener('pagehide', flushPendingSave);
+		document.addEventListener('visibilitychange', handleVisibilityChange);
+		return () => {
+			window.removeEventListener('keydown', handleKeydown);
+			window.removeEventListener('pagehide', flushPendingSave);
+			document.removeEventListener('visibilitychange', handleVisibilityChange);
+		};
 	});
 </script>
 
