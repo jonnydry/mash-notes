@@ -684,7 +684,7 @@
 	<!-- Simple Command Palette -->
 	{#if showPalette}
 		<div
-			class="fixed inset-0 z-50 flex items-start justify-center pt-[20vh] bg-black/60"
+			class="fixed inset-0 z-50 flex items-start justify-center pt-[20vh] bg-black/70 backdrop-blur-sm"
 			role="presentation"
 			tabindex="-1"
 			onclick={(e) => { if (e.target === e.currentTarget) showPalette = false; }}
@@ -703,7 +703,7 @@
 						type="text"
 						bind:value={paletteQuery}
 						placeholder="Type a command..."
-						class="w-full bg-transparent text-sm outline-none placeholder-zinc-500"
+						class="w-full bg-transparent text-sm outline-none placeholder-zinc-500 focus-visible:ring-2 focus-visible:ring-zinc-600 focus-visible:border-zinc-600 rounded px-1"
 						onkeydown={handlePaletteKeydown}
 					/>
 				</div>
@@ -711,7 +711,7 @@
 					{#each paletteActions.filter(a => a.label.toLowerCase().includes(paletteQuery.toLowerCase())) as action, i}
 						<button
 							onclick={action.action}
-							class="flex w-full items-center justify-between rounded px-3 py-2 text-left hover:bg-zinc-800 {i === paletteHighlight ? 'bg-zinc-800' : ''}"
+							class="flex w-full items-center justify-between rounded px-3 py-2 text-left hover:bg-zinc-800 {i === paletteHighlight ? 'bg-zinc-800 ring-1 ring-inset ring-zinc-600/50' : ''}"
 						>
 							<span>{action.label}</span>
 							<span class="text-xs text-zinc-500">{action.shortcut}</span>
@@ -724,7 +724,7 @@
 						{#each notes.filter((n: Note) => n.title.toLowerCase().includes(paletteQuery.toLowerCase()) || n.body.toLowerCase().includes(paletteQuery.toLowerCase())).slice(0, 6) as note, j}
 							<button
 								onclick={() => { selectNote(note.id); showPalette = false; }}
-								class="flex w-full items-center justify-between rounded px-3 py-1.5 text-left hover:bg-zinc-800 text-xs {j + paletteActions.filter(a => a.label.toLowerCase().includes(paletteQuery.toLowerCase())).length === paletteHighlight ? 'bg-zinc-800' : ''}"
+								class="flex w-full items-center justify-between rounded px-3 py-1.5 text-left hover:bg-zinc-800 text-xs {j + paletteActions.filter(a => a.label.toLowerCase().includes(paletteQuery.toLowerCase())).length === paletteHighlight ? 'bg-zinc-800 ring-1 ring-inset ring-zinc-600/50' : ''}"
 							>
 								<span class="truncate">{note.title}</span>
 								<span class="text-zinc-500 text-[10px]">{note.folder}</span>
@@ -736,7 +736,7 @@
 						<div class="px-3 py-2 text-zinc-500 text-sm">No matching commands</div>
 					{/if}
 				</div>
-				<div class="border-t border-zinc-800 p-2 text-[10px] text-zinc-500 text-center">
+				<div class="border-t border-zinc-800 p-2 text-[10px] text-zinc-400 text-center tracking-wide">
 					↑↓ to navigate • Enter to run • Esc to close
 				</div>
 			</div>
