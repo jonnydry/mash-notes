@@ -419,10 +419,21 @@
 			</div>
 
 			{#if isLoading}
-				<div class="p-4 text-sm text-zinc-500 flex-1">Loading...</div>
+				<div class="flex flex-1 flex-col items-center justify-center gap-2 text-zinc-600">
+					<div class="h-5 w-5 animate-spin rounded-full border-2 border-zinc-700 border-t-zinc-400"></div>
+					<span class="text-xs">Loading notes…</span>
+				</div>
 			{:else if filteredNotes.length === 0}
-				<div class="p-4 text-sm text-zinc-500 flex-1">
-					{searchQuery ? 'No matches.' : 'No notes yet. Create one!'}
+				<div class="flex flex-1 flex-col items-center justify-center gap-3 p-4 text-zinc-500">
+					<span class="text-sm">{searchQuery ? 'No matches.' : 'No notes yet.'}</span>
+					{#if !searchQuery && currentFilter.type === null}
+						<button
+							onclick={handleNewNote}
+							class="rounded-lg bg-zinc-800 px-3 py-1.5 text-xs font-medium text-zinc-300 transition hover:bg-zinc-700"
+						>
+							Create your first note
+						</button>
+					{/if}
 				</div>
 			{:else}
 				<div class="flex-1 overflow-hidden">
