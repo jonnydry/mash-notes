@@ -505,7 +505,10 @@
 				</div>
 			{:else if filteredNotes.length === 0}
 				<div class="flex flex-1 flex-col items-center justify-center gap-3 p-4 text-zinc-500">
-					<span class="text-sm">{searchQuery ? 'No matches.' : 'No notes yet.'}</span>
+					<img src="/icons/mash-monochrome-white.svg" alt="" class="h-6 w-6 opacity-40" />
+					<span class="text-sm">
+						{searchQuery ? 'No matches for your search.' : 'Your notes will show up here.'}
+					</span>
 					{#if !searchQuery && currentFilter.type === null}
 						<button
 							onclick={handleNewNote}
@@ -670,11 +673,12 @@
 			{:else}
 				<div class="flex flex-1 items-center justify-center text-zinc-500">
 					<div class="text-center">
-						<div class="mb-2 text-2xl">No note selected</div>
-						<p class="text-sm">Create a new note or select one from the list.</p>
+						<img src="/icons/mash-monochrome-white.svg" alt="" class="mx-auto mb-3 h-8 w-8 opacity-40" />
+						<div class="mb-1 text-xl">No note selected</div>
+						<p class="text-sm text-zinc-500">Pick a note from the list or create a new one.</p>
 						<button
 							onclick={handleNewNote}
-							class="mt-4 rounded bg-zinc-800 px-4 py-2 text-sm hover:bg-zinc-700"
+							class="mt-4 rounded-lg bg-zinc-800 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-700"
 						>
 							Create new note
 						</button>
