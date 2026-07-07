@@ -107,6 +107,12 @@
 		},
 		'.cm-content': {
 			caretColor: '#a1a1aa',
+			maxWidth: '48rem',
+			margin: '0 auto',
+			padding: '2rem 1rem',
+			lineHeight: '1.68',
+			fontSize: '1.0625rem',
+			letterSpacing: '0.01em',
 		},
 		'.cm-gutters': {
 			backgroundColor: '#09090b',
@@ -115,16 +121,18 @@
 		},
 		'.cm-wikilink': {
 			backgroundColor: '#27272a',
-			color: '#60a5fa',
-			padding: '1px 6px',
+			color: '#93c5fd',
+			padding: '1px 5px',
 			borderRadius: '3px',
 			cursor: 'pointer',
 			fontWeight: '500',
-			border: '1px solid #3b82f6',
+			border: '1px solid #3f4f6b',
+			transition: 'border-color 120ms ease, background-color 120ms ease',
 		},
 		'.cm-wikilink:hover': {
-			backgroundColor: '#3b82f6',
-			color: 'white',
+			backgroundColor: '#3f4f6b',
+			borderColor: '#64748b',
+			color: '#e0f0fe',
 		},
 	});
 
@@ -185,9 +193,7 @@
 		height: 100%;
 		font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 	}
-	:global(.cm-content) {
-		padding: 16px;
-	}
+	/* .cm-content padding is now controlled by the darkTheme in EditorView.theme for consistent sanctuary layout */
 	:global(.cm-wikilink) {
 		display: inline-block;
 	}
