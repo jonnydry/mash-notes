@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { createNote, updateNote, deleteNote, getActiveNotes, syncNoteUpdate } from '$lib/db';
-	import { initSearchIndex, searchNotes, updateNoteInSearch } from '$lib/search';
+	import { initSearchIndex, searchNotes, updateNoteInSearch, addNoteToSearch, removeNoteFromSearch } from '$lib/search';
 	import type { Note } from '$lib/types';
 	import { Plus, Search, Trash2, Pin } from 'lucide-svelte';
 	import Editor from '$lib/components/Editor.svelte';
@@ -14,34 +14,35 @@
 
 	let selectedNote = $derived(notes.find(n => n.id === selectedId) ?? null);
 	let filteredNotes = $derived.by(() => {
+		let list = [...notes];
+
+		// Match basic structural filters first (AND logic)
 		list = list.filter(n => {
-		    // Match basic structural filters first (AND logic)
-		    if (currentFilter.type === 'pinned') return n.pinned === 1;
-		    if (currentFilter.type === 'folder' && currentFilter.value) {
-		        return n.folder === currentFilter.value || n.folder.startsWith(currentFilter.value + '/');
-		    }
-		    if (currentFilter.type === 'tag' && currentFilter.value) {
-		        return n.tags.includes(currentFilter.value);
-		    }
-		    return true;
+			if (currentFilter.type === 'pinned') return n.pinned === 1;
+			if (currentFilter.type === 'folder' && currentFilter.value) {
+				return n.folder === currentFilter.value || n.folder.startsWith(currentFilter.value + '/');
+			}
+			if (currentFilter.type === 'tag' && currentFilter.value) {
+				return n.tags.includes(currentFilter.value);
+			}
+			return true;
 		});
 
 		// Apply text search on the already-filtered list
 		if (searchQuery.trim()) {
-		    const results = searchNotes(searchQuery, {
-		        folder: currentFilter.type === 'folder' ? currentFilter.value : undefined,
-		        tags: currentFilter.type === 'tag' && currentFilter.value ? [currentFilter.value] : undefined
-		    });
-		    const idSet = new Set(results.map(r => r.id));
-		    list = list.filter(n => idSet.has(n.id));
+			const results = searchNotes(searchQuery, {
+				folder: currentFilter.type === 'folder' ? currentFilter.value : undefined,
+				tags: currentFilter.type === 'tag' && currentFilter.value ? [currentFilter.value] : undefined
+			});
+			const idSet = new Set(results.map(r => r.id));
+			list = list.filter(n => idSet.has(n.id));
 		}
 
 		// Final Sort: Pinned first, then most recent modified
 		list.sort((a, b) => {
-		    if (a.pinned !== b.pinned) return b.pinned - a.pinned;
-		    return b.modified - a.modified;
+			if (a.pinned !== b.pinned) return b.pinned - a.pinned;
+			return b.modified - a.modified;
 		});
-		}
 		return list;
 	});
 
@@ -50,8 +51,8 @@
 
 	let backlinks = $derived.by(() => {
 		if (!selectedNote) return [];
-		return notes.filter(n => 
-			n.id !== selectedNote.id && 
+		return notes.filter(n =>
+			n.id !== selectedNote.id &&
 			n.links?.some(l => l.toLowerCase() === selectedNote.title.toLowerCase())
 		);
 	});
@@ -60,7 +61,6 @@
 	let saveStatus = $state<'saved' | 'saving' | ''>('');
 	let showPalette = $state(false);
 	let paletteQuery = $state('');
-
 	// Local draft for editing without constant writes
 	let draftTitle = $state('');
 	let draftBody = $state('');
@@ -71,7 +71,7 @@
 
 	function extractWikilinks(body: string): string[] {
 		const links: string[] = [];
-		const regex = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
+		const regex = /\[\[([^|]+)(?:\|([^\]]+))?\]\]/g;
 		let match;
 		while ((match = regex.exec(body)) !== null) {
 			const title = match[1].trim();
@@ -81,8 +81,6 @@
 		}
 		return links;
 	}
-
-
 
 	$effect(() => {
 		if (selectedNote) {
@@ -101,31 +99,34 @@
 	async function loadNotes() {
 		isLoading = true;
 		try {
-			// Load all for correctness in MVP (virtualization + proper indexing/paging planned per plan for scale > few thousand)
-			let loaded = await getActiveNotes({ limit: 10000 }); // effectively all for typical use
+			// Hydrate search index from DB first
+			await initSearchIndex();
+			// Then load notes for UI
+			let loaded = await getActiveNotes({ limit: 10000 });
 
-			// Seed some starter notes on first use (great for demo)
+			// Seed some starter notes on first use
 			if (loaded.length === 0) {
 				const seed1 = await createNote({
 					title: 'Welcome to Mash',
 					body: 'Quick notes. Fast search. Your ideas, mashed together.\n\nTry creating a few notes and using the sidebar filters.',
 					tags: ['welcome'],
 				});
+				addNoteToSearch(seed1);
 				const seed2 = await createNote({
 					title: 'Project ideas',
 					body: '- Build the thing\n- Talk to users\n- Ship fast',
 					tags: ['project'],
 					folder: 'Ideas',
 				});
+				addNoteToSearch(seed2);
 				loaded = [seed1, seed2];
 			}
 
-			// Ensure links are populated for existing notes (cohesive with wikilink feature)
+			// Ensure links are populated for existing notes
 			notes = loaded.map(n => ({
 				...n,
 				links: n.links?.length ? n.links : extractWikilinks(n.body)
 			}));
-			await initSearchIndex();
 		} catch (e) {
 			console.error('Failed to load notes', e);
 		}
@@ -139,6 +140,7 @@
 			folder: currentFilter.type === 'folder' ? (currentFilter.value || '') : '',
 			links: [],
 		});
+		addNoteToSearch(note);
 		notes = [note, ...notes];
 		selectedId = note.id;
 		// Focus title
@@ -153,16 +155,15 @@
 	}
 
 	async function handleWikilinkClick(title: string) {
-		// Find existing note by title (case insensitive for UX)
 		let target = notes.find(n => n.title.toLowerCase() === title.toLowerCase());
 
 		if (!target) {
-			// Create stub note
 			target = await createNote({
 				title,
 				body: '',
 				folder: currentFilter.type === 'folder' ? currentFilter.value || '' : '',
 			});
+			addNoteToSearch(target);
 			notes = [target, ...notes];
 		}
 
@@ -173,7 +174,6 @@
 		if (autoSaveTimeout) clearTimeout(autoSaveTimeout);
 		saveStatus = 'saving';
 
-		// Snapshot at schedule time to prevent cross-note saves on rapid switching
 		const snapId = selectedId;
 		const snapTitle = draftTitle;
 		const snapBody = draftBody;
@@ -190,17 +190,11 @@
 				folder: snapFolder,
 				links: snapLinks,
 			};
-			updateNote(snapId, changes);
+			syncNoteUpdate(snapId, changes);
 
 			const updatedSnap = { ...notes.find(n => n.id === snapId)!, ...changes, modified: Date.now() };
-			// Optimistic local update
-			notes = notes.map(n =>
-				n.id === snapId
-					? updatedSnap
-					: n
-			);
-			// Pass full snapshot to search
-			updateNoteInSearch({ id: snapId, ...changes } as any, updatedSnap);
+			notes = notes.map(n => n.id === snapId ? updatedSnap : n);
+			updateNoteInSearch({ id: snapId, ...changes }, updatedSnap);
 
 			saveStatus = 'saved';
 			setTimeout(() => {
@@ -213,8 +207,6 @@
 		draftTitle = (e.target as HTMLInputElement).value;
 		scheduleAutoSave();
 	}
-
-	// handleBodyInput removed - body edits go through Editor onChange + scheduleAutoSave
 
 	function addTag(tag: string) {
 		const t = tag.trim();
@@ -231,6 +223,7 @@
 	async function handleDelete() {
 		if (!selectedId || !confirm('Delete this note?')) return;
 		await deleteNote(selectedId);
+		removeNoteFromSearch(selectedId);
 		notes = notes.filter(n => n.id !== selectedId);
 		selectedId = notes.length > 0 ? notes[0].id : null;
 	}
@@ -243,7 +236,7 @@
 		} else {
 			currentFilter = { type, value };
 		}
-		searchQuery = ''; // clear text search when using filter
+		searchQuery = '';
 	}
 
 	function clearFilter() {
@@ -254,11 +247,10 @@
 	function handleGlobalSearch(e: Event) {
 		searchQuery = (e.target as HTMLInputElement).value;
 		if (searchQuery) {
-			currentFilter = { type: null }; // clear structural filter when searching
+			currentFilter = { type: null };
 		}
 	}
 
-	// Keyboard shortcuts
 	function handleKeydown(e: KeyboardEvent) {
 		if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
 			e.preventDefault();
@@ -283,8 +275,9 @@
 		{ label: 'Toggle pin', action: () => {
 			if (!selectedId) return;
 			const np = selectedNote?.pinned === 1 ? 0 : 1;
-			updateNote(selectedId, { pinned: np });
-			notes = notes.map(n => n.id === selectedId ? {...n, pinned: np} : n);
+			syncNoteUpdate(selectedId, { pinned: np });
+			notes = notes.map(n => n.id === selectedId ? {...n, pinned: np as 0 | 1} : n);
+			if (selectedNote) updateNoteInSearch({ id: selectedId, pinned: np }, { ...selectedNote, pinned: np as 0 | 1 });
 			showPalette = false;
 		}, shortcut: '' },
 		{ label: 'Delete current note', action: () => { handleDelete(); showPalette = false; }, shortcut: '' },
@@ -370,7 +363,7 @@
 			<!-- Folders (hierarchical) -->
 			<div class="mb-4">
 				<div class="mb-1 px-2 text-xs font-medium uppercase tracking-widest text-zinc-500">Folders</div>
-				{#each uniqueFolders.sort() as folder}
+				{#each uniqueFolders as folder}
 					{@const depth = (folder || '').split('/').length - 1}
 					<button
 						onclick={() => setFilter('folder', folder || '')}
@@ -485,9 +478,10 @@
 							class="w-28 rounded bg-zinc-900 px-2 py-0.5 text-xs placeholder-zinc-500 outline-none focus:bg-zinc-800"
 							oninput={() => {
 								if (!selectedId) return;
-								const updated = { ...selectedNote!, folder: draftFolder };
-								syncNoteUpdate(selectedId, { folder: draftFolder }, updated);
+								const updated = { ...selectedNote, folder: draftFolder };
+								syncNoteUpdate(selectedId, { folder: draftFolder });
 								notes = notes.map(n => n.id === selectedId ? updated : n);
+								updateNoteInSearch({ id: selectedId, folder: draftFolder }, updated);
 								scheduleAutoSave();
 							}}
 						/>
@@ -531,9 +525,10 @@
 							onclick={() => {
 								if (!selectedId) return;
 								const newPinned = (selectedNote?.pinned === 1 ? 0 : 1) as 0 | 1;
-								const updated = { ...selectedNote!, pinned: newPinned };
-								syncNoteUpdate(selectedId, { pinned: newPinned }, updated);
+								const updated = { ...selectedNote, pinned: newPinned };
+								syncNoteUpdate(selectedId, { pinned: newPinned });
 								notes = notes.map(n => n.id === selectedId ? updated : n);
+								updateNoteInSearch({ id: selectedId, pinned: newPinned }, updated);
 							}}
 							class="flex items-center gap-1 rounded px-2 py-1 text-zinc-400 hover:bg-zinc-900 {selectedNote?.pinned ? 'text-amber-400' : ''}"
 							aria-label="Toggle pin"
@@ -553,14 +548,14 @@
 
 				<!-- Editor body -->
 				<div class="flex-1 overflow-hidden border-l border-zinc-800">
-					<Editor 
-						value={draftBody} 
+					<Editor
+						value={draftBody}
 						noteId={selectedId ?? ''}
 						onWikilinkClick={handleWikilinkClick}
-						onChange={(val: string) => { 
-							draftBody = val; 
-							scheduleAutoSave(); 
-						}} 
+						onChange={(val: string) => {
+							draftBody = val;
+							scheduleAutoSave();
+						}}
 					/>
 				</div>
 
@@ -589,17 +584,17 @@
 		<div class="fixed inset-0 z-50 flex items-start justify-center pt-[20vh] bg-black/60" onclick={() => showPalette = false}>
 			<div role="dialog" aria-modal="true" aria-label="Command palette" class="w-full max-w-md rounded-xl border border-zinc-800 bg-zinc-900 shadow-2xl" onclick={(e) => e.stopImmediatePropagation()}>
 				<div class="border-b border-zinc-800 p-3">
-					<input 
-						type="text" 
+					<input
+						type="text"
 						bind:value={paletteQuery}
-						placeholder="Type a command..." 
+						placeholder="Type a command..."
 						class="w-full bg-transparent text-sm outline-none placeholder-zinc-500"
 						autofocus
 					/>
 				</div>
 				<div class="max-h-80 overflow-auto p-1 text-sm">
 					{#each paletteActions.filter(a => a.label.toLowerCase().includes(paletteQuery.toLowerCase())) as action}
-						<button 
+						<button
 							onclick={action.action}
 							class="flex w-full items-center justify-between rounded px-3 py-2 text-left hover:bg-zinc-800"
 						>
@@ -611,8 +606,8 @@
 					<!-- Quick note jump from palette -->
 					{#if paletteQuery.length > 1}
 						<div class="mt-1 border-t border-zinc-800 pt-1 text-[10px] text-zinc-500 px-3">Jump to note</div>
-						{#each notes.filter(n => n.title.toLowerCase().includes(paletteQuery.toLowerCase()) || n.body.toLowerCase().includes(paletteQuery.toLowerCase())).slice(0, 6) as note}
-							<button 
+						{#each notes.filter((n: Note) => n.title.toLowerCase().includes(paletteQuery.toLowerCase()) || n.body.toLowerCase().includes(paletteQuery.toLowerCase())).slice(0, 6) as note}
+							<button
 								onclick={() => { selectedId = note.id; showPalette = false; }}
 								class="flex w-full items-center justify-between rounded px-3 py-1.5 text-left hover:bg-zinc-800 text-xs"
 							>
