@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" aria-labelledby="mash-mono-white-title" role="img">
+  <title id="mash-mono-white-title">Mash — monochrome white potato logo (for dark backgrounds)</title>
+  
+  <!-- Potato body -->
+  <ellipse cx="60" cy="62" rx="38" ry="42" fill="#ffffff"/>
+  
+  <!-- Eyes -->
+  <ellipse cx="46" cy="52" rx="4.5" ry="5.5" fill="#111111"/>
+  <ellipse cx="74" cy="52" rx="4.5" ry="5.5" fill="#111111"/>
+  
+  <!-- Smile -->
+  <path d="M48 68 Q 60 76 72 68" fill="none" stroke="#111111" stroke-width="3.5" stroke-linecap="round"/>
+  
+  <!-- Sprout -->
+  <path d="M60 22 Q 68 14 74 20" fill="none" stroke="#111111" stroke-width="5" stroke-linecap="round"/>
+  <path d="M60 22 Q 52 14 46 20" fill="none" stroke="#111111" stroke-width="5" stroke-linecap="round"/>
+</svg>

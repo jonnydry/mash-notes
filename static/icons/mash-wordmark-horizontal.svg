@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 120" width="420" height="120" aria-labelledby="mash-wordmark-title" role="img">
+  <title id="mash-wordmark-title">Mash — horizontal wordmark with potato logo</title>
+  
+  <!-- Potato (left side, scaled down version of the character style) -->
+  <g transform="translate(30, 20) scale(0.65)">
+    <ellipse cx="60" cy="62" rx="38" ry="42" fill="#111111"/>
+    <ellipse cx="46" cy="52" rx="4.5" ry="5.5" fill="#ffffff"/>
+    <ellipse cx="74" cy="52" rx="4.5" ry="5.5" fill="#ffffff"/>
+    <path d="M48 68 Q 60 76 72 68" fill="none" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round"/>
+    <path d="M60 22 Q 68 14 74 20" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round"/>
+    <path d="M60 22 Q 52 14 46 20" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round"/>
+  </g>
+  
+  <!-- "Mash" text -->
+  <text 
+    x="140" 
+    y="78" 
+    font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" 
+    font-size="68" 
+    font-weight="700" 
+    letter-spacing="-1.5" 
+    fill="#111111">Mash</text>
+</svg>
