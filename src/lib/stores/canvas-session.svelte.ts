@@ -629,7 +629,7 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		const onUp = (ev: PointerEvent) => {
 			window.removeEventListener('pointermove', onMove);
 			window.removeEventListener('pointerup', onUp);
-			window.removeEventListener('pointercancel', onUp);
+			window.removeEventListener('pointercancel', onCancel);
 			const ghost = touchPlaceGhost;
 			touchPlaceGhost = null;
 			if (!ghost || !canvasBoard?.clientToWorld) return;
@@ -640,9 +640,15 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 				world.y - COLLAPSED_CARD.h / 2
 			);
 		};
+		const onCancel = () => {
+			window.removeEventListener('pointermove', onMove);
+			window.removeEventListener('pointerup', onUp);
+			window.removeEventListener('pointercancel', onCancel);
+			touchPlaceGhost = null;
+		};
 		window.addEventListener('pointermove', onMove);
 		window.addEventListener('pointerup', onUp);
-		window.addEventListener('pointercancel', onUp);
+		window.addEventListener('pointercancel', onCancel);
 	}
 
 	return {

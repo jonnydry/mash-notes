@@ -618,10 +618,11 @@ body {
 @media (max-width: 720px) {
 	.mash-dock-slot {
 		top: auto;
-		bottom: 1rem;
+		bottom: max(0.75rem, env(safe-area-inset-bottom));
 		left: 50%;
 		transform: translateX(-50%);
 		padding: 0;
+		z-index: 40;
 	}
 	.mash-dock-slot .mash-side-dock {
 		flex-direction: row;
@@ -638,19 +639,81 @@ body {
 	.mash-dock-slot .mash-side-dock-item {
 		transform-origin: center bottom;
 	}
+	.mash-dock-slot .mash-side-dock-pip {
+		left: 50%;
+		bottom: 3px;
+		transform: translateX(-50%);
+	}
 	.mash-dock-slot .mash-side-dock-label {
 		display: none;
 	}
 	.mash-peel-slot {
 		top: auto;
-		bottom: 5.5rem;
+		bottom: calc(5.25rem + env(safe-area-inset-bottom, 0px));
 		left: 0.75rem;
 		right: 0.75rem;
 		transform: none;
 		width: auto;
+		z-index: 35;
 	}
 	.mash-peel-slot .mash-peel {
 		width: 100%;
-		max-height: min(55vh, 420px);
+		max-height: min(48vh, 380px);
+	}
+
+	/* Selection bar sits above the bottom dock, not on top of it. */
+	.mash-selection-bar {
+		bottom: calc(5.25rem + env(safe-area-inset-bottom, 0px)) !important;
+		left: 0.75rem !important;
+		right: 0.75rem !important;
+		width: auto !important;
+		transform: none !important;
+		max-width: none;
+		z-index: 36;
+	}
+	/* When peel is open, stack the selection bar above the scanner. */
+	.mash-selection-bar.mash-selection-bar--peel {
+		bottom: calc(min(48vh, 380px) + 6.25rem + env(safe-area-inset-bottom, 0px)) !important;
+	}
+	.mash-selection-bar .mash-dock {
+		flex-wrap: wrap;
+		justify-content: center;
+		max-width: 100%;
+		row-gap: 4px;
+	}
+	.mash-selection-bar .mash-dock > span:first-child {
+		width: 100%;
+		text-align: center;
+		padding-bottom: 2px;
+	}
+
+	.mash-canvas-title-chip {
+		left: 0.75rem !important;
+		max-width: calc(100vw - 8rem);
+	}
+
+	/* Canvas chrome: keep essentials, shrink clutter on small screens. */
+	.mash-canvas-chrome-top {
+		max-width: calc(100vw - 1rem);
+		gap: 4px !important;
+	}
+	.mash-canvas-chrome-pan {
+		bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px)) !important;
+		right: 0.5rem !important;
+		transform: scale(0.92);
+		transform-origin: bottom right;
+	}
+	.mash-canvas-chrome-pan .mash-chrome-hint {
+		display: none;
+	}
+}
+
+@media (max-width: 720px) and (pointer: coarse) {
+	.mash-peel-drag-handle {
+		width: 36px;
+		min-width: 36px;
+	}
+	.mash-peel-footer {
+		font-size: 11px;
 	}
 }

@@ -1383,7 +1383,7 @@
 
 	<div
 		data-canvas-chrome
-		class="pointer-events-none absolute top-3 right-3 z-10 flex flex-wrap items-center justify-end gap-1.5"
+		class="mash-canvas-chrome-top pointer-events-none absolute top-3 right-3 z-10 flex flex-wrap items-center justify-end gap-1.5"
 	>
 		<div
 			class="pointer-events-auto flex items-center rounded-md border border-[rgba(80,60,30,0.15)] bg-[rgba(247,241,230,0.92)] p-0.5 text-[10px]"
@@ -1483,7 +1483,7 @@
 	<!-- Pan / zoom pad -->
 	<div
 		data-canvas-chrome
-		class="pointer-events-auto absolute right-3 bottom-3 z-10 flex flex-col items-center gap-1"
+		class="mash-canvas-chrome-pan pointer-events-auto absolute right-3 bottom-3 z-10 flex flex-col items-center gap-1"
 	>
 		<div
 			class="grid grid-cols-3 gap-0.5 rounded-lg border border-[rgba(80,60,30,0.15)] bg-[rgba(247,241,230,0.94)] p-1 shadow"
@@ -1594,7 +1594,7 @@
 				+
 			</button>
 		</div>
-		<p class="max-w-[10rem] text-center text-[9px] leading-tight text-[var(--mash-card-muted)]">
+		<p class="mash-chrome-hint max-w-[10rem] text-center text-[9px] leading-tight text-[var(--mash-card-muted)]">
 			Drag to select · Scroll to pan · Space+drag pan · ⌘/Ctrl+scroll zoom
 		</p>
 	</div>
