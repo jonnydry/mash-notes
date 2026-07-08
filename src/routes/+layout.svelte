@@ -6,7 +6,13 @@
 </script>
 
 <svelte:head>
-	<title>Mash • quick notes</title>
-	<link rel="icon" href="/icons/favicon-32.png" />
+	<title>Mash · where notes become useful</title>
+	<link rel="icon" href={favicon} />
+	<link rel="preconnect" href="https://fonts.googleapis.com" />
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+	<link
+		href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+		rel="stylesheet"
+	/>
 </svelte:head>
 {@render children()}

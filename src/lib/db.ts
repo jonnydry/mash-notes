@@ -6,23 +6,77 @@
  */
 
 import Dexie, { type Table } from 'dexie';
-import type { Note } from './types';
+import type { Canvas, CanvasItem, Note } from './types';
 
 // =============================================================================
 // DATABASE
 // =============================================================================
 
 const DB_NAME = 'mashdb-notes-v1';
-const DB_VERSION = 1;
 
 class MashDB extends Dexie {
 	notes!: Table<Note, string>;
+	canvases!: Table<Canvas, string>;
+	canvasItems!: Table<CanvasItem, string>;
 
 	constructor() {
 		super(DB_NAME);
-		this.version(DB_VERSION).stores({
-			notes: 'id, modified, folder, pinned, *tags',
+		this.version(1).stores({
+			notes: 'id, modified, folder, pinned, *tags'
 		});
+		this.version(2).stores({
+			notes: 'id, modified, folder, pinned, *tags',
+			canvases: 'id, folder, modified',
+			canvasItems: 'id, canvasId, noteId'
+		});
+		this.version(3)
+			.stores({
+				notes: 'id, modified, folder, pinned, *tags',
+				canvases: 'id, folder, modified',
+				canvasItems: 'id, canvasId, noteId, &[canvasId+noteId]'
+			})
+			.upgrade(async (tx) => {
+				// Deduplicate any (canvasId, noteId) pairs before unique index applies.
+				const table = tx.table('canvasItems');
+				const all = await table.toArray();
+				const seen = new Set<string>();
+				const toDelete: string[] = [];
+				for (const item of all) {
+					const key = `${item.canvasId}::${item.noteId}`;
+					if (seen.has(key)) toDelete.push(item.id);
+					else seen.add(key);
+				}
+				if (toDelete.length > 0) await table.bulkDelete(toDelete);
+			});
+		this.version(4)
+			.stores({
+				notes: 'id, modified, folder, pinned, *tags',
+				canvases: 'id, &folder, modified',
+				canvasItems: 'id, canvasId, noteId, &[canvasId+noteId]'
+			})
+			.upgrade(async (tx) => {
+				// One canvas per folder — keep the newest, drop the rest.
+				const table = tx.table('canvases');
+				const all = (await table.toArray()) as Canvas[];
+				const best = new Map<string, Canvas>();
+				const toDelete: string[] = [];
+				for (const canvas of all) {
+					const prev = best.get(canvas.folder);
+					if (!prev || canvas.modified > prev.modified) {
+						if (prev) toDelete.push(prev.id);
+						best.set(canvas.folder, canvas);
+					} else {
+						toDelete.push(canvas.id);
+					}
+				}
+				if (toDelete.length > 0) {
+					const items = tx.table('canvasItems');
+					for (const canvasId of toDelete) {
+						await items.where('canvasId').equals(canvasId).delete();
+					}
+					await table.bulkDelete(toDelete);
+				}
+			});
 	}
 }
 
@@ -41,7 +95,7 @@ function normalizeTitle(title: string | undefined): string {
 }
 
 // =============================================================================
-// CRUD — DB only. Search index updates are the UI's responsibility.
+// NOTES CRUD — DB only. Search index updates are the UI's responsibility.
 // =============================================================================
 
 /**
@@ -53,6 +107,7 @@ export async function createNote(partial: {
 	folder?: string;
 	tags?: string[];
 	links?: string[];
+	mashedFrom?: string[];
 }): Promise<Note> {
 	const note: Note = {
 		id: newId(),
@@ -61,9 +116,10 @@ export async function createNote(partial: {
 		folder: partial.folder ?? '',
 		tags: partial.tags ?? [],
 		links: partial.links ?? [],
+		mashedFrom: partial.mashedFrom,
 		created: Date.now(),
 		modified: Date.now(),
-		pinned: 0,
+		pinned: 0
 	};
 
 	await db.notes.add(note);
@@ -105,6 +161,8 @@ export async function updateNote(id: string, changes: Partial<Note>): Promise<No
  */
 export async function deleteNote(id: string): Promise<void> {
 	await db.notes.delete(id);
+	// Drop canvas placements for this note (note gone → card gone)
+	await db.canvasItems.where('noteId').equals(id).delete();
 }
 
 /**
@@ -112,9 +170,9 @@ export async function deleteNote(id: string): Promise<void> {
  * full Note is already known. Does NOT touch search — caller does that.
  */
 export function syncNoteUpdate(id: string, partial: Partial<Note>): void {
-	db.notes.update(id, { ...partial, modified: Date.now() }).catch((e) =>
-		console.error('Mash syncNoteUpdate DB write failed:', e),
-	);
+	db.notes
+		.update(id, { ...partial, modified: Date.now() })
+		.catch((e) => console.error('Mash syncNoteUpdate DB write failed:', e));
 }
 
 /**
@@ -122,4 +180,110 @@ export function syncNoteUpdate(id: string, partial: Partial<Note>): void {
  */
 export async function getAllNotesForSearchIndex(): Promise<Note[]> {
 	return db.notes.toArray();
+}
+
+// =============================================================================
+// CANVAS CRUD
+// =============================================================================
+
+/**
+ * Get or create the default canvas for a folder path.
+ * Unique on `folder` — concurrent callers share one canvas.
+ */
+export async function getOrCreateFolderCanvas(folder: string): Promise<Canvas> {
+	return db.transaction('rw', db.canvases, async () => {
+		const existing = await db.canvases.where('folder').equals(folder).first();
+		if (existing) return existing;
+
+		const now = Date.now();
+		const canvas: Canvas = {
+			id: newId(),
+			folder,
+			title: folder ? `${folder} canvas` : 'Root canvas',
+			created: now,
+			modified: now
+		};
+		try {
+			await db.canvases.add(canvas);
+			return canvas;
+		} catch {
+			const raced = await db.canvases.where('folder').equals(folder).first();
+			if (raced) return raced;
+			throw new Error('Failed to create folder canvas');
+		}
+	});
+}
+
+export async function getCanvasItems(canvasId: string): Promise<CanvasItem[]> {
+	return db.canvasItems.where('canvasId').equals(canvasId).toArray();
+}
+
+export async function addNoteToCanvas(
+	canvasId: string,
+	noteId: string,
+	pos?: { x: number; y: number; w?: number; h?: number }
+): Promise<CanvasItem> {
+	return db.transaction('rw', db.canvasItems, db.canvases, async () => {
+		const existing = await db.canvasItems
+			.where('[canvasId+noteId]')
+			.equals([canvasId, noteId])
+			.first();
+		if (existing) return existing;
+
+		const count = await db.canvasItems.where('canvasId').equals(canvasId).count();
+		const item: CanvasItem = {
+			id: newId(),
+			canvasId,
+			noteId,
+			x: pos?.x ?? 40 + (count % 4) * 240,
+			y: pos?.y ?? 40 + Math.floor(count / 4) * 160,
+			w: pos?.w ?? 220,
+			h: pos?.h ?? 120
+		};
+		try {
+			await db.canvasItems.add(item);
+			await db.canvases.update(canvasId, { modified: Date.now() });
+			return item;
+		} catch {
+			const raced = await db.canvasItems
+				.where('[canvasId+noteId]')
+				.equals([canvasId, noteId])
+				.first();
+			if (raced) return raced;
+			throw new Error('Failed to add note to canvas');
+		}
+	});
+}
+
+export async function updateCanvasItemPosition(
+	id: string,
+	pos: { x: number; y: number; w?: number; h?: number }
+): Promise<void> {
+	const item = await db.canvasItems.get(id);
+	const patch: Partial<CanvasItem> = { x: pos.x, y: pos.y };
+	if (pos.w !== undefined) patch.w = pos.w;
+	if (pos.h !== undefined) patch.h = pos.h;
+	await db.canvasItems.update(id, patch);
+	if (item) {
+		await db.canvases.update(item.canvasId, { modified: Date.now() });
+	}
+}
+
+export async function removeCanvasItem(id: string): Promise<void> {
+	const item = await db.canvasItems.get(id);
+	await db.canvasItems.delete(id);
+	if (item) {
+		await db.canvases.update(item.canvasId, { modified: Date.now() });
+	}
+}
+
+export async function removeNotesFromCanvas(canvasId: string, noteIds: string[]): Promise<void> {
+	if (noteIds.length === 0) return;
+	const idSet = new Set(noteIds);
+	const items = await db.canvasItems.where('canvasId').equals(canvasId).toArray();
+	const toDelete = items.filter((i) => idSet.has(i.noteId)).map((i) => i.id);
+	await db.canvasItems.bulkDelete(toDelete);
+	if (toDelete.length > 0) {
+		await db.canvases.update(canvasId, { modified: Date.now() });
+	}
 }

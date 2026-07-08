@@ -1,0 +1,187 @@
+<script lang="ts">
+	import { LayoutGrid, Pin, Folder, Hash, Plus, Search } from 'lucide-svelte';
+	import type { NavFilter } from '$lib/note-ui';
+	import { isNavActive } from '$lib/note-ui';
+	import type { DockAction } from '$lib/dock';
+
+	interface Props {
+		currentFilter: NavFilter;
+		searchQuery?: string;
+		foldersOpen?: boolean;
+		tagsOpen?: boolean;
+		/** Callback for dock button presses (avoid `on*` — Svelte 5 treats those as events). */
+		dockSelect: (action: DockAction) => void;
+	}
+
+	let {
+		currentFilter,
+		searchQuery = '',
+		foldersOpen = false,
+		tagsOpen = false,
+		dockSelect
+	}: Props = $props();
+
+	type DockItem = {
+		id: DockAction;
+		label: string;
+		accent?: boolean;
+		active: boolean;
+	};
+
+	let items = $derived<DockItem[]>([
+		{
+			id: 'all',
+			label: 'Desk',
+			active: isNavActive(currentFilter, 'all', undefined, searchQuery) && !foldersOpen && !tagsOpen
+		},
+		{
+			id: 'pinned',
+			label: 'Pinned',
+			active: isNavActive(currentFilter, 'pinned')
+		},
+		{
+			id: 'folders',
+			label: 'Folders',
+			active: foldersOpen || currentFilter.type === 'folder'
+		},
+		{
+			id: 'tags',
+			label: 'Tags',
+			active: tagsOpen || currentFilter.type === 'tag'
+		},
+		{ id: 'new', label: 'New note', accent: true, active: false },
+		{ id: 'search', label: 'Search', active: false }
+	]);
+
+	let dockEl: HTMLElement | undefined = $state();
+	let magRaf = 0;
+	let leaveTimer = 0;
+
+	const MAG_RADIUS = 80;
+	const MAG_PEAK = 0.32; // subtle swell — stays readable on the cream board
+	const ICON_SIZE = 42;
+
+	function iconFor(id: DockAction) {
+		switch (id) {
+			case 'all':
+				return LayoutGrid;
+			case 'pinned':
+				return Pin;
+			case 'folders':
+				return Folder;
+			case 'tags':
+				return Hash;
+			case 'new':
+				return Plus;
+			case 'search':
+				return Search;
+			default: {
+				const _exhaustive: never = id;
+				return _exhaustive;
+			}
+		}
+	}
+
+	function falloff(dist: number): number {
+		const t = Math.max(0, 1 - dist / MAG_RADIUS);
+		const bulge = Math.cos((1 - t) * (Math.PI / 2));
+		return bulge * bulge;
+	}
+
+	/**
+	 * macOS-style: glass stays fixed. Icons scale with transform only and
+	 * overflow out of the pill. Distances use layout centers (not live
+	 * scaled rects) so the curve doesn't chase itself and jitter.
+	 */
+	function applyMag(clientY: number | null) {
+		if (!dockEl) return;
+		const dockTop = dockEl.getBoundingClientRect().top;
+		const buttons = [...dockEl.querySelectorAll<HTMLElement>('[data-dock-item]')];
+		let nearest: { id: string; dist: number } | null = null;
+
+		for (const btn of buttons) {
+			// Layout center — stable while transforms change.
+			const cy = dockTop + btn.offsetTop + ICON_SIZE / 2;
+
+			if (clientY === null) {
+				btn.style.setProperty('--dock-scale', '1');
+				btn.classList.remove('is-hot');
+				continue;
+			}
+
+			const dist = Math.abs(clientY - cy);
+			const scale = 1 + falloff(dist) * MAG_PEAK;
+			btn.style.setProperty('--dock-scale', String(scale));
+			if (!nearest || dist < nearest.dist) {
+				nearest = { id: btn.dataset.dockItem ?? '', dist };
+			}
+		}
+
+		const nextHot =
+			clientY !== null && nearest && nearest.dist < MAG_RADIUS * 0.85 ? nearest.id : null;
+		for (const btn of buttons) {
+			btn.classList.toggle('is-hot', btn.dataset.dockItem === nextHot);
+		}
+		dockEl.classList.toggle('is-magnifying', nextHot !== null);
+	}
+
+	function onPointerMove(e: PointerEvent) {
+		if (!dockEl) return;
+		if (leaveTimer) {
+			clearTimeout(leaveTimer);
+			leaveTimer = 0;
+		}
+		dockEl.classList.remove('is-settling');
+		const clientY = e.clientY;
+		if (magRaf) cancelAnimationFrame(magRaf);
+		magRaf = requestAnimationFrame(() => {
+			magRaf = 0;
+			applyMag(clientY);
+		});
+	}
+
+	function onPointerLeave() {
+		if (magRaf) cancelAnimationFrame(magRaf);
+		magRaf = 0;
+		if (dockEl) dockEl.classList.add('is-settling');
+		applyMag(null);
+		leaveTimer = window.setTimeout(() => {
+			dockEl?.classList.remove('is-settling');
+			leaveTimer = 0;
+		}, 220);
+	}
+</script>
+
+<nav
+	bind:this={dockEl}
+	class="mash-side-dock"
+	aria-label="Mash dock"
+	onpointermove={onPointerMove}
+	onpointerleave={onPointerLeave}
+>
+	{#each items as item (item.id)}
+		{#if item.id === 'new'}
+			<div class="mash-side-dock-spacer" aria-hidden="true"></div>
+		{/if}
+		{@const Icon = iconFor(item.id)}
+		<button
+			type="button"
+			data-dock-item={item.id}
+			class="mash-side-dock-item"
+			class:is-accent={item.accent}
+			class:is-active={item.active}
+			title={item.label}
+			aria-label={item.label}
+			aria-pressed={item.active}
+			onclick={() => dockSelect(item.id)}
+		>
+			<span class="mash-side-dock-icon" aria-hidden="true">
+				<Icon class="h-[18px] w-[18px]" strokeWidth={2} />
+			</span>
+			<span class="mash-side-dock-label">{item.label}</span>
+			{#if item.active}
+				<span class="mash-side-dock-pip" aria-hidden="true"></span>
+			{/if}
+		</button>
+	{/each}
+</nav>

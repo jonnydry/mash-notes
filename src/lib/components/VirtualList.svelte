@@ -1,87 +1,74 @@
 <script lang="ts">
-  import { onMount, onDestroy, type Snippet } from 'svelte';
+	import { onMount, onDestroy, type Snippet } from 'svelte';
 
-  interface Props<T> {
-    items: T[];
-    itemHeight?: number;
-    overscan?: number;
-    children?: Snippet<[T, number]>;  // snippet for rendering each item as children(note, index)
-  }
+	interface Props<T> {
+		items: T[];
+		itemHeight?: number;
+		overscan?: number;
+		children?: Snippet<[T, number]>; // snippet for rendering each item as children(note, index)
+	}
 
-  let { 
-    items = [], 
-    itemHeight = 78, 
-    overscan = 5,
-    children 
-  }: Props<any> = $props();
+	let { items = [], itemHeight = 78, overscan = 5, children }: Props<any> = $props();
 
-  let container: HTMLDivElement | undefined = $state();
-  let scrollTop = $state(0);
-  let containerHeight = $state(600);
+	let container: HTMLDivElement | undefined = $state();
+	let scrollTop = $state(0);
+	let containerHeight = $state(600);
 
-  const totalHeight = $derived(items.length * itemHeight);
+	const totalHeight = $derived(items.length * itemHeight);
 
-  const startIndex = $derived(
-    Math.max(0, Math.floor(scrollTop / itemHeight) - overscan)
-  );
+	const startIndex = $derived(Math.max(0, Math.floor(scrollTop / itemHeight) - overscan));
 
-  const endIndex = $derived(
-    Math.min(items.length, Math.ceil((scrollTop + containerHeight) / itemHeight) + overscan)
-  );
+	const endIndex = $derived(
+		Math.min(items.length, Math.ceil((scrollTop + containerHeight) / itemHeight) + overscan)
+	);
 
-  const visibleItems = $derived(items.slice(startIndex, endIndex));
-  const offsetY = $derived(startIndex * itemHeight);
+	const visibleItems = $derived(items.slice(startIndex, endIndex));
+	const offsetY = $derived(startIndex * itemHeight);
 
-  function handleScroll() {
-    if (container) {
-      scrollTop = container.scrollTop;
-    }
-  }
+	function handleScroll() {
+		if (container) {
+			scrollTop = container.scrollTop;
+		}
+	}
 
-  function updateHeight() {
-    if (container) {
-      containerHeight = container.clientHeight;
-    }
-  }
+	function updateHeight() {
+		if (container) {
+			containerHeight = container.clientHeight;
+		}
+	}
 
-  let resizeObserver: ResizeObserver | undefined;
+	let resizeObserver: ResizeObserver | undefined;
 
-  onMount(() => {
-    if (container) {
-      updateHeight();
-      container.addEventListener('scroll', handleScroll, { passive: true });
+	onMount(() => {
+		if (container) {
+			updateHeight();
+			container.addEventListener('scroll', handleScroll, { passive: true });
 
-      resizeObserver = new ResizeObserver(() => {
-        updateHeight();
-      });
-      resizeObserver.observe(container);
-    }
-  });
+			resizeObserver = new ResizeObserver(() => {
+				updateHeight();
+			});
+			resizeObserver.observe(container);
+		}
+	});
 
-  onDestroy(() => {
-    if (container) {
-      container.removeEventListener('scroll', handleScroll);
-    }
-    if (resizeObserver) {
-      resizeObserver.disconnect();
-    }
-  });
+	onDestroy(() => {
+		if (container) {
+			container.removeEventListener('scroll', handleScroll);
+		}
+		if (resizeObserver) {
+			resizeObserver.disconnect();
+		}
+	});
 </script>
 
-<div
-  bind:this={container}
-  class="overflow-y-auto"
-  style="height: 100%;"
->
-  <div style="height: {totalHeight}px; position: relative; width: 100%;">
-    <div
-      style="transform: translateY({offsetY}px); position: absolute; top: 0; left: 0; right: 0;"
-    >
-      {#each visibleItems as item, i (item.id ?? i)}
-        <div style="height: {itemHeight}px; width: 100%;">
-          {@render children?.(item, startIndex + i)}
-        </div>
-      {/each}
-    </div>
-  </div>
+<div bind:this={container} class="overflow-y-auto" style="height: 100%;">
+	<div style="height: {totalHeight}px; position: relative; width: 100%;">
+		<div style="transform: translateY({offsetY}px); position: absolute; top: 0; left: 0; right: 0;">
+			{#each visibleItems as item, i (item.id ?? i)}
+				<div style="height: {itemHeight}px; width: 100%;">
+					{@render children?.(item, startIndex + i)}
+				</div>
+			{/each}
+		</div>
+	</div>
 </div>

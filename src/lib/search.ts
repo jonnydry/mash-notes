@@ -40,8 +40,8 @@ const miniSearch = new MiniSearch<Note>({
 		boost: { title: 2 },
 		prefix: true,
 		fuzzy: 0.2,
-		combineWith: 'AND',
-	},
+		combineWith: 'AND'
+	}
 });
 
 let isInitialized = false;
@@ -77,7 +77,7 @@ export async function initSearchIndex(): Promise<void> {
 function normalizeForSearch(s: string): string {
 	return s
 		.normalize('NFC')
-		.replace(/<[^>]+>/g, ' ')          // HTML tags → space
+		.replace(/<[^>]+>/g, ' ') // HTML tags → space
 		.replace(/[\u200B-\u200D\uFEFF]/g, '') // zero-width + BOM
 		.replace(/\s+/g, ' ')
 		.trim();
@@ -88,7 +88,7 @@ function prepareDocForIndex(note: Note) {
 		...note,
 		title: normalizeForSearch(note.title),
 		body: normalizeForSearch(note.body),
-		tagsJoined: normalizeForSearch(note.tags.join(' ')),
+		tagsJoined: normalizeForSearch(note.tags.join(' '))
 	};
 }
 
@@ -97,16 +97,14 @@ export function addNoteToSearch(note: Note): void {
 	miniSearch.add(prepareDocForIndex(note));
 }
 
-export function updateNoteInSearch(
-	partial: Partial<Note> & { id: string },
-	fullNote?: Note,
-): void {
+export function updateNoteInSearch(partial: Partial<Note> & { id: string }, fullNote?: Note): void {
 	if (!isInitialized) return;
 	miniSearch.discard(partial.id);
-	const docToAdd = fullNote ?? partial;
-	if (docToAdd.title || docToAdd.body) {
-		miniSearch.add(prepareDocForIndex(docToAdd as Note));
-	}
+	// Prefer the full note — partial-only updates (e.g. pinned/folder) would
+	// otherwise discard the doc and fail to re-add without title/body.
+	const docToAdd = fullNote ?? (partial.title != null || partial.body != null ? partial : null);
+	if (!docToAdd || (docToAdd.title == null && docToAdd.body == null)) return;
+	miniSearch.add(prepareDocForIndex(docToAdd as Note));
 }
 
 export function removeNoteFromSearch(id: string): void {
@@ -132,7 +130,7 @@ export function searchNotes(query: string, filters: SearchFilters = {}): SearchR
 	if (filters.folder) {
 		const folderPrefix = filters.folder;
 		results = results.filter(
-			(r) => r.folder === folderPrefix || r.folder.startsWith(folderPrefix + '/'),
+			(r) => r.folder === folderPrefix || r.folder.startsWith(folderPrefix + '/')
 		);
 	}
 
@@ -148,7 +146,7 @@ export function searchNotes(query: string, filters: SearchFilters = {}): SearchR
 		tags: r.tags,
 		modified: r.modified,
 		pinned: r.pinned,
-		score: r.score,
+		score: r.score
 	}));
 }
 

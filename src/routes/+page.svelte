@@ -1,23 +1,126 @@
 <script lang="ts">
-	import { onMount, tick } from 'svelte';
-	import { createNote, deleteNote, getActiveNotes, syncNoteUpdate } from '$lib/db';
-	import { initSearchIndex, searchNotes, updateNoteInSearch, addNoteToSearch, removeNoteFromSearch } from '$lib/search';
-	import type { Note } from '$lib/types';
-	import { Plus, Search, Trash2, Pin } from 'lucide-svelte';
-	import Editor from '$lib/components/Editor.svelte';
-	import VirtualList from '$lib/components/VirtualList.svelte';
+	import { onMount, tick, untrack } from 'svelte';
+	import {
+		addNoteToCanvas,
+		createNote,
+		db,
+		deleteNote,
+		getActiveNotes,
+		getCanvasItems,
+		getOrCreateFolderCanvas,
+		removeCanvasItem,
+		removeNotesFromCanvas,
+		syncNoteUpdate,
+		updateCanvasItemPosition
+	} from '$lib/db';
+	import {
+		initSearchIndex,
+		searchNotes,
+		updateNoteInSearch,
+		addNoteToSearch,
+		removeNoteFromSearch
+	} from '$lib/search';
+	import type { Canvas, CanvasItem, Note } from '$lib/types';
+	import {
+		Search,
+		Command,
+		Copy,
+		Download,
+		Layers,
+		X,
+		Trash2,
+		Folder,
+		Tag
+	} from 'lucide-svelte';
+	import MashDock from '$lib/components/MashDock.svelte';
+	import PeelScanner from '$lib/components/PeelScanner.svelte';
+	import CanvasBoard from '$lib/components/CanvasBoard.svelte';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+	import type { DockAction } from '$lib/dock';
+	import { notePreview } from '$lib/format';
+	import { type NavFilter } from '$lib/note-ui';
+	import {
+		combineNotes,
+		copyText,
+		exportNotesJson,
+		exportNotesMarkdown,
+		notesFromSelection
+	} from '$lib/mash';
+	import { clearCanvasViewport } from '$lib/viewport';
+	import {
+		clearDismissedForCanvas,
+		dismissNoteFromCanvas,
+		getDismissedNoteIds,
+		undismissNotesFromCanvas
+	} from '$lib/canvas-dismiss';
+	import {
+		CanvasUndoStack,
+		rangeBetween,
+		spatialNoteOrder,
+		type CanvasLayoutSnapshot
+	} from '$lib/canvas-undo';
+
+	const NOTE_MIME = 'application/x-mash-notes';
+	const COLLAPSED_CARD = { w: 220, h: 120 };
+	const EXPANDED_CARD = { w: 360, h: 320 };
 
 	let notes = $state<Note[]>([]);
 	let selectedId = $state<string | null>(null);
+	let selectionIds = $state<string[]>([]);
 	let searchQuery = $state('');
-	let currentFilter = $state<{ type: 'folder' | 'tag' | 'pinned' | null; value?: string }>({ type: null });
+	let currentFilter = $state<NavFilter>({ type: null });
+	let activeCanvas = $state<Canvas | null>(null);
+	let canvasItems = $state<CanvasItem[]>([]);
+	let actionToast = $state('');
+	let toastTimer: ReturnType<typeof setTimeout> | null = null;
+	let expandedNoteId = $state<string | null>(null);
+	let settlingIds = $state<Set<string>>(new Set());
+	let draggingTrayId = $state<string | null>(null);
+	let canvasLoadSeq = 0;
+	const stickySaveTimers = new Map<string, ReturnType<typeof setTimeout>>();
+	let stickySaveStatusClear: ReturnType<typeof setTimeout> | null = null;
+	const canvasUndo = new CanvasUndoStack();
+	let canvasUndoTick = $state(0);
+	let canCanvasUndo = $derived.by(() => {
+		canvasUndoTick;
+		return canvasUndo.canUndo;
+	});
+	let canCanvasRedo = $derived.by(() => {
+		canvasUndoTick;
+		return canvasUndo.canRedo;
+	});
 
-	let selectedNote = $derived(notes.find(n => n.id === selectedId) ?? null);
+	let peelOpen = $state(false);
+	let peelPinned = $state(false);
+	let peelMode = $state<'notes' | 'folders' | 'tags'>('notes');
+	let peelFilterText = $state('');
+	let foldersFlyout = $state(false);
+	let tagsFlyout = $state(false);
+	let bulkMenu = $state<'tag' | 'folder' | null>(null);
+	let bulkTagDraft = $state('');
+	let bulkFolderDraft = $state('');
+	let confirmDialog = $state<{
+		title: string;
+		message: string;
+		confirmLabel: string;
+		danger: boolean;
+		action: () => void | Promise<void>;
+	} | null>(null);
+
+	let selectedNote = $derived(notes.find((n) => n.id === selectedId) ?? null);
+	let selectionSet = $derived(new Set(selectionIds));
+	let selectedNotes = $derived(notesFromSelection(notes, selectionIds));
+	let notesById = $derived(new Map(notes.map((n) => [n.id, n])));
+	let canvasFolder = $derived(
+		currentFilter.type === 'folder' && currentFilter.value !== undefined
+			? currentFilter.value
+			: ''
+	);
+
 	let filteredNotes = $derived.by(() => {
 		let list = [...notes];
 
-		// Match basic structural filters first (AND logic)
-		list = list.filter(n => {
+		list = list.filter((n) => {
 			if (currentFilter.type === 'pinned') return n.pinned === 1;
 			if (currentFilter.type === 'folder' && currentFilter.value) {
 				return n.folder === currentFilter.value || n.folder.startsWith(currentFilter.value + '/');
@@ -28,17 +131,16 @@
 			return true;
 		});
 
-		// Apply text search on the already-filtered list
 		if (searchQuery.trim()) {
 			const results = searchNotes(searchQuery, {
 				folder: currentFilter.type === 'folder' ? currentFilter.value : undefined,
-				tags: currentFilter.type === 'tag' && currentFilter.value ? [currentFilter.value] : undefined
+				tags:
+					currentFilter.type === 'tag' && currentFilter.value ? [currentFilter.value] : undefined
 			});
-			const idSet = new Set(results.map(r => r.id));
-			list = list.filter(n => idSet.has(n.id));
+			const idSet = new Set(results.map((r) => r.id));
+			list = list.filter((n) => idSet.has(n.id));
 		}
 
-		// Final Sort: Pinned first, then most recent modified
 		list.sort((a, b) => {
 			if (a.pinned !== b.pinned) return b.pinned - a.pinned;
 			return b.modified - a.modified;
@@ -46,15 +148,34 @@
 		return list;
 	});
 
-	let uniqueFolders = $derived([...new Set(notes.map(n => n.folder).filter(Boolean))].sort());
-	let uniqueTags = $derived([...new Set(notes.flatMap(n => n.tags))].sort());
+	let uniqueFolders = $derived([...new Set(notes.map((n) => n.folder).filter(Boolean))].sort());
+	let uniqueTags = $derived([...new Set(notes.flatMap((n) => n.tags))].sort());
 
-	let backlinks = $derived.by(() => {
-		if (!selectedNote) return [];
-		return notes.filter(n =>
-			n.id !== selectedNote.id &&
-			n.links?.some(l => l.toLowerCase() === selectedNote.title.toLowerCase())
+	let peelNotes = $derived.by(() => {
+		const q = peelFilterText.trim().toLowerCase();
+		if (!q) return filteredNotes;
+		return filteredNotes.filter(
+			(n) =>
+				n.title.toLowerCase().includes(q) ||
+				n.body.toLowerCase().includes(q) ||
+				n.folder.toLowerCase().includes(q) ||
+				n.tags.some((t) => t.toLowerCase().includes(q))
 		);
+	});
+
+	let peelTitle = $derived.by(() => {
+		if (peelMode === 'folders') return 'Folders';
+		if (peelMode === 'tags') return 'Tags';
+		if (searchQuery.trim()) return 'Search results';
+		if (currentFilter.type === 'pinned') return 'Pinned';
+		if (currentFilter.type === 'folder' && currentFilter.value) return currentFilter.value;
+		if (currentFilter.type === 'tag' && currentFilter.value) return `#${currentFilter.value}`;
+		return 'All notes';
+	});
+
+	let canvasTitle = $derived.by(() => {
+		if (currentFilter.type === 'folder' && currentFilter.value) return currentFilter.value;
+		return 'Desk';
 	});
 
 	let isLoading = $state(true);
@@ -70,19 +191,708 @@
 		void tick().then(() => paletteInput?.focus());
 	});
 
-	// Reset highlight when query changes
 	$effect(() => {
 		paletteQuery;
 		paletteHighlight = 0;
 	});
-	// Local draft for editing without constant writes
+
 	let draftTitle = $state('');
 	let draftBody = $state('');
 	let draftFolder = $state('');
 	let draftTags = $state<string[]>([]);
 
 	let autoSaveTimeout: ReturnType<typeof setTimeout> | null = null;
-	let pendingSnap: { id: string; title: string; body: string; tags: string[]; folder: string; links: string[] } | null = null;
+	let pendingSnap: {
+		id: string;
+		title: string;
+		body: string;
+		tags: string[];
+		folder: string;
+		links: string[];
+	} | null = null;
+
+	function flashToast(msg: string) {
+		actionToast = msg;
+		if (toastTimer) clearTimeout(toastTimer);
+		toastTimer = setTimeout(() => {
+			actionToast = '';
+		}, 1600);
+	}
+
+	function clearSelection() {
+		selectionIds = [];
+		bulkMenu = null;
+	}
+
+	function toggleSelection(id: string, opts?: { additive?: boolean; range?: boolean }) {
+		const additive = opts?.additive ?? false;
+		const range = opts?.range ?? false;
+
+		if (range && selectedId) {
+			const ids = filteredNotes.map((n) => n.id);
+			const from = ids.indexOf(selectedId);
+			const to = ids.indexOf(id);
+			if (from >= 0 && to >= 0) {
+				const [lo, hi] = from < to ? [from, to] : [to, from];
+				const rangeIds = ids.slice(lo, hi + 1);
+				const next = new Set(additive ? selectionIds : []);
+				for (const rid of rangeIds) next.add(rid);
+				selectionIds = [...next];
+				return;
+			}
+		}
+
+		if (additive) {
+			if (selectionSet.has(id)) {
+				selectionIds = selectionIds.filter((x) => x !== id);
+			} else {
+				selectionIds = [...selectionIds, id];
+			}
+			return;
+		}
+
+		selectionIds = [id];
+	}
+
+	function handleNoteClick(id: string, e: MouseEvent) {
+		if (e.metaKey || e.ctrlKey || e.shiftKey) {
+			e.preventDefault();
+			toggleSelection(id, {
+				additive: e.metaKey || e.ctrlKey || selectionIds.length > 0,
+				range: e.shiftKey
+			});
+			selectNote(id, { keepSelection: true });
+			return;
+		}
+		selectNote(id);
+	}
+
+	/**
+	 * Mash notes into a new note + canvas bubble.
+	 * Source notes stay in the library; their canvas cards are removed and can be restored via Unmash.
+	 */
+	async function mashNotesIntoBubble(
+		sourceNotes: Note[],
+		opts?: { x?: number; y?: number; removeItemIds?: string[] }
+	) {
+		if (sourceNotes.length < 2) {
+			flashToast('Pick at least two notes to mash');
+			return;
+		}
+		if (!activeCanvas) {
+			flashToast('Canvas not ready');
+			return;
+		}
+
+		const body = combineNotes(sourceNotes);
+		const title =
+			sourceNotes.length === 2
+				? `${sourceNotes[0].title} + ${sourceNotes[1].title}`.slice(0, 200)
+				: `Mash of ${sourceNotes.length} notes`;
+
+		const xs = opts?.x;
+		const ys = opts?.y;
+		let placeX = xs ?? 80;
+		let placeY = ys ?? 80;
+		if (xs === undefined || ys === undefined) {
+			const onBoard = canvasItems.filter((i) =>
+				sourceNotes.some((n) => n.id === i.noteId)
+			);
+			if (onBoard.length > 0) {
+				placeX = onBoard.reduce((s, i) => s + i.x, 0) / onBoard.length;
+				placeY = onBoard.reduce((s, i) => s + i.y, 0) / onBoard.length;
+			}
+		}
+
+		const sourceIds = sourceNotes.map((n) => n.id);
+		const mergedTags = [
+			...new Set(['mash', ...sourceNotes.flatMap((n) => n.tags)])
+		];
+		const mashed = await createNote({
+			title,
+			body,
+			folder: canvasFolder,
+			tags: mergedTags,
+			links: extractWikilinks(body),
+			mashedFrom: sourceIds
+		});
+		addNoteToSearch(mashed);
+		notes = [mashed, ...notes];
+
+		const removeIds =
+			opts?.removeItemIds ??
+			canvasItems.filter((i) => sourceIds.includes(i.noteId)).map((i) => i.id);
+		for (const id of removeIds) {
+			await removeCanvasItem(id);
+		}
+		// Keep mashed sources off folder canvases until Unmash / drop-back.
+		for (const noteId of sourceIds) {
+			dismissNoteFromCanvas(activeCanvas.id, noteId);
+		}
+		canvasUndo.clear();
+		canvasUndoTick++;
+
+		const item = await addNoteToCanvas(activeCanvas.id, mashed.id, {
+			x: placeX,
+			y: placeY,
+			w: EXPANDED_CARD.w,
+			h: EXPANDED_CARD.h
+		});
+		await refreshCanvasItems();
+		selectionIds = [mashed.id];
+		selectedId = mashed.id;
+		expandedNoteId = mashed.id;
+		settlingIds = new Set([item.id]);
+		setTimeout(() => {
+			settlingIds = new Set();
+		}, 320);
+		flashToast('Mashed — use Unmash to restore sources');
+	}
+
+	async function combineSelection() {
+		await mashNotesIntoBubble(selectedNotes);
+	}
+
+	/** Restore source notes onto the canvas and remove the mash bubble. */
+	async function unmashSelection() {
+		if (!activeCanvas) return;
+		const mashNotes = selectedNotes.filter((n) => n.mashedFrom && n.mashedFrom.length > 0);
+		if (mashNotes.length === 0) {
+			flashToast('Select a mashed sticky to unmash');
+			return;
+		}
+
+		const placed: string[] = [];
+		let missingSources = 0;
+		for (const mash of mashNotes) {
+			const sourceIds = mash.mashedFrom ?? [];
+			const sources = sourceIds
+				.map((id) => notes.find((n) => n.id === id))
+				.filter((n): n is Note => Boolean(n));
+			missingSources += sourceIds.length - sources.length;
+			const mashItem = canvasItems.find((i) => i.noteId === mash.id);
+			const baseX = mashItem?.x ?? 80;
+			const baseY = mashItem?.y ?? 80;
+
+			if (mashItem) {
+				await removeCanvasItem(mashItem.id);
+			}
+			undismissNotesFromCanvas(
+				activeCanvas.id,
+				sources.map((s) => s.id)
+			);
+
+			for (let i = 0; i < sources.length; i++) {
+				const item = await addNoteToCanvas(activeCanvas.id, sources[i].id, {
+					x: baseX + i * 28,
+					y: baseY + i * 24,
+					w: COLLAPSED_CARD.w,
+					h: COLLAPSED_CARD.h
+				});
+				placed.push(item.id);
+			}
+
+			await deleteNote(mash.id);
+			removeNoteFromSearch(mash.id);
+			notes = notes.filter((n) => n.id !== mash.id);
+			if (expandedNoteId === mash.id) expandedNoteId = null;
+		}
+
+		await refreshCanvasItems();
+		selectionIds = [];
+		selectedId = null;
+		settlingIds = new Set(placed);
+		setTimeout(() => {
+			settlingIds = new Set();
+		}, 320);
+		flashToast(
+			missingSources > 0
+				? `Unmashed — ${missingSources} source${missingSources === 1 ? '' : 's'} missing`
+				: 'Unmashed — sources restored'
+		);
+	}
+
+	let canUnmash = $derived(
+		selectedNotes.some((n) => Boolean(n.mashedFrom && n.mashedFrom.length > 0))
+	);
+
+	async function copySelection(sourceNotes: Note[] = selectedNotes) {
+		if (sourceNotes.length === 0) {
+			flashToast('Select notes to copy');
+			return;
+		}
+		const ok = await copyText(combineNotes(sourceNotes));
+		flashToast(
+			ok
+				? `Copied ${sourceNotes.length} note${sourceNotes.length > 1 ? 's' : ''}`
+				: 'Clipboard unavailable'
+		);
+	}
+
+	function exportSelectionMarkdown(sourceNotes: Note[] = selectedNotes) {
+		if (sourceNotes.length === 0) {
+			flashToast('Select notes to export');
+			return;
+		}
+		exportNotesMarkdown(sourceNotes);
+		flashToast(`Exported ${sourceNotes.length} as Markdown`);
+	}
+
+	function exportSelectionJson(sourceNotes: Note[] = selectedNotes) {
+		if (sourceNotes.length === 0) {
+			flashToast('Select notes to export');
+			return;
+		}
+		exportNotesJson(sourceNotes);
+		flashToast(`Exported ${sourceNotes.length} as JSON`);
+	}
+
+	async function loadContextCanvas(folder: string) {
+		const seq = ++canvasLoadSeq;
+		try {
+			const canvas = await getOrCreateFolderCanvas(folder);
+			if (seq !== canvasLoadSeq) return;
+			activeCanvas = canvas;
+			let items = await getCanvasItems(canvas.id);
+			if (seq !== canvasLoadSeq) return;
+
+			// Folder canvases mirror membership: add missing notes, prune leavers.
+			// Notes the user removed from the board stay dismissed until dropped back.
+			if (folder) {
+				const folderNotes = notes.filter(
+					(n) => n.folder === folder || n.folder.startsWith(folder + '/')
+				);
+				const folderNoteIds = new Set(folderNotes.map((n) => n.id));
+				const dismissed = getDismissedNoteIds(canvas.id);
+				const staleIds = items
+					.filter((i) => !folderNoteIds.has(i.noteId))
+					.map((i) => i.noteId);
+				if (staleIds.length > 0) {
+					await removeNotesFromCanvas(canvas.id, staleIds);
+					if (seq !== canvasLoadSeq) return;
+					items = items.filter((i) => folderNoteIds.has(i.noteId));
+				}
+
+				const onCanvas = new Set(items.map((i) => i.noteId));
+				const missing = folderNotes.filter(
+					(n) => !onCanvas.has(n.id) && !dismissed.has(n.id)
+				);
+				if (missing.length > 0) {
+					await Promise.all(
+						missing.map((note, i) => {
+							const idx = items.length + i;
+							return addNoteToCanvas(canvas.id, note.id, {
+								x: 40 + (idx % 4) * 240,
+								y: 40 + Math.floor(idx / 4) * 160,
+								w: COLLAPSED_CARD.w,
+								h: COLLAPSED_CARD.h
+							});
+						})
+					);
+					if (seq !== canvasLoadSeq) return;
+					items = await getCanvasItems(canvas.id);
+				}
+			}
+
+			if (seq !== canvasLoadSeq) return;
+			// Preserve optimistic drag/resize positions if a reload races mid-gesture.
+			const localById = new Map(canvasItems.map((i) => [i.id, i]));
+			canvasItems = items.map((item) => {
+				const local = localById.get(item.id);
+				if (!local) return item;
+				if (
+					local.x !== item.x ||
+					local.y !== item.y ||
+					local.w !== item.w ||
+					local.h !== item.h
+				) {
+					return { ...item, x: local.x, y: local.y, w: local.w, h: local.h };
+				}
+				return item;
+			});
+			if (expandedNoteId && !items.some((i) => i.noteId === expandedNoteId)) {
+				expandedNoteId = null;
+			}
+		} catch (e) {
+			if (seq !== canvasLoadSeq) return;
+			console.error('Failed to load canvas', e);
+			activeCanvas = null;
+			canvasItems = [];
+		}
+	}
+
+	/** Re-run canvas load when folder context or folder membership changes. */
+	let folderMembershipKey = $derived.by(() => {
+		if (!canvasFolder) return '';
+		return notes
+			.filter((n) => n.folder === canvasFolder || n.folder.startsWith(canvasFolder + '/'))
+			.map((n) => n.id)
+			.sort()
+			.join(',');
+	});
+
+	$effect(() => {
+		canvasFolder;
+		folderMembershipKey;
+		// untrack: canvasUndoTick++ both reads and writes — would infinite-loop the effect.
+		untrack(() => {
+			canvasUndo.clear();
+			canvasUndoTick++;
+		});
+		void loadContextCanvas(canvasFolder);
+	});
+
+	async function refreshCanvasItems() {
+		if (!activeCanvas) return;
+		canvasItems = await getCanvasItems(activeCanvas.id);
+	}
+
+	async function handleDropNotes(noteIds: string[], x: number, y: number) {
+		if (!activeCanvas || noteIds.length === 0) return;
+		undismissNotesFromCanvas(activeCanvas.id, noteIds);
+		const placed: string[] = [];
+		for (let i = 0; i < noteIds.length; i++) {
+			const dropX = x + i * 28;
+			const dropY = y + i * 24;
+			const existing = canvasItems.find((item) => item.noteId === noteIds[i]);
+			if (existing) {
+				canvasItems = canvasItems.map((item) =>
+					item.id === existing.id ? { ...item, x: dropX, y: dropY } : item
+				);
+				await updateCanvasItemPosition(existing.id, { x: dropX, y: dropY });
+				placed.push(existing.id);
+				continue;
+			}
+			const item = await addNoteToCanvas(activeCanvas.id, noteIds[i], {
+				x: dropX,
+				y: dropY,
+				w: COLLAPSED_CARD.w,
+				h: COLLAPSED_CARD.h
+			});
+			placed.push(item.id);
+		}
+		await refreshCanvasItems();
+		selectionIds = [...noteIds];
+		selectedId = noteIds[0] ?? null;
+		settlingIds = new Set(placed);
+		setTimeout(() => {
+			settlingIds = new Set();
+		}, 320);
+		flashToast(`Dropped ${noteIds.length} on canvas`);
+	}
+
+	function snapshotItems(itemIds: string[]): CanvasLayoutSnapshot[] {
+		const out: CanvasLayoutSnapshot[] = [];
+		for (const id of itemIds) {
+			const item = canvasItems.find((i) => i.id === id);
+			if (!item) continue;
+			out.push({ itemId: id, x: item.x, y: item.y, w: item.w, h: item.h });
+		}
+		return out;
+	}
+
+	function applyLayoutSnapshots(snaps: CanvasLayoutSnapshot[]) {
+		const byId = new Map(snaps.map((s) => [s.itemId, s]));
+		canvasItems = canvasItems.map((item) => {
+			const s = byId.get(item.id);
+			return s ? { ...item, x: s.x, y: s.y, w: s.w, h: s.h } : item;
+		});
+		void Promise.all(
+			snaps.map((s) =>
+				updateCanvasItemPosition(s.itemId, { x: s.x, y: s.y, w: s.w, h: s.h })
+			)
+		);
+	}
+
+	function pushCanvasUndo(
+		label: string,
+		before: CanvasLayoutSnapshot[],
+		after: CanvasLayoutSnapshot[]
+	) {
+		canvasUndo.push({ label, before, after });
+		canvasUndoTick++;
+	}
+
+	function undoCanvasLayout() {
+		const entry = canvasUndo.undo();
+		canvasUndoTick++;
+		if (!entry) return;
+		applyLayoutSnapshots(entry.before);
+		flashToast(`Undo ${entry.label}`);
+	}
+
+	function redoCanvasLayout() {
+		const entry = canvasUndo.redo();
+		canvasUndoTick++;
+		if (!entry) return;
+		applyLayoutSnapshots(entry.after);
+		flashToast(`Redo ${entry.label}`);
+	}
+
+	function handleCanvasMove(itemId: string, x: number, y: number) {
+		// Optimistic only — persist on drag end to avoid IndexedDB thrash.
+		canvasItems = canvasItems.map((item) => (item.id === itemId ? { ...item, x, y } : item));
+	}
+
+	function handleCanvasMoveMany(moves: Array<{ itemId: string; x: number; y: number }>) {
+		const byId = new Map(moves.map((m) => [m.itemId, m]));
+		canvasItems = canvasItems.map((item) => {
+			const m = byId.get(item.id);
+			return m ? { ...item, x: m.x, y: m.y } : item;
+		});
+	}
+
+	async function handleCanvasMoveEnd(
+		moves: Array<{ itemId: string; x: number; y: number }>,
+		before?: Array<{ itemId: string; x: number; y: number }>
+	) {
+		const beforeSnaps =
+			before?.map((b) => {
+				const cur = canvasItems.find((i) => i.id === b.itemId);
+				return { itemId: b.itemId, x: b.x, y: b.y, w: cur?.w, h: cur?.h };
+			}) ?? snapshotItems(moves.map((m) => m.itemId));
+		handleCanvasMoveMany(moves);
+		const afterSnaps = moves.map((m) => {
+			const cur = canvasItems.find((i) => i.id === m.itemId);
+			return { itemId: m.itemId, x: m.x, y: m.y, w: cur?.w, h: cur?.h };
+		});
+		pushCanvasUndo(moves.length > 1 ? 'Arrange' : 'Move', beforeSnaps, afterSnaps);
+		await Promise.all(
+			moves.map((m) => updateCanvasItemPosition(m.itemId, { x: m.x, y: m.y }))
+		);
+	}
+
+	function handleCanvasResize(itemId: string, w: number, h: number) {
+		canvasItems = canvasItems.map((item) => (item.id === itemId ? { ...item, w, h } : item));
+	}
+
+	async function handleCanvasResizeEnd(
+		itemId: string,
+		w: number,
+		h: number,
+		before?: { w: number; h: number }
+	) {
+		const item = canvasItems.find((i) => i.id === itemId);
+		if (!item) return;
+		const beforeSnap: CanvasLayoutSnapshot = {
+			itemId,
+			x: item.x,
+			y: item.y,
+			w: before?.w ?? item.w,
+			h: before?.h ?? item.h
+		};
+		canvasItems = canvasItems.map((i) => (i.id === itemId ? { ...i, w, h } : i));
+		pushCanvasUndo('Resize', [beforeSnap], [{ itemId, x: item.x, y: item.y, w, h }]);
+		await updateCanvasItemPosition(itemId, { x: item.x, y: item.y, w, h });
+	}
+
+	function handleCanvasSelectNotes(noteIds: string[], opts: { additive: boolean }) {
+		if (!opts.additive) {
+			selectionIds = [...noteIds];
+		} else {
+			const next = new Set(selectionIds);
+			for (const id of noteIds) {
+				if (next.has(id)) next.delete(id);
+				else next.add(id);
+			}
+			selectionIds = [...next];
+		}
+		selectedId = selectionIds[0] ?? null;
+	}
+
+	function handleCanvasSelect(noteId: string, opts: { additive: boolean; range: boolean }) {
+		if (opts.range && selectedId) {
+			const order = spatialNoteOrder(canvasItems);
+			const rangeIds = rangeBetween(order, selectedId, noteId);
+			const next = new Set(opts.additive ? selectionIds : []);
+			for (const id of rangeIds) next.add(id);
+			selectionIds = [...next];
+			selectedId = noteId;
+			return;
+		}
+		toggleSelection(noteId, { additive: opts.additive, range: false });
+		selectNote(noteId, { keepSelection: true });
+	}
+
+	async function handleCanvasRemove(itemId: string) {
+		const item = canvasItems.find((i) => i.id === itemId);
+		await removeCanvasItem(itemId);
+		canvasItems = canvasItems.filter((i) => i.id !== itemId);
+		if (item && activeCanvas && canvasFolder) {
+			dismissNoteFromCanvas(activeCanvas.id, item.noteId);
+		}
+		if (item && expandedNoteId === item.noteId) expandedNoteId = null;
+	}
+
+	function expandSticky(noteId: string) {
+		selectNote(noteId, { keepSelection: true });
+		expandedNoteId = noteId;
+		const item = canvasItems.find((i) => i.noteId === noteId);
+		if (item) {
+			// Grow to at least expanded defaults; keep larger custom sizes.
+			const w = Math.max(item.w ?? 0, EXPANDED_CARD.w);
+			const h = Math.max(item.h ?? 0, EXPANDED_CARD.h);
+			if (w !== item.w || h !== item.h) {
+				canvasItems = canvasItems.map((i) => (i.id === item.id ? { ...i, w, h } : i));
+				void updateCanvasItemPosition(item.id, { x: item.x, y: item.y, w, h });
+			}
+		}
+	}
+
+	function collapseSticky() {
+		const noteId = expandedNoteId;
+		expandedNoteId = null;
+		if (!noteId) return;
+		const item = canvasItems.find((i) => i.noteId === noteId);
+		if (!item) return;
+		// Shrink oversized expanded cards back to a compact default; keep intentional small sizes.
+		const tooBig =
+			(item.w ?? 0) > COLLAPSED_CARD.w + 40 || (item.h ?? 0) > COLLAPSED_CARD.h + 40;
+		if (!tooBig) return;
+		const w = COLLAPSED_CARD.w;
+		const h = COLLAPSED_CARD.h;
+		canvasItems = canvasItems.map((i) => (i.id === item.id ? { ...i, w, h } : i));
+		void updateCanvasItemPosition(item.id, { x: item.x, y: item.y, w, h });
+	}
+
+	function markStickySaving() {
+		saveStatus = 'saving';
+		if (stickySaveStatusClear) clearTimeout(stickySaveStatusClear);
+	}
+
+	function markStickySaved() {
+		saveStatus = 'saved';
+		if (stickySaveStatusClear) clearTimeout(stickySaveStatusClear);
+		stickySaveStatusClear = setTimeout(() => {
+			if (saveStatus === 'saved') saveStatus = '';
+		}, 1200);
+	}
+
+	function scheduleStickyPersist(
+		noteId: string,
+		patch: Partial<Note>,
+		updated: Note
+	) {
+		markStickySaving();
+		const prev = stickySaveTimers.get(noteId);
+		if (prev) clearTimeout(prev);
+		stickySaveTimers.set(
+			noteId,
+			setTimeout(() => {
+				stickySaveTimers.delete(noteId);
+				syncNoteUpdate(noteId, patch);
+				updateNoteInSearch({ id: noteId, ...patch }, updated);
+				markStickySaved();
+			}, 400)
+		);
+	}
+
+	/** Tray double-click: ensure note is on canvas, then expand as sticky. */
+	async function openStickyFromTray(noteId: string) {
+		if (!activeCanvas) return;
+		const existing = canvasItems.find((i) => i.noteId === noteId);
+		if (!existing) {
+			const item = await addNoteToCanvas(activeCanvas.id, noteId);
+			await refreshCanvasItems();
+			settlingIds = new Set([item.id]);
+			setTimeout(() => {
+				settlingIds = new Set();
+			}, 320);
+		}
+		expandSticky(noteId);
+	}
+
+	function handleStickyTitleChange(noteId: string, title: string) {
+		const note = notes.find((n) => n.id === noteId);
+		if (!note) return;
+		if (selectedId === noteId) draftTitle = title;
+		const updated = { ...note, title, modified: Date.now() };
+		notes = notes.map((n) => (n.id === noteId ? updated : n));
+		scheduleStickyPersist(noteId, { title }, updated);
+	}
+
+	function handleStickyBodyChange(noteId: string, body: string) {
+		const note = notes.find((n) => n.id === noteId);
+		if (!note) return;
+		const links = extractWikilinks(body);
+		if (selectedId === noteId) draftBody = body;
+		const updated = { ...note, body, links, modified: Date.now() };
+		notes = notes.map((n) => (n.id === noteId ? updated : n));
+		scheduleStickyPersist(noteId, { body, links }, updated);
+	}
+
+	async function handleMashCards(sourceItemId: string, targetItemId: string) {
+		const source = canvasItems.find((i) => i.id === sourceItemId);
+		const target = canvasItems.find((i) => i.id === targetItemId);
+		if (!source || !target) return;
+
+		// If the dragged card is part of a multi-selection that includes the target,
+		// mash the whole selection. Otherwise mash just the two overlapped cards.
+		const pairNoteIds = new Set([source.noteId, target.noteId]);
+		const selectionIncludesPair =
+			selectionSet.has(source.noteId) &&
+			selectionSet.has(target.noteId) &&
+			selectionIds.length >= 2;
+
+		const mashNoteIds = selectionIncludesPair
+			? [...new Set(selectionIds)]
+			: [...pairNoteIds];
+
+		const mashNotes = mashNoteIds
+			.map((id) => notesById.get(id))
+			.filter((n): n is Note => Boolean(n));
+		if (mashNotes.length < 2) return;
+
+		const mashItems = canvasItems.filter((i) => mashNoteIds.includes(i.noteId));
+		const midX =
+			mashItems.reduce((s, i) => s + i.x, 0) / Math.max(1, mashItems.length);
+		const midY =
+			mashItems.reduce((s, i) => s + i.y, 0) / Math.max(1, mashItems.length);
+
+		await mashNotesIntoBubble(mashNotes, {
+			x: midX,
+			y: midY,
+			removeItemIds: mashItems.map((i) => i.id)
+		});
+	}
+
+	function onTrayDragStart(e: DragEvent, noteId: string) {
+		const ids =
+			selectionSet.has(noteId) && selectionIds.length > 1 ? [...selectionIds] : [noteId];
+		if (!selectionSet.has(noteId)) {
+			selectionIds = [noteId];
+		}
+		selectedId = noteId;
+		draggingTrayId = noteId;
+		const payload = JSON.stringify(ids);
+		e.dataTransfer?.setData(NOTE_MIME, payload);
+		e.dataTransfer?.setData('text/plain', payload);
+		if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copy';
+
+		const note = notesById.get(noteId);
+		if (note && e.dataTransfer) {
+			const ghost = document.createElement('div');
+			ghost.className = 'mash-note-card';
+			ghost.style.cssText =
+				'position:absolute;top:-999px;left:-999px;width:180px;padding:10px 12px;border-radius:12px;font:500 12px var(--mash-font-ui);';
+			ghost.innerHTML = `<div style="font-weight:600;margin-bottom:4px">${escapeHtml(note.title)}</div><div style="font-size:10px;opacity:.65">${escapeHtml(notePreview(note.body, 60))}</div>`;
+			document.body.appendChild(ghost);
+			e.dataTransfer.setDragImage(ghost, 40, 20);
+			requestAnimationFrame(() => ghost.remove());
+		}
+	}
+
+	function onTrayDragEnd() {
+		draggingTrayId = null;
+	}
+
+	function escapeHtml(s: string): string {
+		return s
+			.replace(/&/g, '&amp;')
+			.replace(/</g, '&lt;')
+			.replace(/>/g, '&gt;')
+			.replace(/"/g, '&quot;');
+	}
 
 	function extractWikilinks(body: string): string[] {
 		const links: string[] = [];
@@ -114,31 +924,34 @@
 	async function loadNotes() {
 		isLoading = true;
 		try {
-			// Hydrate search index from DB first
 			await initSearchIndex();
-			// Then load notes for UI
 			let loaded = await getActiveNotes({ limit: 10000 });
 
-			// Seed some starter notes on first use
 			if (loaded.length === 0) {
 				const seed1 = await createNote({
 					title: 'Welcome to Mash',
-					body: 'Quick notes. Fast search. Your ideas, mashed together.\n\nTry creating a few notes and using the sidebar filters.',
-					tags: ['welcome'],
+					body: 'Mash is where notes go to become useful.\n\nDrag notes from the tray onto the canvas. Select a few, then Combine, Copy, or Export.',
+					tags: ['welcome']
 				});
 				addNoteToSearch(seed1);
 				const seed2 = await createNote({
 					title: 'Project ideas',
 					body: '- Build the thing\n- Talk to users\n- Ship fast',
 					tags: ['project'],
-					folder: 'Ideas',
+					folder: 'Ideas'
 				});
 				addNoteToSearch(seed2);
-				loaded = [seed1, seed2];
+				const seed3 = await createNote({
+					title: 'Meeting scraps',
+					body: 'Decide on the export format.\nFollow up with design on the workbench.',
+					tags: ['meeting'],
+					folder: 'Ideas'
+				});
+				addNoteToSearch(seed3);
+				loaded = [seed1, seed2, seed3];
 			}
 
-			// Ensure links are populated for existing notes
-			notes = loaded.map(n => ({
+			notes = loaded.map((n) => ({
 				...n,
 				links: n.links?.length ? n.links : extractWikilinks(n.body)
 			}));
@@ -152,24 +965,31 @@
 		const note = await createNote({
 			title: 'Untitled',
 			body: '',
-			folder: currentFilter.type === 'folder' ? (currentFilter.value || '') : '',
-			links: [],
+			folder: currentFilter.type === 'folder' ? currentFilter.value || '' : '',
+			links: []
 		});
 		addNoteToSearch(note);
 		notes = [note, ...notes];
+		if (activeCanvas) {
+			const item = await addNoteToCanvas(activeCanvas.id, note.id, {
+				x: 60 + canvasItems.length * 24,
+				y: 60 + canvasItems.length * 20,
+				w: 360,
+				h: 320
+			});
+			await refreshCanvasItems();
+			settlingIds = new Set([item.id]);
+			setTimeout(() => {
+				settlingIds = new Set();
+			}, 320);
+		}
 		selectNote(note.id);
-		// Focus title
-		setTimeout(() => {
-			const titleInput = document.getElementById('note-title') as HTMLInputElement;
-			titleInput?.select();
-		}, 50);
+		expandedNoteId = note.id;
 	}
 
-	function selectNote(id: string) {
-		// Flush any pending save from the previously selected note first
+	function selectNote(id: string, opts?: { keepSelection?: boolean }) {
 		if (selectedId && selectedId !== id) flushPendingSave();
-		// Set drafts synchronously so Editor receives correct value same tick as noteId
-		const note = notes.find(n => n.id === id);
+		const note = notes.find((n) => n.id === id);
 		if (note) {
 			draftTitle = note.title;
 			draftBody = note.body;
@@ -177,36 +997,34 @@
 			draftTags = [...note.tags];
 		}
 		selectedId = id;
-	}
-
-	async function handleWikilinkClick(title: string) {
-		let target = notes.find(n => n.title.toLowerCase() === title.toLowerCase());
-
-		if (!target) {
-			target = await createNote({
-				title,
-				body: '',
-				folder: currentFilter.type === 'folder' ? currentFilter.value || '' : '',
-			});
-			addNoteToSearch(target);
-			notes = [target, ...notes];
+		if (!opts?.keepSelection) {
+			selectionIds = [id];
 		}
-
-		selectNote(target.id);
 	}
 
-	function applyDraftSave(snap: { id: string; title: string; body: string; tags: string[]; folder: string; links: string[] }): void {
+	function applyDraftSave(snap: {
+		id: string;
+		title: string;
+		body: string;
+		tags: string[];
+		folder: string;
+		links: string[];
+	}): void {
 		const changes: Partial<Note> = {
 			title: snap.title,
 			body: snap.body,
 			tags: snap.tags,
 			folder: snap.folder,
-			links: snap.links,
+			links: snap.links
 		};
 		syncNoteUpdate(snap.id, changes);
 
-		const updatedSnap = { ...notes.find(n => n.id === snap.id)!, ...changes, modified: Date.now() };
-		notes = notes.map(n => n.id === snap.id ? updatedSnap : n);
+		const updatedSnap = {
+			...notes.find((n) => n.id === snap.id)!,
+			...changes,
+			modified: Date.now()
+		};
+		notes = notes.map((n) => (n.id === snap.id ? updatedSnap : n));
 		updateNoteInSearch({ id: snap.id, ...changes }, updatedSnap);
 	}
 
@@ -215,14 +1033,13 @@
 		if (autoSaveTimeout) clearTimeout(autoSaveTimeout);
 		saveStatus = 'saving';
 
-		// Store pending snap so flushPendingSave can issue it immediately
 		pendingSnap = {
 			id: selectedId!,
 			title: draftTitle,
 			body: draftBody,
 			tags: [...draftTags],
 			folder: draftFolder,
-			links: extractWikilinks(draftBody),
+			links: extractWikilinks(draftBody)
 		};
 
 		autoSaveTimeout = setTimeout(() => {
@@ -247,31 +1064,164 @@
 			applyDraftSave(pendingSnap);
 			pendingSnap = null;
 		}
+		for (const [noteId, timer] of stickySaveTimers) {
+			clearTimeout(timer);
+			stickySaveTimers.delete(noteId);
+			const note = notes.find((n) => n.id === noteId);
+			if (!note) continue;
+			syncNoteUpdate(noteId, {
+				title: note.title,
+				body: note.body,
+				links: note.links
+			});
+			updateNoteInSearch(
+				{ id: noteId, title: note.title, body: note.body, links: note.links },
+				note
+			);
+		}
 	}
 
-	function handleTitleInput(e: Event) {
-		draftTitle = (e.target as HTMLInputElement).value;
-		scheduleAutoSave();
+	function askConfirm(opts: {
+		title: string;
+		message: string;
+		confirmLabel?: string;
+		danger?: boolean;
+		action: () => void | Promise<void>;
+	}) {
+		confirmDialog = {
+			title: opts.title,
+			message: opts.message,
+			confirmLabel: opts.confirmLabel ?? 'Confirm',
+			danger: opts.danger ?? false,
+			action: opts.action
+		};
 	}
 
-	function addTag(tag: string) {
-		const t = tag.trim();
-		if (!t || draftTags.includes(t)) return;
-		draftTags = [...draftTags, t];
-		scheduleAutoSave();
-	}
-
-	function removeTag(tag: string) {
-		draftTags = draftTags.filter(t => t !== tag);
-		scheduleAutoSave();
+	async function runConfirmDialog() {
+		const pending = confirmDialog;
+		confirmDialog = null;
+		if (!pending) return;
+		await pending.action();
 	}
 
 	async function handleDelete() {
-		if (!selectedId || !confirm('Delete this note?')) return;
-		await deleteNote(selectedId);
-		removeNoteFromSearch(selectedId);
-		notes = notes.filter(n => n.id !== selectedId);
-		if (notes.length > 0) selectNote(notes[0].id); else selectedId = null;
+		const ids = selectionIds.length > 0 ? [...selectionIds] : selectedId ? [selectedId] : [];
+		if (ids.length === 0) return;
+		askConfirm({
+			title: ids.length === 1 ? 'Delete note' : `Delete ${ids.length} notes`,
+			message:
+				ids.length === 1
+					? 'Delete this note? This cannot be undone.'
+					: `Delete ${ids.length} notes? This cannot be undone.`,
+			confirmLabel: 'Delete',
+			danger: true,
+			action: async () => {
+				for (const id of ids) {
+					await deleteNote(id);
+					removeNoteFromSearch(id);
+				}
+				const idSet = new Set(ids);
+				notes = notes.filter((n) => !idSet.has(n.id));
+				canvasItems = canvasItems.filter((i) => !idSet.has(i.noteId));
+				if (expandedNoteId && idSet.has(expandedNoteId)) expandedNoteId = null;
+				selectionIds = [];
+				selectedId = notes[0]?.id ?? null;
+				if (selectedId) selectNote(selectedId);
+				bulkMenu = null;
+				flashToast(ids.length === 1 ? 'Note deleted' : `${ids.length} notes deleted`);
+			}
+		});
+	}
+
+	function applyNotePatch(id: string, patch: Partial<Note>) {
+		const note = notes.find((n) => n.id === id);
+		if (!note) return;
+		const updated = { ...note, ...patch, modified: Date.now() };
+		notes = notes.map((n) => (n.id === id ? updated : n));
+		syncNoteUpdate(id, patch);
+		updateNoteInSearch({ id, ...patch }, updated);
+	}
+
+	function tagSelection(tag: string) {
+		const t = tag.trim();
+		if (!t || selectionIds.length === 0) return;
+		for (const id of selectionIds) {
+			const note = notes.find((n) => n.id === id);
+			if (!note || note.tags.includes(t)) continue;
+			applyNotePatch(id, { tags: [...note.tags, t] });
+		}
+		bulkTagDraft = '';
+		bulkMenu = null;
+		flashToast(`Tagged ${selectionIds.length} with #${t}`);
+	}
+
+	function assignFolderToSelection(folder: string) {
+		const f = folder.trim();
+		if (selectionIds.length === 0) return;
+		for (const id of selectionIds) {
+			applyNotePatch(id, { folder: f });
+		}
+		bulkFolderDraft = '';
+		bulkMenu = null;
+		flashToast(f ? `Moved ${selectionIds.length} to ${f}` : `Cleared folder on ${selectionIds.length}`);
+	}
+
+	async function deleteFolder(folder: string) {
+		const matching = notes.filter(
+			(n) => n.folder === folder || n.folder.startsWith(folder + '/')
+		);
+		askConfirm({
+			title: 'Remove folder',
+			message:
+				matching.length > 0
+					? `Remove folder “${folder}”? ${matching.length} note${matching.length === 1 ? '' : 's'} will move to no folder.`
+					: `Remove folder “${folder}”?`,
+			confirmLabel: 'Remove',
+			danger: true,
+			action: async () => {
+				for (const note of matching) {
+					applyNotePatch(note.id, { folder: '' });
+				}
+
+				const canvas = await db.canvases.where('folder').equals(folder).first();
+				if (canvas) {
+					await db.canvasItems.where('canvasId').equals(canvas.id).delete();
+					await db.canvases.delete(canvas.id);
+					clearCanvasViewport(canvas.id);
+					clearDismissedForCanvas(canvas.id);
+					if (activeCanvas?.id === canvas.id) {
+						await loadContextCanvas('');
+					}
+				}
+
+				if (currentFilter.type === 'folder' && currentFilter.value === folder) {
+					clearFilter();
+				}
+				flashToast(`Folder “${folder}” removed`);
+			}
+		});
+	}
+
+	async function deleteTag(tag: string) {
+		const matching = notes.filter((n) => n.tags.includes(tag));
+		askConfirm({
+			title: 'Remove tag',
+			message:
+				matching.length > 0
+					? `Remove tag #${tag} from ${matching.length} note${matching.length === 1 ? '' : 's'}?`
+					: `Remove tag #${tag}?`,
+			confirmLabel: 'Remove',
+			danger: true,
+			action: () => {
+				for (const note of matching) {
+					applyNotePatch(note.id, { tags: note.tags.filter((t) => t !== tag) });
+				}
+				if (currentFilter.type === 'tag' && currentFilter.value === tag) {
+					clearFilter();
+				}
+				flashToast(`Tag #${tag} removed`);
+			}
+		});
 	}
 
 	function setFilter(type: 'folder' | 'tag' | 'pinned', value?: string) {
@@ -283,21 +1233,89 @@
 			currentFilter = { type, value };
 		}
 		searchQuery = '';
+		peelFilterText = '';
+		clearSelection();
 	}
 
 	function clearFilter() {
 		currentFilter = { type: null };
 		searchQuery = '';
+		peelFilterText = '';
+		clearSelection();
 	}
 
 	function handleGlobalSearch(e: Event) {
 		searchQuery = (e.target as HTMLInputElement).value;
 		if (searchQuery) {
-			currentFilter = { type: null };
+			// Keep folder/tag context; only open peel so results are scannable.
+			openPeel('notes');
+		}
+	}
+
+	function openPeel(mode: 'notes' | 'folders' | 'tags' = 'notes') {
+		peelMode = mode;
+		peelOpen = true;
+		foldersFlyout = mode === 'folders';
+		tagsFlyout = mode === 'tags';
+	}
+
+	function closePeel(force = false) {
+		if (peelPinned && !force) return;
+		peelOpen = false;
+		foldersFlyout = false;
+		tagsFlyout = false;
+	}
+
+	function handleDockAction(action: DockAction) {
+		switch (action) {
+			case 'all':
+				clearFilter();
+				openPeel('notes');
+				break;
+			case 'pinned':
+				setFilter('pinned');
+				openPeel('notes');
+				break;
+			case 'folders':
+				if (peelOpen && peelMode === 'folders') {
+					closePeel(true);
+				} else {
+					openPeel('folders');
+				}
+				break;
+			case 'tags':
+				if (peelOpen && peelMode === 'tags') {
+					closePeel(true);
+				} else {
+					openPeel('tags');
+				}
+				break;
+			case 'new':
+				void handleNewNote();
+				break;
+			case 'search':
+				openPeel('notes');
+				void tick().then(() => {
+					(document.getElementById('global-search') as HTMLInputElement | null)?.focus();
+				});
+				break;
+			default: {
+				const _exhaustive: never = action;
+				return _exhaustive;
+			}
 		}
 	}
 
 	function handleKeydown(e: KeyboardEvent) {
+		if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
+			const tag = (e.target as HTMLElement)?.tagName;
+			if (tag !== 'INPUT' && tag !== 'TEXTAREA') {
+				e.preventDefault();
+				if (e.shiftKey) redoCanvasLayout();
+				else undoCanvasLayout();
+				return;
+			}
+		}
 		if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
 			e.preventDefault();
 			showPalette = !showPalette;
@@ -311,46 +1329,150 @@
 			e.preventDefault();
 			(document.getElementById('global-search') as HTMLInputElement)?.focus();
 		}
-		if (e.key === 'Escape' && showPalette) {
-			showPalette = false;
+		if (e.key === 'Escape') {
+			if (confirmDialog) {
+				confirmDialog = null;
+				return;
+			}
+			if (bulkMenu) {
+				bulkMenu = null;
+				return;
+			}
+			if (showPalette) {
+				showPalette = false;
+				return;
+			}
+			if (expandedNoteId) {
+				collapseSticky();
+				return;
+			}
+			if (peelOpen) {
+				closePeel(true);
+				return;
+			}
+			if (selectionIds.length > 0) {
+				clearSelection();
+			}
 		}
 	}
 
 	const paletteActions = [
 		{ label: 'New note', action: handleNewNote, shortcut: '⌘N' },
-		{ label: 'Toggle pin', action: () => {
-			if (!selectedId) return;
-			const np = selectedNote?.pinned === 1 ? 0 : 1;
-			syncNoteUpdate(selectedId, { pinned: np });
-			notes = notes.map(n => n.id === selectedId ? {...n, pinned: np as 0 | 1} : n);
-			if (selectedNote) updateNoteInSearch({ id: selectedId, pinned: np }, { ...selectedNote, pinned: np as 0 | 1 });
-			showPalette = false;
-		}, shortcut: '' },
-		{ label: 'Delete current note', action: () => { handleDelete(); showPalette = false; }, shortcut: '' },
+		{
+			label: 'Combine selected into mash sticky',
+			action: () => {
+				void combineSelection();
+				showPalette = false;
+			},
+			shortcut: ''
+		},
+		{
+			label: 'Copy selected as Markdown',
+			action: () => {
+				void copySelection();
+				showPalette = false;
+			},
+			shortcut: ''
+		},
+		{
+			label: 'Export selected as Markdown',
+			action: () => {
+				exportSelectionMarkdown();
+				showPalette = false;
+			},
+			shortcut: ''
+		},
+		{
+			label: 'Export selected as JSON',
+			action: () => {
+				exportSelectionJson();
+				showPalette = false;
+			},
+			shortcut: ''
+		},
+		{
+			label: 'Unmash selected sticky',
+			action: () => {
+				void unmashSelection();
+				showPalette = false;
+			},
+			shortcut: ''
+		},
+		{
+			label: 'Tag selected notes',
+			action: () => {
+				if (selectionIds.length === 0) return;
+				bulkMenu = 'tag';
+				showPalette = false;
+			},
+			shortcut: ''
+		},
+		{
+			label: 'Move selected to folder',
+			action: () => {
+				if (selectionIds.length === 0) return;
+				bulkMenu = 'folder';
+				showPalette = false;
+			},
+			shortcut: ''
+		},
+		{
+			label: 'Delete selected notes',
+			action: () => {
+				void handleDelete();
+				showPalette = false;
+			},
+			shortcut: ''
+		},
+		{
+			label: 'Toggle pin',
+			action: () => {
+				if (!selectedId) return;
+				const np = selectedNote?.pinned === 1 ? 0 : 1;
+				syncNoteUpdate(selectedId, { pinned: np });
+				notes = notes.map((n) => (n.id === selectedId ? { ...n, pinned: np as 0 | 1 } : n));
+				if (selectedNote)
+					updateNoteInSearch(
+						{ id: selectedId, pinned: np },
+						{ ...selectedNote, pinned: np as 0 | 1 }
+					);
+				showPalette = false;
+			},
+			shortcut: ''
+		},
+		{
+			label: 'Delete current note',
+			action: () => {
+				handleDelete();
+				showPalette = false;
+			},
+			shortcut: ''
+		},
 		{ label: 'Clear filters & search', action: clearFilter, shortcut: '' },
-		{ label: 'Export all as JSON', action: () => {
-			const data = JSON.stringify(notes, null, 2);
-			const blob = new Blob([data], { type: 'application/json' });
-			const url = URL.createObjectURL(blob);
-			const a = document.createElement('a');
-			a.href = url;
-			a.download = 'mash-notes-export.json';
-			a.click();
-			URL.revokeObjectURL(url);
-			showPalette = false;
-		}, shortcut: '' },
+		{
+			label: 'Export all as JSON',
+			action: () => {
+				exportNotesJson(notes, 'mash-notes-export.json');
+				showPalette = false;
+			},
+			shortcut: ''
+		}
 	];
 
 	function handlePaletteKeydown(e: KeyboardEvent): void {
-		const commands = paletteActions.filter(a =>
+		const commands = paletteActions.filter((a) =>
 			a.label.toLowerCase().includes(paletteQuery.toLowerCase())
 		);
-		const noteJumps = paletteQuery.length > 1
-			? notes.filter((n: Note) =>
-				n.title.toLowerCase().includes(paletteQuery.toLowerCase()) ||
-				n.body.toLowerCase().includes(paletteQuery.toLowerCase())
-			).slice(0, 6)
-			: [];
+		const noteJumps =
+			paletteQuery.length > 1
+				? notes
+						.filter(
+							(n: Note) =>
+								n.title.toLowerCase().includes(paletteQuery.toLowerCase()) ||
+								n.body.toLowerCase().includes(paletteQuery.toLowerCase())
+						)
+						.slice(0, 6)
+				: [];
 		const total = commands.length + noteJumps.length;
 		if (total === 0) return;
 
@@ -362,19 +1484,19 @@
 			paletteHighlight = Math.max(paletteHighlight - 1, 0);
 		} else if (e.key === 'Enter') {
 			e.preventDefault();
-		if (paletteHighlight < commands.length) {
+			if (paletteHighlight < commands.length) {
 				commands[paletteHighlight].action();
 				showPalette = false;
 			} else {
 				const note = noteJumps[paletteHighlight - commands.length];
 				if (note) {
 					selectNote(note.id);
+					void openStickyFromTray(note.id);
 					showPalette = false;
 				}
 			}
 		}
 	}
-
 
 	function handleVisibilityChange(): void {
 		if (document.visibilityState === 'hidden') flushPendingSave();
@@ -393,369 +1515,427 @@
 	});
 </script>
 
-<div class="flex h-screen flex-col bg-zinc-950 text-zinc-200">
+<div class="flex h-screen flex-col" style="background: var(--mash-bg); color: var(--mash-ink);">
 	<!-- Header -->
-	<header class="flex items-center justify-between border-b border-zinc-800 bg-zinc-950/95 px-4 py-2 backdrop-blur">
-		<div class="flex items-center gap-3">
-			<div class="flex items-center gap-2">
-				<img src="/icons/mash-monochrome-white.svg" alt="Mash" class="h-7 w-7" />
-				<span class="text-lg font-semibold tracking-tight">Mash</span>
+	<header
+		class="flex items-center justify-between border-b px-4 py-2.5"
+		style="border-color: var(--mash-tray-edge); background: var(--mash-rail);"
+	>
+		<div class="flex items-center gap-2.5">
+			<img
+				src="/icons/mash-logo-sprouts.png"
+				srcset="/icons/mash-logo-sprouts.png 1x, /icons/mash-logo-sprouts@2x.png 2x"
+				alt="Mash"
+				width="32"
+				height="40"
+				class="mash-logo h-10 w-auto select-none"
+				draggable="false"
+			/>
+			<div class="flex flex-col leading-none">
+				<span class="mash-display text-[17px] font-semibold tracking-tight">Mash</span>
+				<span
+					class="mt-0.5 text-[10px] font-medium tracking-[0.12em] uppercase"
+					style="color: var(--mash-accent-bright);"
+				>
+					where notes become useful
+				</span>
 			</div>
-			<div class="text-xs text-zinc-500">quick notes</div>
 		</div>
 
 		<div class="flex flex-1 items-center justify-center px-4">
 			<div class="relative w-full max-w-md">
-				<Search class="absolute left-3 top-2.5 h-4 w-4 text-zinc-500" />
+				<Search
+					class="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2"
+					style="color: var(--mash-ink-muted);"
+				/>
 				<input
 					id="global-search"
 					type="text"
-					placeholder="Search notes... (press /)"
+					placeholder="Search notes to grab…"
 					bind:value={searchQuery}
 					oninput={handleGlobalSearch}
-					class="w-full rounded-lg border border-zinc-800 bg-zinc-900 py-1.5 pl-9 pr-4 text-sm placeholder-zinc-500 focus:border-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-600 focus-visible:border-zinc-600"
+					class="mash-focus w-full rounded-lg border py-1.5 pr-14 pl-9 text-sm transition-colors"
+					style="border-color: var(--mash-tray-edge); background: var(--mash-tray); color: var(--mash-ink);"
+				/>
+				<kbd
+					class="pointer-events-none absolute top-1/2 right-2.5 hidden -translate-y-1/2 items-center gap-0.5 rounded border px-1.5 py-0.5 text-[10px] font-medium sm:flex"
+					style="border-color: var(--mash-tray-edge); color: var(--mash-ink-muted);"
+				>
+					/
+				</kbd>
+			</div>
+		</div>
+
+		<div class="flex items-center gap-2">
+			<div
+				class="hidden items-center gap-1 text-xs lg:flex"
+				style="color: var(--mash-ink-muted);"
+			>
+				<kbd
+					class="flex items-center gap-0.5 rounded border px-1.5 py-0.5 text-[10px] font-medium"
+					style="border-color: var(--mash-tray-edge);"
+				>
+					<Command class="h-2.5 w-2.5" />K
+				</kbd>
+			</div>
+		</div>
+	</header>
+
+	<!-- Full-bleed canvas stage (overflow visible so dock magnification can swell) -->
+	<div class="relative flex min-h-0 flex-1">
+		<div class="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+			<div
+				class="pointer-events-none absolute top-3 left-[4.75rem] z-10 rounded-full border px-3 py-1 text-[10px] backdrop-blur-sm"
+				style="border-color: rgba(80,60,30,0.18); background: rgba(247,241,230,0.72); color: var(--mash-card-muted);"
+			>
+				<span class="mash-display font-medium" style="color: var(--mash-card-ink);">{canvasTitle}</span>
+				<span class="mx-1.5 opacity-40">·</span>
+				{canvasItems.length} on canvas
+			</div>
+
+			<div class="relative min-h-0 flex-1 overflow-hidden">
+				<CanvasBoard
+					items={canvasItems}
+					{notesById}
+					selectedIds={selectionSet}
+					{expandedNoteId}
+					{settlingIds}
+					canvasId={activeCanvas?.id ?? null}
+					onSelect={handleCanvasSelect}
+					onSelectNotes={handleCanvasSelectNotes}
+					onMove={handleCanvasMove}
+					onMoveMany={handleCanvasMoveMany}
+					onMoveEnd={handleCanvasMoveEnd}
+					onResize={handleCanvasResize}
+					onResizeEnd={handleCanvasResizeEnd}
+					onRemove={handleCanvasRemove}
+					onExpand={expandSticky}
+					onCollapse={collapseSticky}
+					onTitleChange={handleStickyTitleChange}
+					onBodyChange={handleStickyBodyChange}
+					onDropNotes={handleDropNotes}
+					onMashCards={handleMashCards}
+					canUndo={canCanvasUndo}
+					canRedo={canCanvasRedo}
+					onUndo={undoCanvasLayout}
+					onRedo={redoCanvasLayout}
 				/>
 			</div>
 		</div>
 
-		<div class="flex items-center gap-2 text-xs text-zinc-500">
-			<button
-				onclick={handleNewNote}
-				class="flex items-center gap-1.5 rounded-lg bg-zinc-100 px-3 py-1.5 text-sm font-medium text-zinc-950 transition hover:bg-white active:bg-zinc-200"
-			>
-				<Plus class="h-4 w-4" />
-				New
-			</button>
-			<div class="hidden md:block">⌘K</div>
+		<!-- Dock + peel sit above the canvas stage so magnification isn't clipped by overflow-hidden. -->
+		<div
+			class="pointer-events-auto absolute top-1/2 left-3 z-30 -translate-y-1/2 overflow-visible py-5 pr-8"
+		>
+			<MashDock
+				{currentFilter}
+				{searchQuery}
+				foldersOpen={foldersFlyout}
+				tagsOpen={tagsFlyout}
+				dockSelect={handleDockAction}
+			/>
 		</div>
-	</header>
-
-	<!-- Main content -->
-	<div class="flex flex-1 overflow-hidden">
-		<!-- Sidebar -->
-		<div class="w-56 flex-shrink-0 border-r border-zinc-800 bg-zinc-950/50 overflow-y-auto p-3 text-sm">
-			<div class="mb-4">
-				<button
-					onclick={() => clearFilter()}
-					class="mb-1 flex w-full items-center gap-2 rounded px-2 py-1 text-left hover:bg-zinc-900 focus-visible:ring-2 focus-visible:ring-zinc-600 focus-visible:ring-inset"
-					class:bg-zinc-900={currentFilter.type === null && !searchQuery}
-				>
-					All Notes
-				</button>
-				<button
-					onclick={() => setFilter('pinned')}
-					class="mb-1 flex w-full items-center gap-2 rounded px-2 py-1 text-left hover:bg-zinc-900 focus-visible:ring-2 focus-visible:ring-zinc-600 focus-visible:ring-inset"
-					class:bg-zinc-900={currentFilter.type === 'pinned'}
-				>
-					<Pin class="h-3.5 w-3.5" /> Pinned
-				</button>
+		{#if peelOpen}
+			<div class="pointer-events-auto absolute top-1/2 left-[4.75rem] z-30 -translate-y-1/2">
+				<PeelScanner
+					open={peelOpen}
+					pinned={peelPinned}
+					mode={peelMode}
+					title={peelTitle}
+					notes={peelNotes}
+					folders={uniqueFolders}
+					tags={uniqueTags}
+					selectedIds={selectionSet}
+					draggingId={draggingTrayId}
+					{saveStatus}
+					filterText={peelFilterText}
+					{isLoading}
+					onClose={() => closePeel(true)}
+					onTogglePin={() => (peelPinned = !peelPinned)}
+					onFilterText={(v) => (peelFilterText = v)}
+					onNoteClick={handleNoteClick}
+					onNoteOpen={(id) => void openStickyFromTray(id)}
+					onDragStart={onTrayDragStart}
+					onDragEnd={onTrayDragEnd}
+					onPickFolder={(folder) => {
+						setFilter('folder', folder);
+						openPeel('notes');
+					}}
+					onPickTag={(tag) => {
+						setFilter('tag', tag);
+						openPeel('notes');
+					}}
+					onDeleteFolder={(folder) => void deleteFolder(folder)}
+					onDeleteTag={(tag) => void deleteTag(tag)}
+					onNewNote={handleNewNote}
+				/>
 			</div>
+		{/if}
 
-			<!-- Folders (hierarchical) -->
-			<div class="mb-4">
-				<div class="mb-1 px-2 text-xs font-medium uppercase tracking-widest text-zinc-500">Folders</div>
-				{#each uniqueFolders as folder}
-					{@const depth = (folder || '').split('/').length - 1}
-					<button
-						onclick={() => setFilter('folder', folder || '')}
-						class="mb-px flex w-full items-center gap-2 truncate rounded px-2 py-1 text-left hover:bg-zinc-900 focus-visible:ring-2 focus-visible:ring-zinc-600 focus-visible:ring-inset"
-						class:bg-zinc-900={currentFilter.type === 'folder' && currentFilter.value === (folder || '')}
-						class:text-white={currentFilter.type === 'folder' && currentFilter.value === (folder || '')}
-						style="padding-left: {depth * 12 + 8}px"
+		{#if selectionIds.length > 0}
+			<div class="absolute bottom-5 left-1/2 z-20 flex -translate-x-1/2 flex-col items-center gap-2">
+				{#if bulkMenu === 'tag'}
+					<div
+						class="w-64 rounded-xl border p-3 shadow-xl"
+						style="border-color: rgba(80,60,30,0.2); background: rgba(28, 24, 18, 0.95); backdrop-filter: blur(10px);"
 					>
-						<span class="text-zinc-400">📁</span> {folder.split('/').pop() || 'Root'}
-					</button>
-				{/each}
-				{#if uniqueFolders.length === 0}
-					<div class="px-2 py-1 text-xs text-zinc-600">No folders yet</div>
-				{/if}
-			</div>
-
-			<!-- Tags -->
-			<div>
-				<div class="mb-1 px-2 text-xs font-medium uppercase tracking-widest text-zinc-500">Tags</div>
-				{#each uniqueTags as tag}
-					<button
-						onclick={() => setFilter('tag', tag)}
-						class="mb-px flex w-full items-center gap-1.5 truncate rounded px-2 py-0.5 text-left text-sm hover:bg-zinc-900 focus-visible:ring-2 focus-visible:ring-zinc-600 focus-visible:ring-inset"
-						class:bg-zinc-900={currentFilter.type === 'tag' && currentFilter.value === tag}
-					>
-						<span class="text-zinc-400">#</span>{tag}
-					</button>
-				{/each}
-				{#if uniqueTags.length === 0}
-					<div class="px-2 py-1 text-xs text-zinc-600">No tags yet</div>
-				{/if}
-			</div>
-		</div>
-
-		<!-- Notes List (virtualized for performance) -->
-		<div class="w-72 flex-shrink-0 border-r border-zinc-800 bg-zinc-950/30 flex flex-col">
-			<div class="sticky top-0 z-10 border-b border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-500 flex-shrink-0 flex items-center justify-between">
-				<span>{searchQuery ? `${filteredNotes.length} results` : `${filteredNotes.length} notes`}</span>
-				<span class="text-zinc-400">
-					{saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? 'Saved' : ''}
-				</span>
-			</div>
-
-			{#if isLoading}
-				<div class="flex flex-1 flex-col items-center justify-center gap-2 text-zinc-600">
-					<div class="h-5 w-5 animate-spin rounded-full border-2 border-zinc-700 border-t-zinc-400"></div>
-					<span class="text-xs">Loading notes…</span>
-				</div>
-			{:else if filteredNotes.length === 0}
-				<div class="flex flex-1 flex-col items-center justify-center gap-3 p-4 text-zinc-500">
-					<img src="/icons/mash-monochrome-white.svg" alt="" class="h-6 w-6 opacity-40" />
-					<span class="text-sm">
-						{searchQuery ? 'No matches for your search.' : 'Your notes will show up here.'}
-					</span>
-					{#if !searchQuery && currentFilter.type === null}
-						<button
-							onclick={handleNewNote}
-							class="rounded-lg bg-zinc-800 px-3 py-1.5 text-xs font-medium text-zinc-300 transition hover:bg-zinc-700"
-						>
-							Create your first note
-						</button>
-					{/if}
-				</div>
-			{:else}
-				<div class="flex-1 overflow-hidden">
-					<VirtualList items={filteredNotes} itemHeight={78}>
-						{#snippet children(note)}
-							<button
-							    onclick={() => selectNote(note.id)}
-							    class="group flex w-full flex-col border-b border-zinc-800 px-3 py-2.5 text-left hover:bg-zinc-900/60 h-full transition-colors focus-visible:ring-2 focus-visible:ring-zinc-600 focus-visible:ring-inset {selectedId === note.id ? 'bg-zinc-900 border-l-2 border-l-zinc-500/70' : ''}"
-							>
-							    <div class="flex items-start justify-between gap-2">
-							        <div class="flex-1 truncate font-medium text-sm pr-1 group-hover:text-white transition-colors {selectedId === note.id ? 'text-zinc-100' : ''}">
-							            {note.title}
-							        </div>
-							        {#if note.pinned}
-							            <Pin class="mt-0.5 h-3 w-3 flex-shrink-0 text-amber-400/80" />
-							        {/if}
-							    </div>
-
-							    <div class="mt-1 line-clamp-2 text-[13px] leading-relaxed text-zinc-400 group-hover:text-zinc-300 transition-colors">
-							        {note.body.slice(0, 100) || 'No content yet...'}
-							    </div>
-
-							    <div class="mt-auto pt-2 flex items-center justify-between text-[10px] font-medium text-zinc-500">
-							        <div class="flex items-center gap-1.5 overflow-hidden whitespace-nowrap">
-							            {#if note.folder}
-							                <span class="opacity-70 truncate flex items-center gap-0.5">
-							                    <span class="text-[8px]">📁</span> {note.folder}
-							                </span>
-							            {/if}
-							        </div>
-
-							        <div class="flex items-center gap-2 text-[9px]">
-							            <span class="opacity-60 tabular-nums">
-							                {new Date(note.modified).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-							            </span>
-							            <div class="flex items-center gap-1 group-hover:opacity-100 transition-opacity">
-							                {#each note.tags as tag}
-							                    <span class="px-1 rounded bg-zinc-800 text-[9px] whitespace-nowrap border border-zinc-700/50 text-zinc-500 group-hover:text-zinc-300">
-							                        #{tag}
-							                    </span>
-							                {/each}
-							            </div>
-							        </div>
-							    </div>
-							</button>
-						{/snippet}
-					</VirtualList>
-				</div>
-			{/if}
-		</div>
-
-		<!-- Editor -->
-		<div class="flex flex-1 flex-col overflow-hidden">
-			{#if selectedNote}
-				<!-- Editor header -->
-				<div class="flex items-center justify-between border-b border-zinc-800 px-4 py-2">
-					<div class="flex flex-1 items-center gap-3">
-						<input
-							id="note-title"
-							type="text"
-							value={draftTitle}
-							oninput={handleTitleInput}
-							class="flex-1 bg-transparent text-lg font-semibold outline-none placeholder-zinc-600 focus-visible:ring-2 focus-visible:ring-zinc-600 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950"
-							placeholder="Untitled"
-						/>
-
-						<!-- Folder -->
+						<div class="mb-2 text-[10px] font-medium tracking-wide uppercase" style="color: var(--mash-accent-bright);">
+							Tag {selectionIds.length} note{selectionIds.length === 1 ? '' : 's'}
+						</div>
 						<input
 							type="text"
-							bind:value={draftFolder}
-							placeholder="folder"
-							class="w-28 rounded bg-zinc-900 px-2 py-0.5 text-xs placeholder-zinc-500 outline-none focus:bg-zinc-800 focus-visible:ring-2 focus-visible:ring-zinc-600 focus-visible:ring-offset-1 focus-visible:ring-offset-zinc-950"
-							oninput={() => {
-								if (!selectedId) return;
-								const updated = { ...selectedNote, folder: draftFolder };
-								syncNoteUpdate(selectedId, { folder: draftFolder });
-								notes = notes.map(n => n.id === selectedId ? updated : n);
-								updateNoteInSearch({ id: selectedId, folder: draftFolder }, updated);
-								scheduleAutoSave();
+							bind:value={bulkTagDraft}
+							placeholder="new tag…"
+							class="mash-focus mb-2 w-full rounded-md border bg-transparent px-2 py-1.5 text-xs outline-none"
+							style="border-color: var(--mash-tray-edge); color: var(--mash-ink);"
+							onkeydown={(e) => {
+								if (e.key === 'Enter') tagSelection(bulkTagDraft);
+								if (e.key === 'Escape') bulkMenu = null;
 							}}
 						/>
-
-						<div class="flex items-center gap-1 text-xs">
-							{#each draftTags as tag (tag)}
-								<span
-									class="flex items-center gap-1 rounded bg-zinc-900 px-2 py-0.5 text-zinc-400"
+						<div class="flex max-h-28 flex-wrap gap-1 overflow-auto">
+							{#each uniqueTags as tag}
+								<button
+									type="button"
+									class="mash-chip rounded-full px-2 py-0.5 text-[10px] hover:bg-white/10"
+									onclick={() => tagSelection(tag)}
 								>
 									#{tag}
-									<button onclick={() => removeTag(tag)} class="hover:text-white focus-visible:ring-1 focus-visible:ring-zinc-600 rounded">×</button>
-								</span>
+								</button>
 							{/each}
-							<input
-								type="text"
-								placeholder="add tag"
-								class="w-20 bg-transparent text-xs placeholder-zinc-600 outline-none focus-visible:ring-2 focus-visible:ring-zinc-600 focus-visible:ring-offset-1 focus-visible:ring-offset-zinc-950"
-								onkeydown={(e) => {
-									if (e.key === 'Enter') {
-										const target = e.currentTarget as HTMLInputElement;
-										addTag(target.value);
-										target.value = '';
-									}
-								}}
-							/>
 						</div>
-
-						{#if backlinks.length > 0}
-							<div class="flex items-center gap-1 text-xs text-zinc-400 ml-2">
-								← {backlinks.length} backlink{backlinks.length > 1 ? 's' : ''}
-							</div>
-						{/if}
 					</div>
-
-					<div class="flex items-center gap-3 text-xs">
-						<span class="text-zinc-500">
-							{saveStatus === 'saving' ? 'Saving...' : saveStatus === 'saved' ? 'Saved' : ''}
-						</span>
-
-						<button
-							onclick={() => {
-								if (!selectedId) return;
-								const newPinned = (selectedNote?.pinned === 1 ? 0 : 1) as 0 | 1;
-								const updated = { ...selectedNote, pinned: newPinned };
-								syncNoteUpdate(selectedId, { pinned: newPinned });
-								notes = notes.map(n => n.id === selectedId ? updated : n);
-								updateNoteInSearch({ id: selectedId, pinned: newPinned }, updated);
+				{:else if bulkMenu === 'folder'}
+					<div
+						class="w-64 rounded-xl border p-3 shadow-xl"
+						style="border-color: rgba(80,60,30,0.2); background: rgba(28, 24, 18, 0.95); backdrop-filter: blur(10px);"
+					>
+						<div class="mb-2 text-[10px] font-medium tracking-wide uppercase" style="color: var(--mash-accent-bright);">
+							Move {selectionIds.length} to folder
+						</div>
+						<input
+							type="text"
+							bind:value={bulkFolderDraft}
+							placeholder="new or existing folder…"
+							class="mash-focus mb-2 w-full rounded-md border bg-transparent px-2 py-1.5 text-xs outline-none"
+							style="border-color: var(--mash-tray-edge); color: var(--mash-ink);"
+							onkeydown={(e) => {
+								if (e.key === 'Enter') assignFolderToSelection(bulkFolderDraft);
+								if (e.key === 'Escape') bulkMenu = null;
 							}}
-							class="flex items-center gap-1 rounded px-2 py-1 text-zinc-400 hover:bg-zinc-900 {selectedNote?.pinned ? 'text-amber-400' : ''}"
-							aria-label="Toggle pin"
-						>
-							<Pin class="h-3.5 w-3.5" />
-						</button>
-
+						/>
 						<button
-							onclick={handleDelete}
-							class="flex items-center gap-1 rounded px-2 py-1 text-zinc-400 hover:bg-zinc-900 hover:text-red-400"
+							type="button"
+							class="mash-peel-meta-row rounded-md"
+							onclick={() => assignFolderToSelection('')}
 						>
-							<Trash2 class="h-3.5 w-3.5" />
-							<span class="hidden sm:inline">Delete</span>
+							<span class="text-[11px]">No folder</span>
 						</button>
+						<div class="max-h-28 overflow-auto">
+							{#each uniqueFolders as folder}
+								<button
+									type="button"
+									class="mash-peel-meta-row"
+									onclick={() => assignFolderToSelection(folder)}
+								>
+									<Folder class="h-3.5 w-3.5 shrink-0 opacity-60" />
+									<span class="truncate text-[11px]">{folder}</span>
+								</button>
+							{/each}
+						</div>
 					</div>
-				</div>
+				{/if}
 
-				<!-- Editor body -->
-				<div class="flex-1 overflow-hidden border-l border-zinc-800">
-					<Editor
-						value={draftBody}
-						noteId={selectedId ?? ''}
-						onWikilinkClick={handleWikilinkClick}
-						onChange={(val: string) => {
-							draftBody = val;
-							scheduleAutoSave();
-						}}
-					/>
-				</div>
-
-				<div class="border-t border-zinc-800 px-4 py-1.5 text-[10px] text-zinc-500">
-					{selectedNote ? new Date(selectedNote.modified).toLocaleString() : ''} • {draftBody.length} chars
-				</div>
-			{:else}
-				<div class="flex flex-1 items-center justify-center text-zinc-500">
-					<div class="text-center">
-						<img src="/icons/mash-monochrome-white.svg" alt="" class="mx-auto mb-3 h-8 w-8 opacity-40" />
-						<div class="mb-1 text-xl">No note selected</div>
-						<p class="text-sm text-zinc-500">Pick a note from the list or create a new one.</p>
+				<div
+					class="mash-dock flex items-center gap-1 rounded-2xl border px-2 py-1.5 shadow-xl"
+					style="border-color: rgba(80,60,30,0.2); background: rgba(28, 24, 18, 0.92); backdrop-filter: blur(10px);"
+				>
+					<span
+						class="px-2 text-[10px] font-medium tracking-wide uppercase"
+						style="color: var(--mash-accent-bright);"
+					>
+						{selectionIds.length} selected
+					</span>
+					<button
+						type="button"
+						onclick={() => void combineSelection()}
+						class="mash-btn flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold"
+						disabled={selectionIds.length < 2}
+					>
+						<Layers class="h-3.5 w-3.5" />
+						Mash
+					</button>
+					{#if canUnmash}
 						<button
-							onclick={handleNewNote}
-							class="mt-4 rounded-lg bg-zinc-800 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-700"
+							type="button"
+							onclick={() => void unmashSelection()}
+							class="mash-btn-ghost flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs"
+							title="Restore source notes and remove mash"
 						>
-							Create new note
+							Unmash
 						</button>
-					</div>
+					{/if}
+					<button
+						type="button"
+						onclick={() => (bulkMenu = bulkMenu === 'tag' ? null : 'tag')}
+						class="mash-btn-ghost flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs {bulkMenu === 'tag'
+							? 'border-[var(--mash-accent)] text-[var(--mash-accent-bright)]'
+							: ''}"
+						title="Tag selected"
+					>
+						<Tag class="h-3.5 w-3.5" />
+						Tag
+					</button>
+					<button
+						type="button"
+						onclick={() => (bulkMenu = bulkMenu === 'folder' ? null : 'folder')}
+						class="mash-btn-ghost flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs {bulkMenu ===
+						'folder'
+							? 'border-[var(--mash-accent)] text-[var(--mash-accent-bright)]'
+							: ''}"
+						title="Move to folder"
+					>
+						<Folder class="h-3.5 w-3.5" />
+						Folder
+					</button>
+					<button
+						type="button"
+						onclick={() => void copySelection()}
+						class="mash-btn-ghost flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs"
+					>
+						<Copy class="h-3.5 w-3.5" />
+						Copy
+					</button>
+					<button
+						type="button"
+						onclick={() => exportSelectionMarkdown()}
+						class="mash-btn-ghost flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs"
+					>
+						<Download class="h-3.5 w-3.5" />
+						MD
+					</button>
+					<button
+						type="button"
+						onclick={() => void handleDelete()}
+						class="mash-btn-ghost flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs hover:text-[var(--mash-danger)]"
+						title="Delete selected"
+					>
+						<Trash2 class="h-3.5 w-3.5" />
+					</button>
+					<button
+						type="button"
+						onclick={clearSelection}
+						class="rounded-lg p-1.5 text-[var(--mash-ink-muted)] hover:bg-white/5 hover:text-[var(--mash-ink)]"
+						aria-label="Clear selection"
+					>
+						<X class="h-3.5 w-3.5" />
+					</button>
 				</div>
-			{/if}
-		</div>
+			</div>
+		{/if}
 	</div>
 
-	<!-- Simple Command Palette -->
+	<!-- Command Palette -->
 	{#if showPalette}
 		<div
-			class="fixed inset-0 z-50 flex items-start justify-center pt-[20vh] bg-black/70 backdrop-blur-sm"
+			class="fixed inset-0 z-50 flex items-start justify-center bg-black/70 pt-[20vh] backdrop-blur-sm"
 			role="presentation"
 			tabindex="-1"
-			onclick={(e) => { if (e.target === e.currentTarget) showPalette = false; }}
-			onkeydown={(e) => { if (e.key === 'Escape') showPalette = false; }}
+			onclick={(e) => {
+				if (e.target === e.currentTarget) showPalette = false;
+			}}
+			onkeydown={(e) => {
+				if (e.key === 'Escape') showPalette = false;
+			}}
 		>
 			<div
 				role="dialog"
 				aria-modal="true"
 				tabindex="-1"
 				aria-label="Command palette"
-				class="relative z-10 w-full max-w-md rounded-xl border border-zinc-800 bg-zinc-900 shadow-2xl"
+				class="relative z-10 w-full max-w-md rounded-xl border shadow-2xl"
+				style="border-color: var(--mash-tray-edge); background: var(--mash-tray);"
 			>
-				<div class="border-b border-zinc-800 p-3">
+				<div class="border-b p-3" style="border-color: var(--mash-tray-edge);">
 					<input
 						bind:this={paletteInput}
 						type="text"
 						bind:value={paletteQuery}
-						placeholder="Type a command..."
-						class="w-full bg-transparent text-sm outline-none placeholder-zinc-500 focus-visible:ring-2 focus-visible:ring-zinc-600 focus-visible:border-zinc-600 rounded px-1"
+						placeholder="Type a command…"
+						class="mash-focus w-full rounded bg-transparent px-1 text-sm outline-none"
+						style="color: var(--mash-ink);"
 						onkeydown={handlePaletteKeydown}
 					/>
 				</div>
 				<div class="max-h-80 overflow-auto p-1 text-sm">
-					{#each paletteActions.filter(a => a.label.toLowerCase().includes(paletteQuery.toLowerCase())) as action, i}
+					{#each paletteActions.filter((a) => a.label
+							.toLowerCase()
+							.includes(paletteQuery.toLowerCase())) as action, i}
 						<button
 							onclick={action.action}
-							class="flex w-full items-center justify-between rounded px-3 py-2 text-left hover:bg-zinc-800 {i === paletteHighlight ? 'bg-zinc-800 ring-1 ring-inset ring-zinc-600/50' : ''}"
+							class="flex w-full items-center justify-between rounded px-3 py-2 text-left hover:bg-white/5 {i ===
+							paletteHighlight
+								? 'bg-white/8 ring-1 ring-[var(--mash-accent)]/40 ring-inset'
+								: ''}"
 						>
 							<span>{action.label}</span>
-							<span class="text-xs text-zinc-500">{action.shortcut}</span>
+							<span class="text-xs" style="color: var(--mash-ink-muted);">{action.shortcut}</span>
 						</button>
 					{/each}
 
-					<!-- Quick note jump from palette -->
 					{#if paletteQuery.length > 1}
-						<div class="mt-1 border-t border-zinc-800 pt-1 text-[10px] text-zinc-500 px-3">Jump to note</div>
-						{#each notes.filter((n: Note) => n.title.toLowerCase().includes(paletteQuery.toLowerCase()) || n.body.toLowerCase().includes(paletteQuery.toLowerCase())).slice(0, 6) as note, j}
+						<div
+							class="mt-1 border-t px-3 pt-1 text-[10px]"
+							style="border-color: var(--mash-tray-edge); color: var(--mash-ink-muted);"
+						>
+							Jump to note
+						</div>
+						{#each notes
+							.filter((n: Note) => n.title
+										.toLowerCase()
+										.includes(paletteQuery.toLowerCase()) || n.body
+										.toLowerCase()
+										.includes(paletteQuery.toLowerCase()))
+							.slice(0, 6) as note, j}
 							<button
-								onclick={() => { selectNote(note.id); showPalette = false; }}
-								class="flex w-full items-center justify-between rounded px-3 py-1.5 text-left hover:bg-zinc-800 text-xs {j + paletteActions.filter(a => a.label.toLowerCase().includes(paletteQuery.toLowerCase())).length === paletteHighlight ? 'bg-zinc-800 ring-1 ring-inset ring-zinc-600/50' : ''}"
+								onclick={() => {
+									void openStickyFromTray(note.id);
+									showPalette = false;
+								}}
+								class="flex w-full items-center justify-between rounded px-3 py-1.5 text-left text-xs hover:bg-white/5 {j +
+									paletteActions.filter((a) =>
+										a.label.toLowerCase().includes(paletteQuery.toLowerCase())
+									).length ===
+								paletteHighlight
+									? 'bg-white/8 ring-1 ring-[var(--mash-accent)]/40 ring-inset'
+									: ''}"
 							>
 								<span class="truncate">{note.title}</span>
-								<span class="text-zinc-500 text-[10px]">{note.folder}</span>
+								<span class="text-[10px]" style="color: var(--mash-ink-muted);">{note.folder}</span>
 							</button>
 						{/each}
 					{/if}
-
-					{#if paletteActions.filter(a => a.label.toLowerCase().includes(paletteQuery.toLowerCase())).length === 0 && paletteQuery.length <= 1}
-						<div class="px-3 py-2 text-zinc-500 text-sm">No matching commands</div>
-					{/if}
-				</div>
-				<div class="border-t border-zinc-800 p-2 text-[10px] text-zinc-400 text-center tracking-wide">
-					↑↓ to navigate • Enter to run • Esc to close
 				</div>
 			</div>
 		</div>
 	{/if}
-</div>
 
-<style>
-	/* App styles */
-</style>
+	{#if actionToast}
+		<div
+			class="pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-lg border px-3 py-1.5 text-xs shadow-lg"
+			style="border-color: var(--mash-tray-edge); background: rgba(28,24,18,0.95); color: var(--mash-ink);"
+		>
+			{actionToast}
+		</div>
+	{/if}
+
+	<ConfirmDialog
+		open={Boolean(confirmDialog)}
+		title={confirmDialog?.title ?? ''}
+		message={confirmDialog?.message ?? ''}
+		confirmLabel={confirmDialog?.confirmLabel ?? 'Confirm'}
+		danger={confirmDialog?.danger ?? false}
+		onConfirm={() => void runConfirmDialog()}
+		onCancel={() => (confirmDialog = null)}
+	/>
+</div>

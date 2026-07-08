@@ -18,7 +18,7 @@ import {
 	removeNoteFromSearch,
 	searchNotes,
 	getSearchIndexSize,
-	resetSearchIndexForTests,
+	resetSearchIndexForTests
 } from './search';
 
 describe('MASH sync engine — DB ↔ search lifecycle', () => {
@@ -33,7 +33,11 @@ describe('MASH sync engine — DB ↔ search lifecycle', () => {
 
 	it('creates a note and makes it searchable', async () => {
 		// createNote writes to DB only — UI must also add to search
-		const note = await createNote({ title: 'Project Ideas', body: 'Build the thing', tags: ['idea'] });
+		const note = await createNote({
+			title: 'Project Ideas',
+			body: 'Build the thing',
+			tags: ['idea']
+		});
 		addNoteToSearch(note);
 
 		expect(getSearchIndexSize()).toBe(1);
@@ -141,8 +145,8 @@ describe('MASH sync engine — DB ↔ search lifecycle', () => {
 
 	it('normalizes NFC: decomposed query finds composed note', async () => {
 		// é as decomposed (e + combining acute) vs composed (single codepoint)
-		const composed = 'café';            // NFC: single codepoint U+00E9
-		const decomposed = 'café';    // NFD: e + combining acute U+0301
+		const composed = 'café'; // NFC: single codepoint U+00E9
+		const decomposed = 'café'; // NFD: e + combining acute U+0301
 		const note = await createNote({ title: 'Cafe', body: composed });
 		addNoteToSearch(note);
 
