@@ -1621,6 +1621,7 @@
 					onBodyChange={handleStickyBodyChange}
 					onDropNotes={handleDropNotes}
 					onMashCards={handleMashCards}
+					onBlankPointerDown={() => closePeel()}
 					canUndo={canCanvasUndo}
 					canRedo={canCanvasRedo}
 					onUndo={undoCanvasLayout}

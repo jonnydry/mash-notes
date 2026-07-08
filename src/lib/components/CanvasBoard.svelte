@@ -73,6 +73,8 @@
 		onBodyChange: (noteId: string, body: string) => void;
 		onDropNotes: (noteIds: string[], x: number, y: number) => void;
 		onMashCards: (sourceItemId: string, targetItemId: string) => void;
+		/** Fired when the user presses on empty board (not a card/chrome). */
+		onBlankPointerDown?: () => void;
 		canUndo?: boolean;
 		canRedo?: boolean;
 		onUndo?: () => void;
@@ -100,6 +102,7 @@
 		onBodyChange,
 		onDropNotes,
 		onMashCards,
+		onBlankPointerDown,
 		canUndo = false,
 		canRedo = false,
 		onUndo,
@@ -217,6 +220,8 @@
 		if (target.closest('[data-canvas-card]')) return;
 		if (target.closest('[data-mash-confirm]')) return;
 		if (target.closest('[data-canvas-chrome]')) return;
+
+		onBlankPointerDown?.();
 
 		// Pan: Space+drag or middle-click (scroll/trackpad also pans).
 		// Empty-board drag: marquee select (Shift/⌘/Ctrl adds to selection).
