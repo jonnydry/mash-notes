@@ -524,7 +524,7 @@
 						{#snippet children(note)}
 							<button
 							    onclick={() => selectNote(note.id)}
-							    class="group flex w-full flex-col border-b border-zinc-800 px-3 py-2.5 text-left hover:bg-zinc-900/60 h-full transition-colors {selectedId === note.id ? 'bg-zinc-900 border-l-2 border-l-zinc-500/70' : ''}"
+							    class="group flex w-full flex-col border-b border-zinc-800 px-3 py-2.5 text-left hover:bg-zinc-900/60 h-full transition-colors focus-visible:ring-2 focus-visible:ring-zinc-600 focus-visible:ring-inset {selectedId === note.id ? 'bg-zinc-900 border-l-2 border-l-zinc-500/70' : ''}"
 							>
 							    <div class="flex items-start justify-between gap-2">
 							        <div class="flex-1 truncate font-medium text-sm pr-1 group-hover:text-white transition-colors {selectedId === note.id ? 'text-zinc-100' : ''}">
@@ -548,12 +548,17 @@
 							            {/if}
 							        </div>
 
-							        <div class="flex items-center gap-1 group-hover:opacity-100 transition-opacity">
-							             {#each note.tags as tag}
-							                <span class="px-1 rounded bg-zinc-800 text-[9px] whitespace-nowrap border border-zinc-700/50 text-zinc-500 group-hover:text-zinc-300">
-							                    #{tag}
-							                </span>
-							             {/each}
+							        <div class="flex items-center gap-2 text-[9px]">
+							            <span class="opacity-60 tabular-nums">
+							                {new Date(note.modified).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+							            </span>
+							            <div class="flex items-center gap-1 group-hover:opacity-100 transition-opacity">
+							                {#each note.tags as tag}
+							                    <span class="px-1 rounded bg-zinc-800 text-[9px] whitespace-nowrap border border-zinc-700/50 text-zinc-500 group-hover:text-zinc-300">
+							                        #{tag}
+							                    </span>
+							                {/each}
+							            </div>
 							        </div>
 							    </div>
 							</button>
