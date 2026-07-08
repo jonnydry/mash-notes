@@ -644,7 +644,8 @@
 
 	async function handleCanvasMoveEnd(
 		moves: Array<{ itemId: string; x: number; y: number }>,
-		before?: Array<{ itemId: string; x: number; y: number }>
+		before?: Array<{ itemId: string; x: number; y: number }>,
+		opts?: { recordUndo?: boolean }
 	) {
 		const beforeSnaps =
 			before?.map((b) => {
@@ -656,7 +657,9 @@
 			const cur = canvasItems.find((i) => i.id === m.itemId);
 			return { itemId: m.itemId, x: m.x, y: m.y, w: cur?.w, h: cur?.h };
 		});
-		pushCanvasUndo(moves.length > 1 ? 'Arrange' : 'Move', beforeSnaps, afterSnaps);
+		if (opts?.recordUndo !== false) {
+			pushCanvasUndo(moves.length > 1 ? 'Arrange' : 'Move', beforeSnaps, afterSnaps);
+		}
 		await Promise.all(
 			moves.map((m) => updateCanvasItemPosition(m.itemId, { x: m.x, y: m.y }))
 		);
@@ -718,6 +721,9 @@
 		const item = canvasItems.find((i) => i.id === itemId);
 		await removeCanvasItem(itemId);
 		canvasItems = canvasItems.filter((i) => i.id !== itemId);
+		// Layout undo snapshots may reference the removed card — drop the stack.
+		canvasUndo.clear();
+		canvasUndoTick++;
 		if (item && activeCanvas && canvasFolder) {
 			dismissNoteFromCanvas(activeCanvas.id, item.noteId);
 		}

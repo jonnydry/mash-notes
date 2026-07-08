@@ -56,7 +56,8 @@
 		onMoveMany: (moves: Array<{ itemId: string; x: number; y: number }>) => void;
 		onMoveEnd?: (
 			moves: Array<{ itemId: string; x: number; y: number }>,
-			before?: Array<{ itemId: string; x: number; y: number }>
+			before?: Array<{ itemId: string; x: number; y: number }>,
+			opts?: { recordUndo?: boolean }
 		) => void;
 		onResize: (itemId: string, w: number, h: number) => void;
 		onResizeEnd?: (
@@ -112,6 +113,8 @@
 	let snapEnabled = $state(false);
 	let altHeld = $state(false);
 	let spaceHeld = $state(false);
+	let pointerOverBoard = $state(false);
+	let mashConfirmBtn: HTMLButtonElement | undefined = $state();
 	let isPanning = $state(false);
 	let isExternalDragOver = $state(false);
 	let panStart = { x: 0, y: 0, panX: 0, panY: 0 };
@@ -337,10 +340,14 @@
 			onMoveMany(moves);
 		}
 		const before = group.map((g) => ({ itemId: g.id, x: g.originX, y: g.originY }));
-		onMoveEnd?.(moves, before);
+		const willMash = group.length <= 1 && Boolean(targetId) && targetId !== sourceId;
+		const mashImmediate = willMash && hasSeenDragMashConfirm();
+		// Immediate mash clears the undo stack — don't leave a stale move entry.
+		// First-time confirm keeps the move so Cancel → Undo can restore.
+		onMoveEnd?.(moves, before, { recordUndo: !mashImmediate });
 
-		if (group.length <= 1 && targetId && targetId !== sourceId) {
-			if (hasSeenDragMashConfirm()) {
+		if (willMash && targetId) {
+			if (mashImmediate) {
 				onMashCards(sourceId, targetId);
 			} else {
 				pendingMash = { sourceId, targetId };
@@ -692,10 +699,37 @@
 
 	$effect(() => {
 		if (!pendingMash) return;
-		requestAnimationFrame(() => {
-			const el = boardEl?.querySelector<HTMLElement>('[data-mash-confirm]');
-			el?.focus();
-		});
+		requestAnimationFrame(() => mashConfirmBtn?.focus());
+
+		function onConfirmKey(e: KeyboardEvent) {
+			if (e.key === 'Escape') {
+				e.preventDefault();
+				e.stopImmediatePropagation();
+				cancelPendingMash();
+				return;
+			}
+			if (e.key !== 'Tab') return;
+			const root = boardEl?.querySelector<HTMLElement>('[data-mash-confirm]');
+			if (!root) return;
+			const focusable = [
+				...root.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')
+			].filter((el) => !el.hasAttribute('disabled'));
+			if (focusable.length === 0) return;
+			const first = focusable[0];
+			const last = focusable[focusable.length - 1];
+			const active = document.activeElement as HTMLElement | null;
+			if (e.shiftKey) {
+				if (active === first || !root.contains(active)) {
+					e.preventDefault();
+					last.focus();
+				}
+			} else if (active === last || !root.contains(active)) {
+				e.preventDefault();
+				first.focus();
+			}
+		}
+		window.addEventListener('keydown', onConfirmKey, true);
+		return () => window.removeEventListener('keydown', onConfirmKey, true);
 	});
 
 	$effect(() => {
@@ -703,18 +737,15 @@
 			if (e.key === 'Alt') altHeld = true;
 			if (
 				e.key === ' ' &&
+				pointerOverBoard &&
 				!(e.target instanceof HTMLInputElement) &&
-				!(e.target instanceof HTMLTextAreaElement)
+				!(e.target instanceof HTMLTextAreaElement) &&
+				!(e.target instanceof HTMLElement && e.target.isContentEditable)
 			) {
 				spaceHeld = true;
 				e.preventDefault();
 			}
-			if (pendingMash && e.key === 'Escape') {
-				e.preventDefault();
-				e.stopImmediatePropagation();
-				cancelPendingMash();
-				return;
-			}
+			if (pendingMash) return;
 			const tag = (e.target as HTMLElement)?.tagName;
 			if (tag === 'INPUT' || tag === 'TEXTAREA') return;
 			if (selectedIds.size === 0) return;
@@ -807,6 +838,13 @@
 	onpointermove={onBoardPointerMove}
 	onpointerup={onBoardPointerUp}
 	onpointercancel={onBoardPointerUp}
+	onpointerenter={() => {
+		pointerOverBoard = true;
+	}}
+	onpointerleave={() => {
+		pointerOverBoard = false;
+		if (!isPanning) spaceHeld = false;
+	}}
 	onwheel={onWheel}
 	ondragover={handleDragOver}
 	ondragleave={handleDragLeave}
@@ -866,20 +904,17 @@
 					{#if isPendingSource}
 						<div
 							data-mash-confirm
-							role="dialog"
-							aria-label="Confirm mash"
+							role="alertdialog"
+							aria-modal="true"
+							aria-labelledby="mash-drag-confirm-title"
 							tabindex="-1"
 							class="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 rounded-xl bg-[rgba(28,24,18,0.88)] px-3 backdrop-blur-[2px]"
 							onpointerdown={(e) => e.stopPropagation()}
 							onclick={(e) => e.stopPropagation()}
-							onkeydown={(e) => {
-								if (e.key === 'Escape') {
-									e.stopPropagation();
-									cancelPendingMash();
-								}
-							}}
+							onkeydown={(e) => e.stopPropagation()}
 						>
 							<p
+								id="mash-drag-confirm-title"
 								class="mash-display text-center text-sm font-medium"
 								style="color: var(--mash-card);"
 							>
@@ -887,6 +922,7 @@
 							</p>
 							<div class="flex items-center gap-2">
 								<button
+									bind:this={mashConfirmBtn}
 									type="button"
 									class="mash-btn rounded-lg px-3 py-1.5 text-xs font-semibold"
 									onclick={(e) => {
@@ -984,8 +1020,8 @@
 						class="mash-resize-handle"
 						onpointerdown={(e) => startResize(e, item)}
 						onpointerup={endResize}
-						role="separator"
-						aria-orientation="horizontal"
+						role="button"
+						tabindex="-1"
 						aria-label="Resize card"
 					></div>
 				</div>
