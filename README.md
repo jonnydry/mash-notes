@@ -1,63 +1,57 @@
-# 🥔 Mash
+# Mash
 
 **Mash your ideas together in a reliable place.**
 
-Fast, cute, minimal web-based notes. An open-source, private, keyboard-first PWA — the lightweight Obsidian you can open in any browser instantly.
-
-No signup. No server required. Your notes live in your browser (IndexedDB). Export anytime as clean Markdown + JSON.
+Fast, cute, minimal web notes — a canvas-first, local-only PWA. Open in any browser, no signup, no server required. Notes live in IndexedDB; export or import JSON anytime.
 
 ## Why Mash?
 
-- **Instant** — Go to the URL and start typing. No accounts, no loading screens.
-- **Cute but serious** — Friendly potato mascot, but built for real knowledge work (folders, tags, wikilinks, powerful search, command palette).
-- **Fast & reliable** — CodeMirror 6 editor, excellent offline support, virtualized UI, designed for thousands of notes.
-- **Yours** — Fully open source (MIT). Export everything. Self-hostable as a static site. No lock-in.
+- **Instant** — Open the URL and start arranging notes on a desk.
+- **Canvas-first** — Dock + peel to find notes; stickies on a board to mash them together.
+- **Private by default** — Everything stays in your browser. No accounts, no cloud sync (yet).
+- **Yours** — MIT open source. Self-host as a static site. Export Markdown + JSON.
 
-## Branding
+## What’s in the app
 
-Mash features a cute potato mascot (because you _mash_ ideas together).
+- Vertical dock (Desk, Pinned, Folders, Tags, New, Search) with peel scanner tray
+- Freeform canvas: pan, zoom, snap, align, expand/bump neighbors, layout undo
+- Drag-to-mash, unmash, bulk tag/folder/copy/export
+- Sticky editor with markdown preview + `[[wikilink]]` navigation
+- Command palette (⌘K), search, folders/tags filters
+- PWA install + offline static assets
 
-**Current official logo**: The friendly character-style potato from this Grok Imagine generation:  
-https://grok.com/imagine/post/f6c7baa3-c2a9-4b0f-8fe4-327b589a7a75
-
-App icons and assets are derived from this image (stored in `static/icons/`).
-
-A fully functional multi-pane UI shell is implemented: folders + tags sidebar, searchable/filterable note list, live editor with autosave, ⌘K command palette, pin, delete, etc.
-
-## Quick Start
+## Quick start
 
 ```bash
 npm install
 npm run dev
 ```
 
-Then open http://localhost:5173
+Open http://localhost:5173
 
-## Tech Stack (Best-in-Class for This Vision)
+## Tech stack
 
-- Svelte 5 + SvelteKit (static)
-- CodeMirror 6 (editor)
-- Dexie + MiniSearch (data + search)
-- Tailwind + bits-ui + shadcn-style components
-- Full PWA (offline-first, installable)
-
-See the detailed implementation plan in `.grok/sessions/.../plan.md` for architecture, data model, and feature phases.
+- Svelte 5 + SvelteKit (static adapter)
+- Dexie (IndexedDB) + MiniSearch
+- Tailwind CSS 4
+- marked (safe sticky preview)
+- vite-plugin-pwa
 
 ## Development
 
 ```bash
-npm run dev          # dev server
-npm run build        # production build
-npm run preview      # preview production build
-npm run check        # type check
-npm run lint
-npm run format
+npm run dev
+npm run build
+npm run preview
+npm run check
+npm run test
+npm run ci
 ```
 
 ## License
 
-MIT — build whatever you want with it.
+MIT
 
 ---
 
-Made with ❤️ and potatoes. Mash responsibly.
+Made with potatoes. Mash responsibly.

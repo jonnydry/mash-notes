@@ -10,12 +10,15 @@
 		clampSize,
 		fitViewport,
 		loadSnapPref,
+		panToShowRect,
 		saveSnapPref,
 		snapPoint,
-		snapSize
+		snapSize,
+		viewCenterPlacement
 	} from '$lib/canvas-geom';
-	import { Minimize2, X, AlignLeft, AlignCenter, AlignRight, AlignStartVertical, AlignCenterVertical, AlignEndVertical, StretchHorizontal, StretchVertical, Layers, LayoutGrid } from 'lucide-svelte';
+	import { Pin, Folder, Tag, Minimize2, X } from 'lucide-svelte';
 	import StickyEditor from '$lib/components/StickyEditor.svelte';
+	import { linkSummary } from '$lib/links';
 
 	const NOTE_MIME = 'application/x-mash-notes';
 	const COLLAPSED_W = 220;
@@ -48,6 +51,8 @@
 		notesById: Map<string, Note>;
 		selectedIds: Set<string>;
 		expandedNoteId?: string | null;
+		/** When expanding, focus title (new notes) or body (existing). */
+		expandFocus?: 'title' | 'body' | null;
 		settlingIds?: Set<string>;
 		canvasId?: string | null;
 		onSelect: (noteId: string, opts: { additive: boolean; range: boolean }) => void;
@@ -71,6 +76,14 @@
 		onCollapse: () => void;
 		onTitleChange: (noteId: string, title: string) => void;
 		onBodyChange: (noteId: string, body: string) => void;
+		onMetaChange?: (
+			noteId: string,
+			patch: { folder?: string; tags?: string[]; pinned?: 0 | 1 }
+		) => void;
+		onWikilink?: (target: string) => void;
+		/** Open peel Linked for this note (links chip). */
+		onOpenLinks?: (noteId: string) => void;
+		folders?: string[];
 		onDropNotes: (noteIds: string[], x: number, y: number) => void;
 		onMashCards: (sourceItemId: string, targetItemId: string) => void;
 		/** Fired when the user presses on empty board (not a card/chrome). */
@@ -86,6 +99,7 @@
 		notesById,
 		selectedIds,
 		expandedNoteId = null,
+		expandFocus = null,
 		settlingIds = new Set(),
 		canvasId = null,
 		onSelect,
@@ -100,6 +114,10 @@
 		onCollapse,
 		onTitleChange,
 		onBodyChange,
+		onMetaChange,
+		onWikilink,
+		onOpenLinks,
+		folders = [],
 		onDropNotes,
 		onMashCards,
 		onBlankPointerDown,
@@ -118,6 +136,11 @@
 	let spaceHeld = $state(false);
 	let pointerOverBoard = $state(false);
 	let mashConfirmBtn: HTMLButtonElement | undefined = $state();
+	let titleInputEl: HTMLInputElement | undefined = $state();
+	let focusedExpandId: string | null = null;
+	/** Custom folder picker — native datalist mispositions under canvas transform. */
+	let folderSuggestNoteId = $state<string | null>(null);
+	let folderSuggestQuery = $state('');
 	let isPanning = $state(false);
 	let isExternalDragOver = $state(false);
 	let panStart = { x: 0, y: 0, panX: 0, panY: 0 };
@@ -140,6 +163,14 @@
 	let marqueeAdditive = false;
 
 	let snapEffective = $derived(altHeld ? !snapEnabled : snapEnabled);
+
+	$effect(() => {
+		if (!expandedNoteId || folderSuggestNoteId !== expandedNoteId) {
+			if (folderSuggestNoteId && folderSuggestNoteId !== expandedNoteId) {
+				folderSuggestNoteId = null;
+			}
+		}
+	});
 
 	function cardSize(item: CanvasItem, noteId: string): { w: number; h: number } {
 		const expanded = expandedNoteId === noteId;
@@ -426,12 +457,39 @@
 		panY += dy;
 	}
 
+	function findCardScrollTarget(target: EventTarget | null): HTMLElement | null {
+		if (!(target instanceof Element)) return null;
+		// Collapsed preview, expanded body textarea, or any marked scroll region.
+		return target.closest<HTMLElement>('textarea, [data-card-scroll]');
+	}
+
+	function canScrollElement(el: HTMLElement, deltaX: number, deltaY: number): boolean {
+		const style = getComputedStyle(el);
+		const oy = style.overflowY;
+		const ox = style.overflowX;
+		const canY =
+			(oy === 'auto' || oy === 'scroll' || oy === 'overlay' || el instanceof HTMLTextAreaElement) &&
+			el.scrollHeight > el.clientHeight + 1;
+		const canX =
+			(ox === 'auto' || ox === 'scroll' || ox === 'overlay') && el.scrollWidth > el.clientWidth + 1;
+		if (Math.abs(deltaY) >= Math.abs(deltaX)) {
+			if (!canY) return false;
+			if (deltaY < 0 && el.scrollTop > 0) return true;
+			if (deltaY > 0 && el.scrollTop + el.clientHeight < el.scrollHeight - 1) return true;
+			return false;
+		}
+		if (!canX) return false;
+		if (deltaX < 0 && el.scrollLeft > 0) return true;
+		if (deltaX > 0 && el.scrollLeft + el.clientWidth < el.scrollWidth - 1) return true;
+		return false;
+	}
+
 	function onWheel(e: WheelEvent) {
-		e.preventDefault();
 		if (!boardEl) return;
 
 		// ⌘/Ctrl + scroll → zoom toward cursor
 		if (e.ctrlKey || e.metaKey) {
+			e.preventDefault();
 			const rect = boardEl.getBoundingClientRect();
 			const mx = e.clientX - rect.left;
 			const my = e.clientY - rect.top;
@@ -445,10 +503,18 @@
 			return;
 		}
 
-		// Trackpad / mouse wheel → pan the board
 		const line = 16;
 		const dx = e.deltaMode === 1 ? e.deltaX * line : e.deltaX;
 		const dy = e.deltaMode === 1 ? e.deltaY * line : e.deltaY;
+
+		// Inside a note (collapsed preview or expanded editor): let it scroll first.
+		const scrollEl = findCardScrollTarget(e.target);
+		if (scrollEl && canScrollElement(scrollEl, dx, dy)) {
+			return;
+		}
+
+		e.preventDefault();
+		// Trackpad / mouse wheel → pan the board
 		panBy(-dx, -dy);
 	}
 
@@ -631,12 +697,99 @@
 		scale = next.scale;
 	}
 
+	/** Board-space top-left for a new card in the current viewport. */
+	export function getSpawnPoint(
+		size: { w: number; h: number },
+		cascadeIndex = 0
+	): { x: number; y: number } {
+		const view = boardEl?.getBoundingClientRect();
+		const viewW = view?.width ?? 800;
+		const viewH = view?.height ?? 600;
+		const existing = items.map((i) => {
+			const s = cardSize(i, i.noteId);
+			return { x: i.x, y: i.y, w: s.w, h: s.h };
+		});
+		return viewCenterPlacement({
+			panX,
+			panY,
+			scale,
+			viewW,
+			viewH,
+			cardW: size.w,
+			cardH: size.h,
+			index: cascadeIndex,
+			existing
+		});
+	}
+
+	/** Soft-pan so an existing note's card is comfortably on screen (keeps scale). */
+	export function ensureNoteVisible(noteId: string): void {
+		if (!boardEl) return;
+		const item = items.find((i) => i.noteId === noteId);
+		if (!item) return;
+		const s = cardSize(item, noteId);
+		const view = boardEl.getBoundingClientRect();
+		const next = panToShowRect(
+			{ x: item.x, y: item.y, w: s.w, h: s.h },
+			{ panX, panY, scale, viewW: view.width, viewH: view.height },
+			56
+		);
+		if (next.panX === panX && next.panY === panY) return;
+		panX = next.panX;
+		panY = next.panY;
+	}
+
+	/** Convert a client (screen) point to board world coordinates. */
+	export function clientToWorld(clientX: number, clientY: number): { x: number; y: number } {
+		if (!boardEl) return { x: 0, y: 0 };
+		const rect = boardEl.getBoundingClientRect();
+		return {
+			x: (clientX - rect.left - panX) / scale,
+			y: (clientY - rect.top - panY) / scale
+		};
+	}
+
 	function toggleSnap() {
 		snapEnabled = !snapEnabled;
 		saveSnapPref(snapEnabled);
 	}
 
-	function applyAlign(mode: AlignMode) {
+	/**
+	 * Autocomplete for existing folder paths — not a required picker.
+	 * Hide when the only hit is exactly what's already typed (avoids echo menus).
+	 */
+	function folderSuggestions(query: string, currentFolder: string): string[] {
+		const q = query.trim().toLowerCase();
+		if (!q) {
+			// On focus: other folders you can switch to (skip current).
+			return folders.filter((f) => f !== currentFolder).slice(0, 8);
+		}
+		return folders
+			.filter((f) => {
+				const fl = f.toLowerCase();
+				if (fl === q) return false; // exact typed match — no echo
+				return fl.includes(q);
+			})
+			.slice(0, 8);
+	}
+
+	function openFolderSuggest(noteId: string, current: string) {
+		folderSuggestNoteId = noteId;
+		folderSuggestQuery = current;
+	}
+
+	function closeFolderSuggest() {
+		folderSuggestNoteId = null;
+	}
+
+	function pickFolder(noteId: string, folder: string) {
+		onMetaChange?.(noteId, { folder });
+		folderSuggestQuery = folder;
+		closeFolderSuggest();
+	}
+
+	/** Align / arrange selected cards (also used by the page selection bar). */
+	export function applyAlign(mode: AlignMode) {
 		const rects = items
 			.filter((i) => selectedIds.has(i.noteId))
 			.map((i) => {
@@ -700,6 +853,19 @@
 		scale;
 		if (!canvasId || appliedCanvasId !== canvasId) return;
 		scheduleViewportSave();
+	});
+
+	$effect(() => {
+		if (!expandedNoteId || expandFocus !== 'title') {
+			if (!expandedNoteId) focusedExpandId = null;
+			return;
+		}
+		if (focusedExpandId === expandedNoteId) return;
+		focusedExpandId = expandedNoteId;
+		requestAnimationFrame(() => {
+			titleInputEl?.focus();
+			titleInputEl?.select();
+		});
 	});
 
 	$effect(() => {
@@ -957,6 +1123,7 @@
 							class="flex cursor-grab items-center gap-1 border-b border-[rgba(80,60,30,0.12)] px-2 py-1.5 active:cursor-grabbing"
 						>
 							<input
+								bind:this={titleInputEl}
 								type="text"
 								value={note.title}
 								class="mash-focus min-w-0 flex-1 bg-transparent text-sm font-semibold tracking-tight outline-none"
@@ -965,6 +1132,20 @@
 								oninput={(e) =>
 									onTitleChange(note.id, (e.currentTarget as HTMLInputElement).value)}
 							/>
+							<button
+								type="button"
+								class="shrink-0 rounded p-1 text-[var(--mash-card-muted)] hover:bg-black/5 {note.pinned === 1
+									? 'text-[var(--mash-accent)]'
+									: ''}"
+								onclick={(e) => {
+									e.stopPropagation();
+									onMetaChange?.(note.id, { pinned: note.pinned === 1 ? 0 : 1 });
+								}}
+								aria-label={note.pinned === 1 ? 'Unpin note' : 'Pin note'}
+								title={note.pinned === 1 ? 'Unpin' : 'Pin'}
+							>
+								<Pin class="h-3.5 w-3.5" />
+							</button>
 							<button
 								type="button"
 								class="shrink-0 rounded p-1 text-[var(--mash-card-muted)] hover:bg-black/5"
@@ -988,20 +1169,145 @@
 								<X class="h-3.5 w-3.5" />
 							</button>
 						</div>
+						<div
+							class="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-[rgba(80,60,30,0.08)] px-2 py-1"
+							data-no-drag
+							role="group"
+							aria-label="Note metadata"
+							onpointerdown={(e) => e.stopPropagation()}
+						>
+							<div class="relative flex min-w-0 flex-1 items-center gap-1 text-[10px] text-[var(--mash-card-muted)]">
+								<Folder class="h-3 w-3 shrink-0" />
+								<input
+									type="text"
+									value={note.folder}
+									placeholder="Folder path…"
+									title="Type a folder path, or pick an existing one"
+									autocomplete="off"
+									class="mash-focus min-w-0 flex-1 rounded border-0 bg-transparent py-0.5 text-[11px] outline-none"
+									style="color: var(--mash-card-ink);"
+									onfocus={() => openFolderSuggest(note.id, note.folder)}
+									oninput={(e) => {
+										const folder = (e.currentTarget as HTMLInputElement).value;
+										folderSuggestQuery = folder;
+										folderSuggestNoteId = note.id;
+										onMetaChange?.(note.id, { folder });
+									}}
+									onkeydown={(e) => {
+										if (e.key === 'Escape') {
+											e.stopPropagation();
+											closeFolderSuggest();
+											(e.currentTarget as HTMLInputElement).blur();
+										}
+										if (e.key === 'Enter') {
+											const hits = folderSuggestions(folderSuggestQuery, note.folder);
+											if (hits.length === 1) {
+												e.preventDefault();
+												pickFolder(note.id, hits[0]);
+											} else {
+												closeFolderSuggest();
+											}
+										}
+									}}
+									onblur={() => {
+										setTimeout(() => {
+											if (folderSuggestNoteId === note.id) closeFolderSuggest();
+										}, 120);
+									}}
+								/>
+								{#if folderSuggestNoteId === note.id}
+									{@const hits = folderSuggestions(folderSuggestQuery, note.folder)}
+									{#if hits.length > 0 || note.folder}
+										<ul
+											class="absolute top-full left-0 z-30 mt-0.5 max-h-32 min-w-full overflow-auto rounded border py-0.5"
+											style="border-color: rgba(80,60,30,0.18); background: rgba(247,241,230,0.98); box-shadow: 0 4px 12px rgba(40,30,15,0.12);"
+											role="listbox"
+											aria-label="Existing folders"
+										>
+											{#if note.folder}
+												<li role="option" aria-selected="false">
+													<button
+														type="button"
+														class="block w-full truncate px-2 py-1 text-left text-[10px] text-[var(--mash-card-muted)] hover:bg-black/5"
+														onmousedown={(e) => {
+															e.preventDefault();
+															pickFolder(note.id, '');
+														}}
+													>
+														Clear folder
+													</button>
+												</li>
+											{/if}
+											{#each hits as folder}
+												<li role="option" aria-selected="false">
+													<button
+														type="button"
+														class="block w-full truncate px-2 py-1 text-left text-[11px] text-[var(--mash-card-ink)] hover:bg-black/5"
+														onmousedown={(e) => {
+															e.preventDefault();
+															pickFolder(note.id, folder);
+														}}
+													>
+														{folder}
+													</button>
+												</li>
+											{/each}
+										</ul>
+									{/if}
+								{/if}
+							</div>
+							<label class="flex min-w-[40%] flex-1 items-center gap-1 text-[10px] text-[var(--mash-card-muted)]">
+								<Tag class="h-3 w-3 shrink-0" />
+								<input
+									type="text"
+									value={note.tags.join(', ')}
+									placeholder="tags, comma, separated"
+									class="mash-focus min-w-0 flex-1 rounded border-0 bg-transparent py-0.5 text-[11px] outline-none"
+									style="color: var(--mash-card-ink);"
+									oninput={(e) => {
+										const raw = (e.currentTarget as HTMLInputElement).value;
+										const tags = raw
+											.split(',')
+											.map((t) => t.trim())
+											.filter(Boolean);
+										onMetaChange?.(note.id, { tags });
+									}}
+								/>
+							</label>
+							{#if true}
+								{@const links = linkSummary([...notesById.values()], note)}
+								<button
+									type="button"
+									class="shrink-0 rounded-md px-1.5 py-0.5 text-[10px] tabular-nums text-[var(--mash-card-muted)] hover:bg-black/5 hover:text-[var(--mash-accent)]"
+									title="Open linked notes"
+									onclick={(e) => {
+										e.stopPropagation();
+										onOpenLinks?.(note.id);
+									}}
+								>
+									{links.outgoingCount} links · {links.backlinkCount} backlinks
+								</button>
+							{/if}
+						</div>
 						<div class="min-h-0 flex-1 overflow-hidden">
 							<StickyEditor
 								body={note.body}
 								noteId={note.id}
+								autofocus={expandFocus !== 'title'}
 								onBodyChange={(b) => onBodyChange(note.id, b)}
+								onWikilink={(target) => onWikilink?.(target)}
 							/>
 						</div>
 					{:else}
 						<div
 							class="flex items-start justify-between gap-1 border-b border-[rgba(80,60,30,0.1)] px-2.5 py-1.5"
 						>
-							<span class="truncate text-xs font-semibold tracking-tight">
-								{#if isMash}<span class="mr-1 text-[var(--mash-accent)]">◎</span>{/if}
-								{note.title}
+							<span class="flex min-w-0 items-center gap-1 truncate text-xs font-semibold tracking-tight">
+								{#if note.pinned === 1}
+									<Pin class="h-3 w-3 shrink-0 text-[var(--mash-accent)]" />
+								{/if}
+								{#if isMash}<span class="mr-0.5 text-[var(--mash-accent)]">◎</span>{/if}
+								<span class="truncate">{note.title}</span>
 							</span>
 							<button
 								type="button"
@@ -1016,8 +1322,12 @@
 								<X class="h-3 w-3" />
 							</button>
 						</div>
-						<div class="flex-1 overflow-hidden px-2.5 py-2 text-[11px] leading-snug text-[var(--mash-card-muted)]">
-							{notePreview(note.body, 120)}
+						<div
+							data-card-scroll
+							class="mash-card-preview min-h-0 flex-1 overflow-y-auto overscroll-contain px-2.5 py-2 text-[11px] leading-snug text-[var(--mash-card-muted)]"
+							onwheel={(e) => e.stopPropagation()}
+						>
+							{notePreview(note.body, 220)}
 						</div>
 					{/if}
 					<div
@@ -1289,123 +1599,4 @@
 		</p>
 	</div>
 
-	{#if selectedCount >= 2}
-		<div
-			data-canvas-chrome
-			class="pointer-events-auto absolute top-3 left-1/2 z-10 flex max-w-[min(92vw,40rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-1 rounded-xl border border-[rgba(80,60,30,0.18)] bg-[rgba(247,241,230,0.96)] px-2 py-1.5 shadow-lg"
-			role="toolbar"
-			aria-label="Arrange selected notes"
-		>
-			<span class="px-1.5 text-[10px] font-medium whitespace-nowrap text-[var(--mash-card-muted)]">
-				{selectedCount} selected
-			</span>
-			<span class="mx-0.5 hidden h-4 w-px bg-[rgba(80,60,30,0.2)] sm:block"></span>
-			<span class="px-1 text-[9px] tracking-wide uppercase text-[var(--mash-card-muted)]">Align</span>
-			<button
-				type="button"
-				class="mash-align-btn"
-				onclick={() => applyAlign('left')}
-				title="Left-align into a vertical column"
-				aria-label="Align left"
-			>
-				<AlignLeft class="h-3.5 w-3.5" />
-				<span class="hidden sm:inline">Left</span>
-			</button>
-			<button
-				type="button"
-				class="mash-align-btn"
-				onclick={() => applyAlign('center')}
-				title="Center into a vertical column"
-				aria-label="Align center"
-			>
-				<AlignCenter class="h-3.5 w-3.5" />
-				<span class="hidden sm:inline">Center</span>
-			</button>
-			<button
-				type="button"
-				class="mash-align-btn"
-				onclick={() => applyAlign('right')}
-				title="Right-align into a vertical column"
-				aria-label="Align right"
-			>
-				<AlignRight class="h-3.5 w-3.5" />
-				<span class="hidden sm:inline">Right</span>
-			</button>
-			<button
-				type="button"
-				class="mash-align-btn"
-				onclick={() => applyAlign('top')}
-				title="Top-align into a horizontal row"
-				aria-label="Align top"
-			>
-				<AlignStartVertical class="h-3.5 w-3.5" />
-				<span class="hidden sm:inline">Top</span>
-			</button>
-			<button
-				type="button"
-				class="mash-align-btn"
-				onclick={() => applyAlign('middle')}
-				title="Middle-align into a horizontal row"
-				aria-label="Align middle"
-			>
-				<AlignCenterVertical class="h-3.5 w-3.5" />
-				<span class="hidden sm:inline">Middle</span>
-			</button>
-			<button
-				type="button"
-				class="mash-align-btn"
-				onclick={() => applyAlign('bottom')}
-				title="Bottom-align into a horizontal row"
-				aria-label="Align bottom"
-			>
-				<AlignEndVertical class="h-3.5 w-3.5" />
-				<span class="hidden sm:inline">Bottom</span>
-			</button>
-			{#if selectedCount >= 3}
-				<span class="mx-0.5 h-4 w-px bg-[rgba(80,60,30,0.2)]"></span>
-				<span class="px-1 text-[9px] tracking-wide uppercase text-[var(--mash-card-muted)]">Space</span>
-				<button
-					type="button"
-					class="mash-align-btn"
-					onclick={() => applyAlign('distribute-h')}
-					title="Even horizontal gaps"
-					aria-label="Space evenly horizontally"
-				>
-					<StretchHorizontal class="h-3.5 w-3.5" />
-					<span class="hidden sm:inline">Across</span>
-				</button>
-				<button
-					type="button"
-					class="mash-align-btn"
-					onclick={() => applyAlign('distribute-v')}
-					title="Even vertical gaps"
-					aria-label="Space evenly vertically"
-				>
-					<StretchVertical class="h-3.5 w-3.5" />
-					<span class="hidden sm:inline">Down</span>
-				</button>
-			{/if}
-			<span class="mx-0.5 h-4 w-px bg-[rgba(80,60,30,0.2)]"></span>
-			<button
-				type="button"
-				class="mash-align-btn"
-				onclick={() => applyAlign('stack')}
-				title="Stack into a neat pile"
-				aria-label="Stack selected"
-			>
-				<Layers class="h-3.5 w-3.5" />
-				<span class="hidden sm:inline">Stack</span>
-			</button>
-			<button
-				type="button"
-				class="mash-align-btn"
-				onclick={() => applyAlign('grid')}
-				title="Arrange into a grid"
-				aria-label="Grid selected"
-			>
-				<LayoutGrid class="h-3.5 w-3.5" />
-				<span class="hidden sm:inline">Grid</span>
-			</button>
-		</div>
-	{/if}
 </div>

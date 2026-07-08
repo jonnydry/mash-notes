@@ -2,9 +2,22 @@
 	import type { Note } from '$lib/types';
 	import VirtualList from '$lib/components/VirtualList.svelte';
 	import { formatNoteTimestamp, notePreview } from '$lib/format';
-	import { GripVertical, Pin, X, Lock, LockOpen, Folder, Hash, Trash2 } from 'lucide-svelte';
+	import { buildFolderTree, flattenFolderTree } from '$lib/folder-tree';
+	import {
+		GripVertical,
+		Pin,
+		X,
+		Lock,
+		LockOpen,
+		Folder,
+		Hash,
+		Trash2,
+		Link2,
+		ArrowUpRight,
+		ArrowDownLeft
+	} from 'lucide-svelte';
 
-	type PeelMode = 'notes' | 'folders' | 'tags';
+	export type PeelMode = 'notes' | 'folders' | 'tags' | 'linked';
 
 	interface Props {
 		open: boolean;
@@ -12,6 +25,11 @@
 		mode?: PeelMode;
 		title: string;
 		notes: Note[];
+		/** Linked mode: notes this note links to */
+		outgoingNotes?: Note[];
+		/** Linked mode: notes that link here */
+		backlinkNotes?: Note[];
+		linkedFocusTitle?: string;
 		folders?: string[];
 		tags?: string[];
 		selectedIds: Set<string>;
@@ -31,6 +49,9 @@
 		onDeleteFolder?: (folder: string) => void;
 		onDeleteTag?: (tag: string) => void;
 		onNewNote?: () => void;
+		onSelectAllNotes?: () => void;
+		/** Touch long-press place (optional) */
+		onTouchPlaceStart?: (noteId: string, clientX: number, clientY: number) => void;
 	}
 
 	let {
@@ -39,6 +60,9 @@
 		mode = 'notes',
 		title,
 		notes,
+		outgoingNotes = [],
+		backlinkNotes = [],
+		linkedFocusTitle = '',
 		folders = [],
 		tags = [],
 		selectedIds,
@@ -57,10 +81,13 @@
 		onPickTag,
 		onDeleteFolder,
 		onDeleteTag,
-		onNewNote
+		onNewNote,
+		onSelectAllNotes,
+		onTouchPlaceStart
 	}: Props = $props();
 
 	let filterInput: HTMLInputElement | undefined = $state();
+	let folderRows = $derived(flattenFolderTree(buildFolderTree(folders)));
 
 	$effect(() => {
 		if (open && mode === 'notes') {
@@ -80,7 +107,24 @@
 			return;
 		}
 		if ((e.key === 'a' || e.key === 'A') && (e.metaKey || e.ctrlKey)) {
+			e.preventDefault();
+			onSelectAllNotes?.();
 			return;
+		}
+	}
+
+	let longPressTimer = 0;
+	function onHandlePointerDown(e: PointerEvent, noteId: string) {
+		if (!onTouchPlaceStart) return;
+		if (e.pointerType === 'mouse') return;
+		longPressTimer = window.setTimeout(() => {
+			onTouchPlaceStart(noteId, e.clientX, e.clientY);
+		}, 420);
+	}
+	function clearLongPress() {
+		if (longPressTimer) {
+			clearTimeout(longPressTimer);
+			longPressTimer = 0;
 		}
 	}
 </script>
@@ -98,6 +142,10 @@
 						{#if saveStatus}
 							· {saveStatus === 'saving' ? 'Saving' : 'Saved'}
 						{/if}
+					</div>
+				{:else if mode === 'linked'}
+					<div class="text-[10px]" style="color: var(--mash-ink-muted);">
+						{linkedFocusTitle || 'Links'}
 					</div>
 				{/if}
 			</div>
@@ -136,24 +184,24 @@
 
 		<div class="mash-peel-body">
 			{#if mode === 'folders'}
-				{#if folders.length === 0}
+				{#if folderRows.length === 0}
 					<div class="mash-peel-empty">No folders yet</div>
 				{:else}
-					{#each folders as folder}
-						<div class="mash-peel-meta-row group">
+					{#each folderRows as { node, depth }}
+						<div class="mash-peel-meta-row group" style="padding-left: {10 + depth * 12}px;">
 							<button
 								type="button"
 								class="flex min-w-0 flex-1 items-center gap-2 text-left"
-								onclick={() => onPickFolder?.(folder)}
+								onclick={() => onPickFolder?.(node.path)}
 							>
 								<Folder class="h-3.5 w-3.5 shrink-0 opacity-60" />
-								<span class="truncate">{folder}</span>
+								<span class="truncate">{node.name}</span>
 							</button>
 							<button
 								type="button"
 								class="mash-peel-icon-btn opacity-40 group-hover:opacity-100 focus-visible:opacity-100"
-								aria-label="Delete folder {folder}"
-								onclick={() => onDeleteFolder?.(folder)}
+								aria-label="Delete folder {node.path}"
+								onclick={() => onDeleteFolder?.(node.path)}
 							>
 								<Trash2 class="h-3.5 w-3.5" />
 							</button>
@@ -184,6 +232,45 @@
 							</button>
 						</div>
 					{/each}
+				{/if}
+			{:else if mode === 'linked'}
+				{#if !linkedFocusTitle}
+					<div class="mash-peel-empty">Select a note to see links</div>
+				{:else}
+					<div class="px-2.5 py-1.5 text-[10px] font-medium tracking-wide uppercase" style="color: var(--mash-accent-bright);">
+						<span class="inline-flex items-center gap-1"><ArrowUpRight class="h-3 w-3" /> Outgoing</span>
+					</div>
+					{#if outgoingNotes.length === 0}
+						<div class="mash-peel-empty py-2">No outgoing links</div>
+					{:else}
+						{#each outgoingNotes as note}
+							<button
+								type="button"
+								class="mash-peel-meta-row w-full text-left"
+								onclick={() => onNoteOpen(note.id)}
+							>
+								<Link2 class="h-3.5 w-3.5 shrink-0 opacity-60" />
+								<span class="truncate text-[12px]">{note.title}</span>
+							</button>
+						{/each}
+					{/if}
+					<div class="mt-2 px-2.5 py-1.5 text-[10px] font-medium tracking-wide uppercase" style="color: var(--mash-accent-bright);">
+						<span class="inline-flex items-center gap-1"><ArrowDownLeft class="h-3 w-3" /> Backlinks</span>
+					</div>
+					{#if backlinkNotes.length === 0}
+						<div class="mash-peel-empty py-2">No backlinks</div>
+					{:else}
+						{#each backlinkNotes as note}
+							<button
+								type="button"
+								class="mash-peel-meta-row w-full text-left"
+								onclick={() => onNoteOpen(note.id)}
+							>
+								<Link2 class="h-3.5 w-3.5 shrink-0 opacity-60" />
+								<span class="truncate text-[12px]">{note.title}</span>
+							</button>
+						{/each}
+					{/if}
 				{/if}
 			{:else if isLoading}
 				<div class="mash-peel-empty">Loading…</div>
@@ -218,6 +305,10 @@
 								title="Drag to canvas"
 								ondragstart={(e) => onDragStart(e, note.id)}
 								ondragend={onDragEnd}
+								onpointerdown={(e) => onHandlePointerDown(e, note.id)}
+								onpointerup={clearLongPress}
+								onpointercancel={clearLongPress}
+								onpointerleave={clearLongPress}
 								onclick={(e) => e.stopPropagation()}
 							>
 								<GripVertical class="h-3.5 w-3.5" />
@@ -263,6 +354,8 @@
 
 		{#if mode === 'notes'}
 			<div class="mash-peel-footer">Drag handle onto canvas · Enter to expand · Space to select</div>
+		{:else if mode === 'linked'}
+			<div class="mash-peel-footer">Open a linked note on the canvas</div>
 		{/if}
 	</aside>
 {/if}

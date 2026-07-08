@@ -233,6 +233,233 @@ export function fitViewport(
 	return { panX, panY, scale };
 }
 
+const CASCADE_STEP_X = 28;
+const CASCADE_STEP_Y = 24;
+const CASCADE_MOD = 8;
+const OVERLAP_RATIO = 0.55;
+const NUDGE_STEP = 36;
+const NUDGE_MAX = 12;
+
+function rectOverlapRatio(
+	ax: number,
+	ay: number,
+	aw: number,
+	ah: number,
+	bx: number,
+	by: number,
+	bw: number,
+	bh: number
+): number {
+	const x1 = Math.max(ax, bx);
+	const y1 = Math.max(ay, by);
+	const x2 = Math.min(ax + aw, bx + bw);
+	const y2 = Math.min(ay + ah, by + bh);
+	const iw = Math.max(0, x2 - x1);
+	const ih = Math.max(0, y2 - y1);
+	const area = aw * ah;
+	if (area <= 0) return 0;
+	return (iw * ih) / area;
+}
+
+function heavilyOverlaps(
+	x: number,
+	y: number,
+	w: number,
+	h: number,
+	existing: Array<{ x: number; y: number; w: number; h: number }>
+): boolean {
+	for (const r of existing) {
+		if (rectOverlapRatio(x, y, w, h, r.x, r.y, r.w, r.h) >= OVERLAP_RATIO) return true;
+	}
+	return false;
+}
+
+/**
+ * Board-space top-left for a card centered in the current viewport,
+ * with a light cascade so rapid spawns don't perfectly stack.
+ * Optionally nudges away from heavily overlapping existing cards.
+ */
+export function viewCenterPlacement(opts: {
+	panX: number;
+	panY: number;
+	scale: number;
+	viewW: number;
+	viewH: number;
+	cardW: number;
+	cardH: number;
+	index?: number;
+	existing?: Array<{ x: number; y: number; w: number; h: number }>;
+}): { x: number; y: number } {
+	const scale = opts.scale > 0 ? opts.scale : 1;
+	const cascade = (opts.index ?? 0) % CASCADE_MOD;
+	const centerBoardX = (opts.viewW / 2 - opts.panX) / scale;
+	const centerBoardY = (opts.viewH / 2 - opts.panY) / scale;
+	let x = centerBoardX - opts.cardW / 2 + cascade * CASCADE_STEP_X;
+	let y = centerBoardY - opts.cardH / 2 + cascade * CASCADE_STEP_Y;
+
+	const existing = opts.existing ?? [];
+	if (existing.length > 0 && heavilyOverlaps(x, y, opts.cardW, opts.cardH, existing)) {
+		// Spiral outward until clear or give up.
+		for (let i = 1; i <= NUDGE_MAX; i++) {
+			const ring = Math.ceil(i / 4);
+			const side = (i - 1) % 4;
+			const dx = side === 0 ? ring : side === 2 ? -ring : 0;
+			const dy = side === 1 ? ring : side === 3 ? -ring : 0;
+			const nx = x + dx * NUDGE_STEP;
+			const ny = y + dy * NUDGE_STEP;
+			if (!heavilyOverlaps(nx, ny, opts.cardW, opts.cardH, existing)) {
+				x = nx;
+				y = ny;
+				break;
+			}
+		}
+	}
+
+	return { x, y };
+}
+
+/**
+ * Pan (keeping scale) so a board-space rect sits comfortably in the viewport.
+ * No-op when already mostly visible.
+ */
+export function panToShowRect(
+	rect: { x: number; y: number; w: number; h: number },
+	viewport: { panX: number; panY: number; scale: number; viewW: number; viewH: number },
+	padding = 48
+): { panX: number; panY: number } {
+	const scale = viewport.scale > 0 ? viewport.scale : 1;
+	const viewLeft = -viewport.panX / scale;
+	const viewTop = -viewport.panY / scale;
+	const viewRight = viewLeft + viewport.viewW / scale;
+	const viewBottom = viewTop + viewport.viewH / scale;
+
+	const pad = padding / scale;
+	const visibleW = Math.max(
+		0,
+		Math.min(rect.x + rect.w, viewRight) - Math.max(rect.x, viewLeft)
+	);
+	const visibleH = Math.max(
+		0,
+		Math.min(rect.y + rect.h, viewBottom) - Math.max(rect.y, viewTop)
+	);
+	const visibleRatio =
+		rect.w * rect.h > 0 ? (visibleW * visibleH) / (rect.w * rect.h) : 0;
+
+	if (visibleRatio >= 0.65) {
+		return { panX: viewport.panX, panY: viewport.panY };
+	}
+
+	// Center the rect in the view at the current scale.
+	const panX = viewport.viewW / 2 - (rect.x + rect.w / 2) * scale;
+	const panY = viewport.viewH / 2 - (rect.y + rect.h / 2) * scale;
+	// Prefer a slight bias toward padding when the card is huge; still center.
+	void pad;
+	return { panX, panY };
+}
+
+const BUMP_GAP = 16;
+const BUMP_MAX_PASSES = 16;
+
+type BumpRect = { id: string; x: number; y: number; w: number; h: number };
+
+function rectsOverlapWithGap(a: BumpRect, b: BumpRect, gap: number): boolean {
+	return !(
+		a.x + a.w + gap <= b.x ||
+		b.x + b.w + gap <= a.x ||
+		a.y + a.h + gap <= b.y ||
+		b.y + b.h + gap <= a.y
+	);
+}
+
+/**
+ * Shortest axis-aligned push so `other` clears `fixed` with `gap`.
+ * Prefers vertical on ties (column layouts).
+ */
+function pushAwayDelta(
+	fixed: BumpRect,
+	other: BumpRect,
+	gap: number
+): { dx: number; dy: number } | null {
+	if (!rectsOverlapWithGap(fixed, other, gap)) return null;
+
+	const pushRight = fixed.x + fixed.w + gap - other.x;
+	const pushLeft = other.x + other.w + gap - fixed.x;
+	const pushDown = fixed.y + fixed.h + gap - other.y;
+	const pushUp = other.y + other.h + gap - fixed.y;
+
+	const options = [
+		{ dx: pushRight, dy: 0, mag: pushRight, vert: 0 },
+		{ dx: -pushLeft, dy: 0, mag: pushLeft, vert: 0 },
+		{ dx: 0, dy: pushDown, mag: pushDown, vert: 1 },
+		{ dx: 0, dy: -pushUp, mag: pushUp, vert: 1 }
+	];
+	options.sort((a, b) => a.mag - b.mag || b.vert - a.vert);
+	const best = options[0];
+	if (!best || best.mag <= 0) return null;
+	return { dx: best.dx, dy: best.dy };
+}
+
+/**
+ * Keep `anchor` fixed and push overlapping neighbors clear (with gap).
+ * Resolves chains so bumped cards don't land on each other.
+ * Returns only cards that actually moved.
+ */
+export function bumpOverlappingRects(
+	anchor: BumpRect,
+	others: BumpRect[],
+	gap = BUMP_GAP
+): Map<string, { x: number; y: number }> {
+	const moved = new Map<string, { x: number; y: number }>();
+	if (others.length === 0) return moved;
+
+	const positions = new Map<string, BumpRect>();
+	for (const o of others) {
+		if (o.id === anchor.id) continue;
+		positions.set(o.id, { ...o });
+	}
+
+	const anchorCx = anchor.x + anchor.w / 2;
+	const anchorCy = anchor.y + anchor.h / 2;
+
+	for (let pass = 0; pass < BUMP_MAX_PASSES; pass++) {
+		let changed = false;
+
+		for (const rect of positions.values()) {
+			const delta = pushAwayDelta(anchor, rect, gap);
+			if (!delta) continue;
+			rect.x += delta.dx;
+			rect.y += delta.dy;
+			moved.set(rect.id, { x: rect.x, y: rect.y });
+			changed = true;
+		}
+
+		const list = [...positions.values()];
+		for (let i = 0; i < list.length; i++) {
+			for (let j = i + 1; j < list.length; j++) {
+				const a = list[i];
+				const b = list[j];
+				if (!rectsOverlapWithGap(a, b, gap)) continue;
+				const da =
+					(a.x + a.w / 2 - anchorCx) ** 2 + (a.y + a.h / 2 - anchorCy) ** 2;
+				const db =
+					(b.x + b.w / 2 - anchorCx) ** 2 + (b.y + b.h / 2 - anchorCy) ** 2;
+				const fixed = da <= db ? a : b;
+				const mobile = da <= db ? b : a;
+				const delta = pushAwayDelta(fixed, mobile, gap);
+				if (!delta) continue;
+				mobile.x += delta.dx;
+				mobile.y += delta.dy;
+				moved.set(mobile.id, { x: mobile.x, y: mobile.y });
+				changed = true;
+			}
+		}
+
+		if (!changed) break;
+	}
+
+	return moved;
+}
+
 const SNAP_PREF_KEY = 'mash.canvasSnap';
 
 export function loadSnapPref(): boolean {

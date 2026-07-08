@@ -15,7 +15,6 @@
 	} from '$lib/db';
 	import {
 		initSearchIndex,
-		searchNotes,
 		updateNoteInSearch,
 		addNoteToSearch,
 		removeNoteFromSearch
@@ -30,14 +29,26 @@
 		X,
 		Trash2,
 		Folder,
-		Tag
+		Tag,
+		AlignLeft,
+		AlignCenter,
+		AlignRight,
+		AlignStartVertical,
+		AlignCenterVertical,
+		AlignEndVertical,
+		StretchHorizontal,
+		StretchVertical,
+		LayoutGrid
 	} from 'lucide-svelte';
 	import MashDock from '$lib/components/MashDock.svelte';
 	import PeelScanner from '$lib/components/PeelScanner.svelte';
 	import CanvasBoard from '$lib/components/CanvasBoard.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import type { DockAction } from '$lib/dock';
-	import { notePreview } from '$lib/format';
+	import type { PeelMode } from '$lib/components/PeelScanner.svelte';
+	import { isBlankUntitledNote, notePreview } from '$lib/format';
+	import { extractWikilinks } from '$lib/markdown';
+	import { parseNotesJson } from '$lib/import-notes';
 	import { type NavFilter } from '$lib/note-ui';
 	import {
 		combineNotes,
@@ -59,10 +70,30 @@
 		spatialNoteOrder,
 		type CanvasLayoutSnapshot
 	} from '$lib/canvas-undo';
-
-	const NOTE_MIME = 'application/x-mash-notes';
-	const COLLAPSED_CARD = { w: 220, h: 120 };
-	const EXPANDED_CARD = { w: 360, h: 320 };
+	import { bumpOverlappingRects, type AlignMode } from '$lib/canvas-geom';
+	import { findBacklinks, findOutgoingNotes } from '$lib/links';
+	import { parseSyncBundle, mergeSyncBundle, downloadSyncBundle } from '$lib/sync-file';
+	import {
+		NOTE_MIME,
+		COLLAPSED_CARD,
+		EXPANDED_CARD,
+		BUMP_GAP
+	} from '$lib/stores/canvas-session';
+	import {
+		filterNotes,
+		filterPeelNotes,
+		uniqueFoldersFrom,
+		uniqueTagsFrom,
+		canvasFolderFromFilter,
+		canvasTitleFromFilter
+	} from '$lib/stores/note-library';
+	import {
+		peelTitleFor,
+		peelOpenPatch,
+		peelClosePatch,
+		dispatchDockAction,
+		windowPeelNotes
+	} from '$lib/stores/peel-nav';
 
 	let notes = $state<Note[]>([]);
 	let selectedId = $state<string | null>(null);
@@ -74,6 +105,8 @@
 	let actionToast = $state('');
 	let toastTimer: ReturnType<typeof setTimeout> | null = null;
 	let expandedNoteId = $state<string | null>(null);
+	/** Original neighbor positions before expand-bump; restored on collapse. */
+	let bumpRestore: Map<string, { x: number; y: number }> | null = $state(null);
 	let settlingIds = $state<Set<string>>(new Set());
 	let draggingTrayId = $state<string | null>(null);
 	let canvasLoadSeq = 0;
@@ -92,13 +125,27 @@
 
 	let peelOpen = $state(false);
 	let peelPinned = $state(false);
-	let peelMode = $state<'notes' | 'folders' | 'tags'>('notes');
+	let peelMode = $state<PeelMode>('notes');
 	let peelFilterText = $state('');
 	let foldersFlyout = $state(false);
 	let tagsFlyout = $state(false);
-	let bulkMenu = $state<'tag' | 'folder' | null>(null);
+	let linkedFlyout = $state(false);
+	let linkedFocusId = $state<string | null>(null);
+	let bulkMenu = $state<'tag' | 'folder' | 'align' | null>(null);
 	let bulkTagDraft = $state('');
 	let bulkFolderDraft = $state('');
+	let expandFocus = $state<'title' | 'body' | null>(null);
+	let touchPlaceGhost = $state<{
+		noteId: string;
+		clientX: number;
+		clientY: number;
+	} | null>(null);
+	let canvasBoard: {
+		getSpawnPoint: (size: { w: number; h: number }, cascadeIndex?: number) => { x: number; y: number };
+		ensureNoteVisible: (noteId: string) => void;
+		applyAlign: (mode: AlignMode) => void;
+		clientToWorld?: (clientX: number, clientY: number) => { x: number; y: number };
+	} | undefined = $state();
 	let confirmDialog = $state<{
 		title: string;
 		message: string;
@@ -111,72 +158,27 @@
 	let selectionSet = $derived(new Set(selectionIds));
 	let selectedNotes = $derived(notesFromSelection(notes, selectionIds));
 	let notesById = $derived(new Map(notes.map((n) => [n.id, n])));
-	let canvasFolder = $derived(
-		currentFilter.type === 'folder' && currentFilter.value !== undefined
-			? currentFilter.value
-			: ''
+	let canvasFolder = $derived(canvasFolderFromFilter(currentFilter));
+	let filteredNotes = $derived(filterNotes(notes, currentFilter, searchQuery));
+	let uniqueFolders = $derived(uniqueFoldersFrom(notes));
+	let uniqueTags = $derived(uniqueTagsFrom(notes));
+	let peelNotes = $derived(filterPeelNotes(filteredNotes, peelFilterText));
+	let linkedFocusNote = $derived(
+		linkedFocusId
+			? (notes.find((n) => n.id === linkedFocusId) ?? null)
+			: expandedNoteId
+				? (notes.find((n) => n.id === expandedNoteId) ?? null)
+				: selectedNote
 	);
-
-	let filteredNotes = $derived.by(() => {
-		let list = [...notes];
-
-		list = list.filter((n) => {
-			if (currentFilter.type === 'pinned') return n.pinned === 1;
-			if (currentFilter.type === 'folder' && currentFilter.value) {
-				return n.folder === currentFilter.value || n.folder.startsWith(currentFilter.value + '/');
-			}
-			if (currentFilter.type === 'tag' && currentFilter.value) {
-				return n.tags.includes(currentFilter.value);
-			}
-			return true;
-		});
-
-		if (searchQuery.trim()) {
-			const results = searchNotes(searchQuery, {
-				folder: currentFilter.type === 'folder' ? currentFilter.value : undefined,
-				tags:
-					currentFilter.type === 'tag' && currentFilter.value ? [currentFilter.value] : undefined
-			});
-			const idSet = new Set(results.map((r) => r.id));
-			list = list.filter((n) => idSet.has(n.id));
-		}
-
-		list.sort((a, b) => {
-			if (a.pinned !== b.pinned) return b.pinned - a.pinned;
-			return b.modified - a.modified;
-		});
-		return list;
-	});
-
-	let uniqueFolders = $derived([...new Set(notes.map((n) => n.folder).filter(Boolean))].sort());
-	let uniqueTags = $derived([...new Set(notes.flatMap((n) => n.tags))].sort());
-
-	let peelNotes = $derived.by(() => {
-		const q = peelFilterText.trim().toLowerCase();
-		if (!q) return filteredNotes;
-		return filteredNotes.filter(
-			(n) =>
-				n.title.toLowerCase().includes(q) ||
-				n.body.toLowerCase().includes(q) ||
-				n.folder.toLowerCase().includes(q) ||
-				n.tags.some((t) => t.toLowerCase().includes(q))
-		);
-	});
-
-	let peelTitle = $derived.by(() => {
-		if (peelMode === 'folders') return 'Folders';
-		if (peelMode === 'tags') return 'Tags';
-		if (searchQuery.trim()) return 'Search results';
-		if (currentFilter.type === 'pinned') return 'Pinned';
-		if (currentFilter.type === 'folder' && currentFilter.value) return currentFilter.value;
-		if (currentFilter.type === 'tag' && currentFilter.value) return `#${currentFilter.value}`;
-		return 'All notes';
-	});
-
-	let canvasTitle = $derived.by(() => {
-		if (currentFilter.type === 'folder' && currentFilter.value) return currentFilter.value;
-		return 'Desk';
-	});
+	let linkedOutgoing = $derived(
+		linkedFocusNote ? findOutgoingNotes(notes, linkedFocusNote) : []
+	);
+	let linkedBacklinks = $derived(
+		linkedFocusNote ? findBacklinks(notes, linkedFocusNote) : []
+	);
+	let peelTitle = $derived(peelTitleFor(peelMode, searchQuery, currentFilter));
+	let peelNotesWindowed = $derived(windowPeelNotes(peelNotes));
+	let canvasTitle = $derived(canvasTitleFromFilter(currentFilter));
 
 	let isLoading = $state(true);
 	let saveStatus = $state<'saved' | 'saving' | ''>('');
@@ -196,20 +198,9 @@
 		paletteHighlight = 0;
 	});
 
-	let draftTitle = $state('');
-	let draftBody = $state('');
-	let draftFolder = $state('');
-	let draftTags = $state<string[]>([]);
-
-	let autoSaveTimeout: ReturnType<typeof setTimeout> | null = null;
-	let pendingSnap: {
-		id: string;
-		title: string;
-		body: string;
-		tags: string[];
-		folder: string;
-		links: string[];
-	} | null = null;
+	let loadError = $state('');
+	let importInputEl: HTMLInputElement | undefined = $state();
+	let syncInputEl: HTMLInputElement | undefined = $state();
 
 	function flashToast(msg: string) {
 		actionToast = msg;
@@ -512,6 +503,8 @@
 			});
 			if (expandedNoteId && !items.some((i) => i.noteId === expandedNoteId)) {
 				expandedNoteId = null;
+				expandFocus = null;
+				bumpRestore = null;
 			}
 		} catch (e) {
 			if (seq !== canvasLoadSeq) return;
@@ -538,6 +531,7 @@
 		untrack(() => {
 			canvasUndo.clear();
 			canvasUndoTick++;
+			bumpRestore = null;
 		});
 		void loadContextCanvas(canvasFolder);
 	});
@@ -687,6 +681,9 @@
 		canvasItems = canvasItems.map((i) => (i.id === itemId ? { ...i, w, h } : i));
 		pushCanvasUndo('Resize', [beforeSnap], [{ itemId, x: item.x, y: item.y, w, h }]);
 		await updateCanvasItemPosition(itemId, { x: item.x, y: item.y, w, h });
+		if (expandedNoteId === item.noteId) {
+			bumpNeighborsAround(itemId, { w, h });
+		}
 	}
 
 	function handleCanvasSelectNotes(noteIds: string[], opts: { additive: boolean }) {
@@ -719,35 +716,134 @@
 
 	async function handleCanvasRemove(itemId: string) {
 		const item = canvasItems.find((i) => i.id === itemId);
+		const note = item ? notesById.get(item.noteId) : undefined;
 		await removeCanvasItem(itemId);
 		canvasItems = canvasItems.filter((i) => i.id !== itemId);
 		// Layout undo snapshots may reference the removed card — drop the stack.
 		canvasUndo.clear();
 		canvasUndoTick++;
+
+		if (item && expandedNoteId === item.noteId) {
+			expandedNoteId = null;
+			expandFocus = null;
+			restoreBumpLayout();
+		}
+
+		// Blank Untitled scratch notes shouldn't linger in the tray.
+		if (item && note && isBlankUntitledNote(note)) {
+			await deleteNote(item.noteId);
+			removeNoteFromSearch(item.noteId);
+			notes = notes.filter((n) => n.id !== item.noteId);
+			selectionIds = selectionIds.filter((id) => id !== item.noteId);
+			if (selectedId === item.noteId) selectedId = selectionIds[0] ?? null;
+			return;
+		}
+
 		if (item && activeCanvas && canvasFolder) {
 			dismissNoteFromCanvas(activeCanvas.id, item.noteId);
 		}
-		if (item && expandedNoteId === item.noteId) expandedNoteId = null;
 	}
 
-	function expandSticky(noteId: string) {
+	function cardDisplaySize(item: CanvasItem, noteId: string, asExpanded: boolean): {
+		w: number;
+		h: number;
+	} {
+		if (asExpanded) {
+			return {
+				w: Math.max(item.w ?? 0, EXPANDED_CARD.w),
+				h: Math.max(item.h ?? 0, EXPANDED_CARD.h)
+			};
+		}
+		return {
+			w: item.w ?? COLLAPSED_CARD.w,
+			h: item.h ?? COLLAPSED_CARD.h
+		};
+	}
+
+	/** Push neighbors clear of an expanded/resized card; remember originals for collapse. */
+	function bumpNeighborsAround(anchorId: string, size: { w: number; h: number }) {
+		const anchor = canvasItems.find((i) => i.id === anchorId);
+		if (!anchor) return;
+		const others = canvasItems
+			.filter((i) => i.id !== anchorId)
+			.map((i) => {
+				const s = cardDisplaySize(i, i.noteId, expandedNoteId === i.noteId);
+				return { id: i.id, x: i.x, y: i.y, w: s.w, h: s.h };
+			});
+		const moved = bumpOverlappingRects(
+			{ id: anchor.id, x: anchor.x, y: anchor.y, w: size.w, h: size.h },
+			others,
+			BUMP_GAP
+		);
+		if (moved.size === 0) return;
+
+		const restore = bumpRestore ?? new Map<string, { x: number; y: number }>();
+		for (const item of canvasItems) {
+			if (!moved.has(item.id) || restore.has(item.id)) continue;
+			restore.set(item.id, { x: item.x, y: item.y });
+		}
+		bumpRestore = restore;
+
+		canvasItems = canvasItems.map((item) => {
+			const next = moved.get(item.id);
+			return next ? { ...item, x: next.x, y: next.y } : item;
+		});
+		settlingIds = new Set(moved.keys());
+		setTimeout(() => {
+			settlingIds = new Set();
+		}, 320);
+		void Promise.all(
+			[...moved.entries()].map(([itemId, pos]) =>
+				updateCanvasItemPosition(itemId, { x: pos.x, y: pos.y })
+			)
+		);
+	}
+
+	/** Snap bumped neighbors back to their pre-expand positions. */
+	function restoreBumpLayout() {
+		const restore = bumpRestore;
+		bumpRestore = null;
+		if (!restore || restore.size === 0) return;
+
+		canvasItems = canvasItems.map((item) => {
+			const prev = restore.get(item.id);
+			return prev ? { ...item, x: prev.x, y: prev.y } : item;
+		});
+		settlingIds = new Set(restore.keys());
+		setTimeout(() => {
+			settlingIds = new Set();
+		}, 320);
+		void Promise.all(
+			[...restore.entries()].map(([itemId, pos]) =>
+				updateCanvasItemPosition(itemId, { x: pos.x, y: pos.y })
+			)
+		);
+	}
+
+	function expandSticky(noteId: string, focus: 'title' | 'body' = 'body') {
+		if (expandedNoteId && expandedNoteId !== noteId) {
+			restoreBumpLayout();
+		}
 		selectNote(noteId, { keepSelection: true });
+		expandFocus = focus;
 		expandedNoteId = noteId;
 		const item = canvasItems.find((i) => i.noteId === noteId);
-		if (item) {
-			// Grow to at least expanded defaults; keep larger custom sizes.
-			const w = Math.max(item.w ?? 0, EXPANDED_CARD.w);
-			const h = Math.max(item.h ?? 0, EXPANDED_CARD.h);
-			if (w !== item.w || h !== item.h) {
-				canvasItems = canvasItems.map((i) => (i.id === item.id ? { ...i, w, h } : i));
-				void updateCanvasItemPosition(item.id, { x: item.x, y: item.y, w, h });
-			}
+		if (!item) return;
+		// Grow to at least expanded defaults; keep larger custom sizes.
+		const w = Math.max(item.w ?? 0, EXPANDED_CARD.w);
+		const h = Math.max(item.h ?? 0, EXPANDED_CARD.h);
+		if (w !== item.w || h !== item.h) {
+			canvasItems = canvasItems.map((i) => (i.id === item.id ? { ...i, w, h } : i));
+			void updateCanvasItemPosition(item.id, { x: item.x, y: item.y, w, h });
 		}
+		bumpNeighborsAround(item.id, { w, h });
 	}
 
 	function collapseSticky() {
 		const noteId = expandedNoteId;
 		expandedNoteId = null;
+		expandFocus = null;
+		restoreBumpLayout();
 		if (!noteId) return;
 		const item = canvasItems.find((i) => i.noteId === noteId);
 		if (!item) return;
@@ -774,20 +870,28 @@
 		}, 1200);
 	}
 
+	/** Coalesce rapid title/body/meta edits so earlier fields aren't dropped. */
+	const stickyPendingPatches = new Map<string, Partial<Note>>();
+
 	function scheduleStickyPersist(
 		noteId: string,
 		patch: Partial<Note>,
 		updated: Note
 	) {
 		markStickySaving();
+		const mergedPatch = { ...(stickyPendingPatches.get(noteId) ?? {}), ...patch };
+		stickyPendingPatches.set(noteId, mergedPatch);
 		const prev = stickySaveTimers.get(noteId);
 		if (prev) clearTimeout(prev);
 		stickySaveTimers.set(
 			noteId,
 			setTimeout(() => {
 				stickySaveTimers.delete(noteId);
-				syncNoteUpdate(noteId, patch);
-				updateNoteInSearch({ id: noteId, ...patch }, updated);
+				const pending = stickyPendingPatches.get(noteId) ?? mergedPatch;
+				stickyPendingPatches.delete(noteId);
+				const latest = notes.find((n) => n.id === noteId) ?? updated;
+				syncNoteUpdate(noteId, pending);
+				updateNoteInSearch({ id: noteId, ...pending }, latest);
 				markStickySaved();
 			}, 400)
 		);
@@ -798,20 +902,31 @@
 		if (!activeCanvas) return;
 		const existing = canvasItems.find((i) => i.noteId === noteId);
 		if (!existing) {
-			const item = await addNoteToCanvas(activeCanvas.id, noteId);
+			const spawn =
+				canvasBoard?.getSpawnPoint(EXPANDED_CARD, canvasItems.length) ?? {
+					x: 80,
+					y: 80
+				};
+			const item = await addNoteToCanvas(activeCanvas.id, noteId, {
+				x: spawn.x,
+				y: spawn.y,
+				w: EXPANDED_CARD.w,
+				h: EXPANDED_CARD.h
+			});
 			await refreshCanvasItems();
 			settlingIds = new Set([item.id]);
 			setTimeout(() => {
 				settlingIds = new Set();
 			}, 320);
+		} else {
+			canvasBoard?.ensureNoteVisible(noteId);
 		}
-		expandSticky(noteId);
+		expandSticky(noteId, 'body');
 	}
 
 	function handleStickyTitleChange(noteId: string, title: string) {
 		const note = notes.find((n) => n.id === noteId);
 		if (!note) return;
-		if (selectedId === noteId) draftTitle = title;
 		const updated = { ...note, title, modified: Date.now() };
 		notes = notes.map((n) => (n.id === noteId ? updated : n));
 		scheduleStickyPersist(noteId, { title }, updated);
@@ -821,10 +936,45 @@
 		const note = notes.find((n) => n.id === noteId);
 		if (!note) return;
 		const links = extractWikilinks(body);
-		if (selectedId === noteId) draftBody = body;
 		const updated = { ...note, body, links, modified: Date.now() };
 		notes = notes.map((n) => (n.id === noteId ? updated : n));
 		scheduleStickyPersist(noteId, { body, links }, updated);
+	}
+
+	function handleStickyMetaChange(
+		noteId: string,
+		patch: { folder?: string; tags?: string[]; pinned?: 0 | 1 }
+	) {
+		const note = notes.find((n) => n.id === noteId);
+		if (!note) return;
+		const updated = { ...note, ...patch, modified: Date.now() };
+		notes = notes.map((n) => (n.id === noteId ? updated : n));
+		scheduleStickyPersist(noteId, patch, updated);
+	}
+
+	function openLinkedPeel(noteId: string) {
+		linkedFocusId = noteId;
+		openPeel('linked');
+	}
+
+	async function openWikilink(target: string) {
+		const needle = target.trim().toLowerCase();
+		if (!needle) return;
+		let note = notes.find((n) => n.title.trim().toLowerCase() === needle);
+		if (!note) {
+			note = await createNote({
+				title: target.trim(),
+				body: '',
+				folder: canvasFolder,
+				links: []
+			});
+			addNoteToSearch(note);
+			notes = [note, ...notes];
+			flashToast(`Created “${note.title}”`);
+		}
+		linkedFocusId = note.id;
+		openPeel('linked');
+		await openStickyFromTray(note.id);
 	}
 
 	async function handleMashCards(sourceItemId: string, targetItemId: string) {
@@ -900,35 +1050,9 @@
 			.replace(/"/g, '&quot;');
 	}
 
-	function extractWikilinks(body: string): string[] {
-		const links: string[] = [];
-		const regex = /\[\[([^|]+)(?:\|([^\]]+))?\]\]/g;
-		let match;
-		while ((match = regex.exec(body)) !== null) {
-			const title = match[1].trim();
-			if (title && !links.includes(title)) {
-				links.push(title);
-			}
-		}
-		return links;
-	}
-
-	$effect(() => {
-		if (selectedNote) {
-			draftTitle = selectedNote.title;
-			draftBody = selectedNote.body;
-			draftFolder = selectedNote.folder;
-			draftTags = [...selectedNote.tags];
-		} else {
-			draftTitle = '';
-			draftBody = '';
-			draftFolder = '';
-			draftTags = [];
-		}
-	});
-
 	async function loadNotes() {
 		isLoading = true;
+		loadError = '';
 		try {
 			await initSearchIndex();
 			let loaded = await getActiveNotes({ limit: 10000 });
@@ -936,7 +1060,7 @@
 			if (loaded.length === 0) {
 				const seed1 = await createNote({
 					title: 'Welcome to Mash',
-					body: 'Mash is where notes go to become useful.\n\nDrag notes from the tray onto the canvas. Select a few, then Combine, Copy, or Export.',
+					body: 'Mash is where notes go to become useful.\n\nDrag notes from the tray onto the canvas. Select a few, then Combine, Copy, or Export.\n\nTry a [[Project ideas]] link in preview mode.',
 					tags: ['welcome']
 				});
 				addNoteToSearch(seed1);
@@ -963,6 +1087,8 @@
 			}));
 		} catch (e) {
 			console.error('Failed to load notes', e);
+			loadError = 'Couldn’t load notes. Check storage permissions and retry.';
+			flashToast(loadError);
 		}
 		isLoading = false;
 	}
@@ -977,113 +1103,187 @@
 		addNoteToSearch(note);
 		notes = [note, ...notes];
 		if (activeCanvas) {
+			const spawn =
+				canvasBoard?.getSpawnPoint(EXPANDED_CARD, canvasItems.length) ?? {
+					x: 80,
+					y: 80
+				};
 			const item = await addNoteToCanvas(activeCanvas.id, note.id, {
-				x: 60 + canvasItems.length * 24,
-				y: 60 + canvasItems.length * 20,
-				w: 360,
-				h: 320
+				x: spawn.x,
+				y: spawn.y,
+				w: EXPANDED_CARD.w,
+				h: EXPANDED_CARD.h
 			});
 			await refreshCanvasItems();
-			settlingIds = new Set([item.id]);
+			selectNote(note.id);
+			expandFocus = 'title';
+			expandedNoteId = note.id;
+			bumpNeighborsAround(item.id, EXPANDED_CARD);
+			settlingIds = new Set([item.id, ...settlingIds]);
 			setTimeout(() => {
 				settlingIds = new Set();
 			}, 320);
+			return;
 		}
 		selectNote(note.id);
+		expandFocus = 'title';
 		expandedNoteId = note.id;
 	}
 
 	function selectNote(id: string, opts?: { keepSelection?: boolean }) {
 		if (selectedId && selectedId !== id) flushPendingSave();
-		const note = notes.find((n) => n.id === id);
-		if (note) {
-			draftTitle = note.title;
-			draftBody = note.body;
-			draftFolder = note.folder;
-			draftTags = [...note.tags];
-		}
 		selectedId = id;
 		if (!opts?.keepSelection) {
 			selectionIds = [id];
 		}
 	}
 
-	function applyDraftSave(snap: {
-		id: string;
-		title: string;
-		body: string;
-		tags: string[];
-		folder: string;
-		links: string[];
-	}): void {
-		const changes: Partial<Note> = {
-			title: snap.title,
-			body: snap.body,
-			tags: snap.tags,
-			folder: snap.folder,
-			links: snap.links
-		};
-		syncNoteUpdate(snap.id, changes);
-
-		const updatedSnap = {
-			...notes.find((n) => n.id === snap.id)!,
-			...changes,
-			modified: Date.now()
-		};
-		notes = notes.map((n) => (n.id === snap.id ? updatedSnap : n));
-		updateNoteInSearch({ id: snap.id, ...changes }, updatedSnap);
-	}
-
-	function scheduleAutoSave() {
-		if (!selectedId) return;
-		if (autoSaveTimeout) clearTimeout(autoSaveTimeout);
-		saveStatus = 'saving';
-
-		pendingSnap = {
-			id: selectedId!,
-			title: draftTitle,
-			body: draftBody,
-			tags: [...draftTags],
-			folder: draftFolder,
-			links: extractWikilinks(draftBody)
-		};
-
-		autoSaveTimeout = setTimeout(() => {
-			autoSaveTimeout = null;
-			if (!pendingSnap) return;
-			applyDraftSave(pendingSnap);
-			pendingSnap = null;
-
-			saveStatus = 'saved';
-			setTimeout(() => {
-				if (saveStatus === 'saved') saveStatus = '';
-			}, 1200);
-		}, 400);
-	}
-
 	function flushPendingSave(): void {
-		if (autoSaveTimeout) {
-			clearTimeout(autoSaveTimeout);
-			autoSaveTimeout = null;
-		}
-		if (pendingSnap) {
-			applyDraftSave(pendingSnap);
-			pendingSnap = null;
-		}
 		for (const [noteId, timer] of stickySaveTimers) {
 			clearTimeout(timer);
 			stickySaveTimers.delete(noteId);
+			stickyPendingPatches.delete(noteId);
 			const note = notes.find((n) => n.id === noteId);
 			if (!note) continue;
 			syncNoteUpdate(noteId, {
 				title: note.title,
 				body: note.body,
+				folder: note.folder,
+				tags: note.tags,
+				pinned: note.pinned,
 				links: note.links
 			});
 			updateNoteInSearch(
-				{ id: noteId, title: note.title, body: note.body, links: note.links },
+				{
+					id: noteId,
+					title: note.title,
+					body: note.body,
+					folder: note.folder,
+					tags: note.tags,
+					pinned: note.pinned,
+					links: note.links
+				},
 				note
 			);
+		}
+		stickyPendingPatches.clear();
+	}
+
+	async function handleSyncFile(e: Event) {
+		const input = e.currentTarget as HTMLInputElement;
+		const file = input.files?.[0];
+		input.value = '';
+		if (!file) return;
+		try {
+			const text = await file.text();
+			if (text.length > 8_000_000) {
+				flashToast('Sync file too large');
+				return;
+			}
+			const parsed = parseSyncBundle(text);
+			if (!parsed.ok) {
+				flashToast(parsed.error);
+				return;
+			}
+			const { notes: mergedNotes, summary } = mergeSyncBundle(notes, parsed.bundle);
+			for (const n of mergedNotes) {
+				await db.notes.put(n);
+			}
+			notes = mergedNotes;
+			for (const n of mergedNotes) {
+				removeNoteFromSearch(n.id);
+				addNoteToSearch(n);
+			}
+			const conflictFields = [
+				...new Set(summary.conflicts.map((c) => `${c.noteId}:${c.field}`))
+			];
+			flashToast(
+				`Sync: ${summary.added} added · ${summary.updated} updated` +
+					(conflictFields.length ? ` · ${conflictFields.length} field conflicts (LWW)` : '')
+			);
+			if (summary.conflicts.length > 0) {
+				const bodyConflicts = summary.conflicts.filter((c) => c.field === 'body');
+				if (bodyConflicts.length > 0) {
+					const first = bodyConflicts[0];
+					askConfirm({
+						title: 'Sync body conflict',
+						message: `Note ${first.noteId.slice(0, 8)}… had conflicting body. LWW kept ${first.chosen}. Re-export after reviewing if needed.`,
+						confirmLabel: 'OK',
+						danger: false,
+						action: () => {}
+					});
+				}
+			}
+		} catch {
+			flashToast('Sync import failed');
+		}
+	}
+
+	function startTouchPlace(noteId: string, clientX: number, clientY: number) {
+		touchPlaceGhost = { noteId, clientX, clientY };
+		const onMove = (ev: PointerEvent) => {
+			if (!touchPlaceGhost) return;
+			touchPlaceGhost = { ...touchPlaceGhost, clientX: ev.clientX, clientY: ev.clientY };
+		};
+		const onUp = (ev: PointerEvent) => {
+			window.removeEventListener('pointermove', onMove);
+			window.removeEventListener('pointerup', onUp);
+			window.removeEventListener('pointercancel', onUp);
+			const ghost = touchPlaceGhost;
+			touchPlaceGhost = null;
+			if (!ghost || !canvasBoard?.clientToWorld) return;
+			const world = canvasBoard.clientToWorld(ev.clientX, ev.clientY);
+			void handleDropNotes([ghost.noteId], world.x - COLLAPSED_CARD.w / 2, world.y - COLLAPSED_CARD.h / 2);
+		};
+		window.addEventListener('pointermove', onMove);
+		window.addEventListener('pointerup', onUp);
+		window.addEventListener('pointercancel', onUp);
+	}
+
+	async function handleImportFile(e: Event) {
+		const input = e.currentTarget as HTMLInputElement;
+		const file = input.files?.[0];
+		input.value = '';
+		if (!file) return;
+		try {
+			const text = await file.text();
+			if (text.length > 8_000_000) {
+				flashToast('Import file too large');
+				return;
+			}
+			const result = parseNotesJson(text);
+			if (!result.ok) {
+				flashToast(result.error);
+				return;
+			}
+			let added = 0;
+			for (const note of result.notes) {
+				const existing = notes.find((n) => n.id === note.id);
+				if (existing) {
+					const merged = {
+						...existing,
+						...note,
+						id: existing.id,
+						modified: Math.max(existing.modified, note.modified)
+					};
+					await db.notes.put(merged);
+					notes = notes.map((n) => (n.id === existing.id ? merged : n));
+					updateNoteInSearch(merged, merged);
+				} else {
+					await db.notes.put(note);
+					addNoteToSearch(note);
+					notes = [note, ...notes];
+					added++;
+				}
+			}
+			flashToast(
+				added === result.notes.length
+					? `Imported ${added} notes`
+					: `Imported ${result.notes.length} notes (${added} new)`
+			);
+		} catch (err) {
+			console.error(err);
+			flashToast('Import failed');
 		}
 	}
 
@@ -1258,58 +1458,44 @@
 		}
 	}
 
-	function openPeel(mode: 'notes' | 'folders' | 'tags' = 'notes') {
-		peelMode = mode;
-		peelOpen = true;
-		foldersFlyout = mode === 'folders';
-		tagsFlyout = mode === 'tags';
+	function openPeel(mode: PeelMode = 'notes') {
+		const patch = peelOpenPatch(mode);
+		peelMode = patch.peelMode;
+		peelOpen = patch.peelOpen;
+		foldersFlyout = patch.foldersFlyout;
+		tagsFlyout = patch.tagsFlyout;
+		linkedFlyout = patch.linkedFlyout;
 	}
 
 	function closePeel(force = false) {
 		if (peelPinned && !force) return;
-		peelOpen = false;
-		foldersFlyout = false;
-		tagsFlyout = false;
+		const patch = peelClosePatch();
+		peelOpen = patch.peelOpen;
+		foldersFlyout = patch.foldersFlyout;
+		tagsFlyout = patch.tagsFlyout;
+		linkedFlyout = patch.linkedFlyout;
 	}
 
 	function handleDockAction(action: DockAction) {
-		switch (action) {
-			case 'all':
-				clearFilter();
-				openPeel('notes');
-				break;
-			case 'pinned':
-				setFilter('pinned');
-				openPeel('notes');
-				break;
-			case 'folders':
-				if (peelOpen && peelMode === 'folders') {
-					closePeel(true);
-				} else {
-					openPeel('folders');
-				}
-				break;
-			case 'tags':
-				if (peelOpen && peelMode === 'tags') {
-					closePeel(true);
-				} else {
-					openPeel('tags');
-				}
-				break;
-			case 'new':
-				void handleNewNote();
-				break;
-			case 'search':
-				openPeel('notes');
+		dispatchDockAction(action, {
+			clearFilter,
+			setFilter: (type, value) => setFilter(type, value),
+			openPeel,
+			closePeel,
+			getPeelOpen: () => peelOpen,
+			getPeelMode: () => peelMode,
+			setLinkedFocus: (id) => {
+				linkedFocusId = id;
+			},
+			resolveLinkedFocus: () =>
+				expandedNoteId ?? selectedId ?? linkedFocusId ?? notes[0]?.id ?? null,
+			newNote: () => void handleNewNote(),
+			focusSearch: () => {
 				void tick().then(() => {
 					(document.getElementById('global-search') as HTMLInputElement | null)?.focus();
 				});
-				break;
-			default: {
-				const _exhaustive: never = action;
-				return _exhaustive;
 			}
-		}
+		});
 	}
 
 	function handleKeydown(e: KeyboardEvent) {
@@ -1330,6 +1516,19 @@
 		if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
 			e.preventDefault();
 			handleNewNote();
+		}
+		if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'm') {
+			const tag = (e.target as HTMLElement)?.tagName;
+			if (tag !== 'INPUT' && tag !== 'TEXTAREA' && selectionIds.length >= 2) {
+				e.preventDefault();
+				void combineSelection();
+			}
+		}
+		if (e.key === '?' && document.activeElement?.tagName === 'BODY') {
+			e.preventDefault();
+			flashToast(
+				'⌘K palette · ⌘N new · ⌘M mash · ⌘Z board=layout undo (in text=content) · / search · Esc dismiss'
+			);
 		}
 		if (e.key === '/' && document.activeElement?.tagName === 'BODY') {
 			e.preventDefault();
@@ -1435,16 +1634,10 @@
 			action: () => {
 				if (!selectedId) return;
 				const np = selectedNote?.pinned === 1 ? 0 : 1;
-				syncNoteUpdate(selectedId, { pinned: np });
-				notes = notes.map((n) => (n.id === selectedId ? { ...n, pinned: np as 0 | 1 } : n));
-				if (selectedNote)
-					updateNoteInSearch(
-						{ id: selectedId, pinned: np },
-						{ ...selectedNote, pinned: np as 0 | 1 }
-					);
+				handleStickyMetaChange(selectedId, { pinned: np as 0 | 1 });
 				showPalette = false;
 			},
-			shortcut: ''
+			shortcut: '⌘P'
 		},
 		{
 			label: 'Delete current note',
@@ -1454,7 +1647,15 @@
 			},
 			shortcut: ''
 		},
-		{ label: 'Clear filters & search', action: clearFilter, shortcut: '' },
+		{ label: 'Clear filters & search', action: clearFilter, shortcut: 'Esc' },
+		{
+			label: 'Import notes from JSON…',
+			action: () => {
+				showPalette = false;
+				importInputEl?.click();
+			},
+			shortcut: ''
+		},
 		{
 			label: 'Export all as JSON',
 			action: () => {
@@ -1462,6 +1663,41 @@
 				showPalette = false;
 			},
 			shortcut: ''
+		},
+		{
+			label: 'Export sync bundle…',
+			action: () => {
+				downloadSyncBundle(notes);
+				showPalette = false;
+				flashToast('Exported sync bundle');
+			},
+			shortcut: ''
+		},
+		{
+			label: 'Import sync bundle…',
+			action: () => {
+				showPalette = false;
+				syncInputEl?.click();
+			},
+			shortcut: ''
+		},
+		{
+			label: 'Keyboard shortcuts',
+			action: () => {
+				showPalette = false;
+				flashToast(
+					'⌘Z in text = content undo · ⌘Z on board = layout undo · ⌘K · ⌘N · / search'
+				);
+			},
+			shortcut: '?'
+		},
+		{
+			label: 'Undo tip: content vs layout',
+			action: () => {
+				showPalette = false;
+				flashToast('In a sticky: ⌘Z undoes typing. On the board: ⌘Z undoes move/align.');
+			},
+			shortcut: '⌘Z'
 		}
 	];
 
@@ -1524,26 +1760,26 @@
 <div class="flex h-screen flex-col" style="background: var(--mash-bg); color: var(--mash-ink);">
 	<!-- Header -->
 	<header
-		class="flex items-center justify-between border-b px-4 py-2.5"
+		class="flex items-center justify-between border-b px-5 py-3.5"
 		style="border-color: var(--mash-tray-edge); background: var(--mash-rail);"
 	>
-		<div class="flex items-center gap-2.5">
+		<div class="flex items-center gap-3.5">
 			<img
 				src="/icons/mash-logo-sprouts.png"
 				srcset="/icons/mash-logo-sprouts.png 1x, /icons/mash-logo-sprouts@2x.png 2x"
 				alt="Mash"
-				width="32"
-				height="40"
-				class="mash-logo h-10 w-auto select-none"
+				width="48"
+				height="60"
+				class="mash-logo h-[3.25rem] w-auto select-none"
 				draggable="false"
 			/>
 			<div class="flex flex-col leading-none">
-				<span class="mash-display text-[17px] font-semibold tracking-tight">Mash</span>
+				<span class="mash-display text-[22px] font-semibold tracking-tight">Mash</span>
 				<span
-					class="mt-0.5 text-[10px] font-medium tracking-[0.12em] uppercase"
+					class="mt-1 text-[11px] font-medium tracking-[0.14em] uppercase"
 					style="color: var(--mash-accent-bright);"
 				>
-					where notes become useful
+					Infinite stovetop
 				</span>
 			</div>
 		</div>
@@ -1560,7 +1796,7 @@
 					placeholder="Search notes to grab…"
 					bind:value={searchQuery}
 					oninput={handleGlobalSearch}
-					class="mash-focus w-full rounded-lg border py-1.5 pr-14 pl-9 text-sm transition-colors"
+					class="mash-focus w-full rounded-lg border py-2 pr-14 pl-9 text-sm transition-colors"
 					style="border-color: var(--mash-tray-edge); background: var(--mash-tray); color: var(--mash-ink);"
 				/>
 				<kbd
@@ -1587,7 +1823,23 @@
 		</div>
 	</header>
 
-	<!-- Full-bleed canvas stage (overflow visible so dock magnification can swell) -->
+	{#if loadError}
+		<div
+			class="flex items-center justify-between gap-3 border-b px-4 py-2 text-xs"
+			style="border-color: var(--mash-tray-edge); background: rgba(196,92,74,0.15); color: var(--mash-ink);"
+		>
+			<span>{loadError}</span>
+			<button
+				type="button"
+				class="mash-btn rounded-md px-2.5 py-1 text-[11px] font-semibold"
+				onclick={() => void loadNotes()}
+			>
+				Retry
+			</button>
+		</div>
+	{/if}
+
+	<!-- Full-bleed canvas stage -->
 	<div class="relative flex min-h-0 flex-1">
 		<div class="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
 			<div
@@ -1601,10 +1853,12 @@
 
 			<div class="relative min-h-0 flex-1 overflow-hidden">
 				<CanvasBoard
+					bind:this={canvasBoard}
 					items={canvasItems}
 					{notesById}
 					selectedIds={selectionSet}
 					{expandedNoteId}
+					{expandFocus}
 					{settlingIds}
 					canvasId={activeCanvas?.id ?? null}
 					onSelect={handleCanvasSelect}
@@ -1619,6 +1873,10 @@
 					onCollapse={collapseSticky}
 					onTitleChange={handleStickyTitleChange}
 					onBodyChange={handleStickyBodyChange}
+					onMetaChange={handleStickyMetaChange}
+					onWikilink={(target) => void openWikilink(target)}
+					onOpenLinks={openLinkedPeel}
+					folders={uniqueFolders}
 					onDropNotes={handleDropNotes}
 					onMashCards={handleMashCards}
 					onBlankPointerDown={() => closePeel()}
@@ -1632,24 +1890,28 @@
 
 		<!-- Dock + peel sit above the canvas stage so magnification isn't clipped by overflow-hidden. -->
 		<div
-			class="pointer-events-auto absolute top-1/2 left-3 z-30 -translate-y-1/2 overflow-visible py-5 pr-8"
+			class="mash-dock-slot pointer-events-auto absolute top-1/2 left-3 z-30 -translate-y-1/2 overflow-visible py-5 pr-8"
 		>
 			<MashDock
 				{currentFilter}
 				{searchQuery}
 				foldersOpen={foldersFlyout}
 				tagsOpen={tagsFlyout}
+				linkedOpen={linkedFlyout}
 				dockSelect={handleDockAction}
 			/>
 		</div>
 		{#if peelOpen}
-			<div class="pointer-events-auto absolute top-1/2 left-[4.75rem] z-30 -translate-y-1/2">
+			<div class="mash-peel-slot pointer-events-auto absolute top-1/2 left-[4.75rem] z-30 -translate-y-1/2">
 				<PeelScanner
 					open={peelOpen}
 					pinned={peelPinned}
 					mode={peelMode}
 					title={peelTitle}
-					notes={peelNotes}
+					notes={peelNotesWindowed}
+					outgoingNotes={linkedOutgoing}
+					backlinkNotes={linkedBacklinks}
+					linkedFocusTitle={linkedFocusNote?.title ?? ''}
 					folders={uniqueFolders}
 					tags={uniqueTags}
 					selectedIds={selectionSet}
@@ -1675,7 +1937,25 @@
 					onDeleteFolder={(folder) => void deleteFolder(folder)}
 					onDeleteTag={(tag) => void deleteTag(tag)}
 					onNewNote={handleNewNote}
+					onSelectAllNotes={() => {
+						selectionIds = peelNotesWindowed.map((n) => n.id);
+						selectedId = selectionIds[0] ?? null;
+					}}
+					onTouchPlaceStart={startTouchPlace}
 				/>
+			</div>
+		{/if}
+
+		{#if touchPlaceGhost}
+			{@const ghostNote = notesById.get(touchPlaceGhost.noteId)}
+			<div
+				class="pointer-events-none fixed z-50 w-[180px] rounded-xl border px-3 py-2 shadow-xl"
+				style="left: {touchPlaceGhost.clientX - 40}px; top: {touchPlaceGhost.clientY - 20}px; border-color: rgba(80,60,30,0.25); background: rgba(247,241,230,0.95);"
+			>
+				<div class="text-xs font-semibold" style="color: var(--mash-card-ink);">
+					{ghostNote?.title ?? 'Note'}
+				</div>
+				<div class="mt-0.5 text-[10px]" style="color: var(--mash-card-muted);">Drop on canvas</div>
 			</div>
 		{/if}
 
@@ -1751,6 +2031,106 @@
 							{/each}
 						</div>
 					</div>
+				{:else if bulkMenu === 'align'}
+					<div
+						class="flex max-w-[min(92vw,28rem)] flex-wrap items-center justify-center gap-1 rounded-xl border p-2 shadow-xl"
+						style="border-color: rgba(80,60,30,0.2); background: rgba(28, 24, 18, 0.95); backdrop-filter: blur(10px);"
+						role="toolbar"
+						aria-label="Align selected"
+					>
+						<button
+							type="button"
+							class="mash-align-btn"
+							onclick={() => canvasBoard?.applyAlign('left')}
+							title="Align left"
+							aria-label="Align left"
+						>
+							<AlignLeft class="h-3.5 w-3.5" />
+						</button>
+						<button
+							type="button"
+							class="mash-align-btn"
+							onclick={() => canvasBoard?.applyAlign('center')}
+							title="Align center"
+							aria-label="Align center"
+						>
+							<AlignCenter class="h-3.5 w-3.5" />
+						</button>
+						<button
+							type="button"
+							class="mash-align-btn"
+							onclick={() => canvasBoard?.applyAlign('right')}
+							title="Align right"
+							aria-label="Align right"
+						>
+							<AlignRight class="h-3.5 w-3.5" />
+						</button>
+						<button
+							type="button"
+							class="mash-align-btn"
+							onclick={() => canvasBoard?.applyAlign('top')}
+							title="Align top"
+							aria-label="Align top"
+						>
+							<AlignStartVertical class="h-3.5 w-3.5" />
+						</button>
+						<button
+							type="button"
+							class="mash-align-btn"
+							onclick={() => canvasBoard?.applyAlign('middle')}
+							title="Align middle"
+							aria-label="Align middle"
+						>
+							<AlignCenterVertical class="h-3.5 w-3.5" />
+						</button>
+						<button
+							type="button"
+							class="mash-align-btn"
+							onclick={() => canvasBoard?.applyAlign('bottom')}
+							title="Align bottom"
+							aria-label="Align bottom"
+						>
+							<AlignEndVertical class="h-3.5 w-3.5" />
+						</button>
+						{#if selectionIds.length >= 3}
+							<button
+								type="button"
+								class="mash-align-btn"
+								onclick={() => canvasBoard?.applyAlign('distribute-h')}
+								title="Space across"
+								aria-label="Space evenly horizontally"
+							>
+								<StretchHorizontal class="h-3.5 w-3.5" />
+							</button>
+							<button
+								type="button"
+								class="mash-align-btn"
+								onclick={() => canvasBoard?.applyAlign('distribute-v')}
+								title="Space down"
+								aria-label="Space evenly vertically"
+							>
+								<StretchVertical class="h-3.5 w-3.5" />
+							</button>
+						{/if}
+						<button
+							type="button"
+							class="mash-align-btn"
+							onclick={() => canvasBoard?.applyAlign('stack')}
+							title="Stack"
+							aria-label="Stack selected"
+						>
+							<Layers class="h-3.5 w-3.5" />
+						</button>
+						<button
+							type="button"
+							class="mash-align-btn"
+							onclick={() => canvasBoard?.applyAlign('grid')}
+							title="Grid"
+							aria-label="Grid selected"
+						>
+							<LayoutGrid class="h-3.5 w-3.5" />
+						</button>
+					</div>
 				{/if}
 
 				<div
@@ -1780,6 +2160,20 @@
 							title="Restore source notes and remove mash"
 						>
 							Unmash
+						</button>
+					{/if}
+					{#if selectionIds.length >= 2}
+						<button
+							type="button"
+							onclick={() => (bulkMenu = bulkMenu === 'align' ? null : 'align')}
+							class="mash-btn-ghost flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs {bulkMenu ===
+							'align'
+								? 'border-[var(--mash-accent)] text-[var(--mash-accent-bright)]'
+								: ''}"
+							title="Align selected"
+						>
+							<AlignLeft class="h-3.5 w-3.5" />
+							Align
 						</button>
 					{/if}
 					<button
@@ -1926,6 +2320,21 @@
 			</div>
 		</div>
 	{/if}
+
+	<input
+		bind:this={importInputEl}
+		type="file"
+		accept="application/json,.json"
+		class="hidden"
+		onchange={(e) => void handleImportFile(e)}
+	/>
+	<input
+		bind:this={syncInputEl}
+		type="file"
+		accept="application/json,.json"
+		class="hidden"
+		onchange={(e) => void handleSyncFile(e)}
+	/>
 
 	{#if actionToast}
 		<div

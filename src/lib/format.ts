@@ -30,3 +30,21 @@ export function notePreview(body: string, max = 92): string {
 	if (!flat) return 'No content yet…';
 	return flat.length <= max ? flat : flat.slice(0, max).trimEnd() + '…';
 }
+
+/** Scratch note with no real content — safe to discard when closed from the canvas. */
+export function isBlankUntitledNote(note: {
+	title: string;
+	body: string;
+	tags?: string[];
+	mashedFrom?: string[];
+	pinned?: number;
+}): boolean {
+	const title = note.title.trim();
+	const blankTitle = title === '' || title === 'Untitled';
+	if (!blankTitle) return false;
+	if (note.body.trim() !== '') return false;
+	if ((note.tags?.length ?? 0) > 0) return false;
+	if ((note.mashedFrom?.length ?? 0) > 0) return false;
+	if (note.pinned === 1) return false;
+	return true;
+}

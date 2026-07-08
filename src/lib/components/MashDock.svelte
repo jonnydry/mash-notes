@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { LayoutGrid, Pin, Folder, Hash, Plus, Search } from 'lucide-svelte';
+	import { LayoutGrid, Pin, Folder, Hash, Link2, Plus, Search } from 'lucide-svelte';
 	import type { NavFilter } from '$lib/note-ui';
 	import { isNavActive } from '$lib/note-ui';
 	import type { DockAction } from '$lib/dock';
@@ -9,6 +9,7 @@
 		searchQuery?: string;
 		foldersOpen?: boolean;
 		tagsOpen?: boolean;
+		linkedOpen?: boolean;
 		/** Callback for dock button presses (avoid `on*` — Svelte 5 treats those as events). */
 		dockSelect: (action: DockAction) => void;
 	}
@@ -18,6 +19,7 @@
 		searchQuery = '',
 		foldersOpen = false,
 		tagsOpen = false,
+		linkedOpen = false,
 		dockSelect
 	}: Props = $props();
 
@@ -32,7 +34,11 @@
 		{
 			id: 'all',
 			label: 'Desk',
-			active: isNavActive(currentFilter, 'all', undefined, searchQuery) && !foldersOpen && !tagsOpen
+			active:
+				isNavActive(currentFilter, 'all', undefined, searchQuery) &&
+				!foldersOpen &&
+				!tagsOpen &&
+				!linkedOpen
 		},
 		{
 			id: 'pinned',
@@ -48,6 +54,11 @@
 			id: 'tags',
 			label: 'Tags',
 			active: tagsOpen || currentFilter.type === 'tag'
+		},
+		{
+			id: 'linked',
+			label: 'Linked',
+			active: linkedOpen
 		},
 		{ id: 'new', label: 'New note', accent: true, active: false },
 		{ id: 'search', label: 'Search', active: false }
@@ -71,6 +82,8 @@
 				return Folder;
 			case 'tags':
 				return Hash;
+			case 'linked':
+				return Link2;
 			case 'new':
 				return Plus;
 			case 'search':

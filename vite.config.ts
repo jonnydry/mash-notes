@@ -14,21 +14,22 @@ export default defineConfig({
 				short_name: 'Mash',
 				description:
 					'Mash your ideas together in a reliable place. Cute, fast, minimal web notes. Open source, private, keyboard-first PWA.',
-				theme_color: '#09090b',
-				background_color: '#09090b',
+				theme_color: '#1a1814',
+				background_color: '#1a1814',
 				display: 'standalone',
 				icons: [
-					// Official Mash potato logo from Grok Imagine (character style)
-					// Source: https://grok.com/imagine/post/f6c7baa3-c2a9-4b0f-8fe4-327b589a7a75
 					{ src: '/icons/mash-icon-192.png', sizes: '192x192', type: 'image/png' },
-					{ src: '/icons/mash-icon-512.png', sizes: '512x512', type: 'image/png' }
+					{ src: '/icons/mash-icon-512.png', sizes: '512x512', type: 'image/png' },
+					{
+						src: '/icons/mash-icon-512.png',
+						sizes: '512x512',
+						type: 'image/png',
+						purpose: 'maskable'
+					}
 				]
 			},
 			workbox: {
-				globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-				runtimeCaching: [
-					{ urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i, handler: 'CacheFirst' }
-				]
+				globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}']
 			}
 		})
 	],

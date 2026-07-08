@@ -7,6 +7,9 @@ import {
 	boundsOf,
 	alignRects,
 	fitViewport,
+	viewCenterPlacement,
+	panToShowRect,
+	bumpOverlappingRects,
 	loadSnapPref,
 	saveSnapPref,
 	GRID
@@ -118,6 +121,91 @@ describe('canvas-geom', () => {
 		expect(v.scale).toBe(2);
 		expect(v.panX).toBe(0);
 		expect(v.panY).toBe(100);
+	});
+
+	it('places cards at the view center with cascade', () => {
+		const base = viewCenterPlacement({
+			panX: 0,
+			panY: 0,
+			scale: 1,
+			viewW: 800,
+			viewH: 600,
+			cardW: 200,
+			cardH: 100,
+			index: 0
+		});
+		expect(base).toEqual({ x: 300, y: 250 });
+
+		const cascaded = viewCenterPlacement({
+			panX: 0,
+			panY: 0,
+			scale: 1,
+			viewW: 800,
+			viewH: 600,
+			cardW: 200,
+			cardH: 100,
+			index: 1
+		});
+		expect(cascaded).toEqual({ x: 328, y: 274 });
+
+		const zoomed = viewCenterPlacement({
+			panX: 100,
+			panY: 50,
+			scale: 2,
+			viewW: 800,
+			viewH: 600,
+			cardW: 200,
+			cardH: 100,
+			index: 0
+		});
+		// center board = ((400-100)/2, (300-50)/2) = (150, 125); top-left = (50, 75)
+		expect(zoomed).toEqual({ x: 50, y: 75 });
+	});
+
+	it('nudges spawn away from heavy overlap', () => {
+		const placed = viewCenterPlacement({
+			panX: 0,
+			panY: 0,
+			scale: 1,
+			viewW: 800,
+			viewH: 600,
+			cardW: 200,
+			cardH: 100,
+			index: 0,
+			existing: [{ x: 300, y: 250, w: 200, h: 100 }]
+		});
+		expect(placed).not.toEqual({ x: 300, y: 250 });
+	});
+
+	it('pans to show an off-screen rect without changing scale', () => {
+		const same = panToShowRect(
+			{ x: 100, y: 100, w: 200, h: 100 },
+			{ panX: 0, panY: 0, scale: 1, viewW: 800, viewH: 600 }
+		);
+		expect(same).toEqual({ panX: 0, panY: 0 });
+
+		const moved = panToShowRect(
+			{ x: 2000, y: 1500, w: 200, h: 100 },
+			{ panX: 0, panY: 0, scale: 1, viewW: 800, viewH: 600 }
+		);
+		expect(moved.panX).toBe(800 / 2 - (2000 + 100));
+		expect(moved.panY).toBe(600 / 2 - (1500 + 50));
+	});
+
+	it('bumps overlapping neighbors away from an expanded anchor', () => {
+		const anchor = { id: 'a', x: 0, y: 0, w: 360, h: 320 };
+		const below = { id: 'b', x: 20, y: 140, w: 220, h: 120 };
+		const moved = bumpOverlappingRects(anchor, [below], 16);
+		expect(moved.get('b')).toEqual({ x: 20, y: 336 });
+	});
+
+	it('chains bumps so neighbors do not land on each other', () => {
+		const anchor = { id: 'a', x: 0, y: 0, w: 360, h: 320 };
+		const mid = { id: 'b', x: 10, y: 200, w: 220, h: 120 };
+		const low = { id: 'c', x: 10, y: 340, w: 220, h: 120 };
+		const moved = bumpOverlappingRects(anchor, [mid, low], 16);
+		expect(moved.get('b')?.y).toBe(336);
+		expect(moved.get('c')?.y).toBeGreaterThanOrEqual((moved.get('b')?.y ?? 0) + 120 + 16);
 	});
 
 	it('persists snap preference', () => {

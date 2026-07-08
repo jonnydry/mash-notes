@@ -32,6 +32,12 @@
 				e.preventDefault();
 				e.stopImmediatePropagation();
 				onCancel();
+				return;
+			}
+			if (e.key === 'Enter') {
+				e.preventDefault();
+				e.stopImmediatePropagation();
+				onConfirm();
 			}
 		}
 		window.addEventListener('keydown', onKey, true);
