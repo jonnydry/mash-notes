@@ -45,8 +45,11 @@ npm run build
 npm run preview
 npm run check
 npm run test
+npm run test:e2e
 npm run ci
 ```
+
+GitHub Actions runs `check`, unit tests, production build, and the Playwright smoke on every pull request and push to `main`.
 
 ## License
 
