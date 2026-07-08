@@ -1,7 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { cardDisplaySize, computeExpandBumps, COLLAPSED_CARD, EXPANDED_CARD } from './canvas-session';
-import { peelTitleFor, peelOpenPatch, windowPeelNotes, PEEL_UI_CAP } from './peel-nav';
-import { filterPeelNotes, uniqueFoldersFrom, canvasFolderFromFilter } from './note-library';
+import {
+	cardDisplaySize,
+	computeExpandBumps,
+	COLLAPSED_CARD,
+	EXPANDED_CARD
+} from './canvas-session.svelte';
+import { peelTitleFor, peelOpenPatch, windowPeelNotes, PEEL_UI_CAP } from './peel-nav.svelte';
+import { filterPeelNotes, uniqueFoldersFrom, canvasFolderFromFilter } from './note-library.svelte';
 import type { Note } from '$lib/types';
 
 function note(partial: Partial<Note> & Pick<Note, 'id' | 'title'>): Note {
