@@ -62,3 +62,36 @@ export function clearDismissedForCanvas(canvasId: string): void {
 		/* ignore */
 	}
 }
+
+export type DismissedByCanvas = Record<string, string[]>;
+
+/** Snapshot all dismissals for sync export. */
+export function exportAllDismissed(): DismissedByCanvas {
+	const out: DismissedByCanvas = {};
+	try {
+		for (let i = 0; i < localStorage.length; i++) {
+			const key = localStorage.key(i);
+			if (!key?.startsWith(PREFIX)) continue;
+			const canvasId = key.slice(PREFIX.length);
+			out[canvasId] = [...readSet(canvasId)];
+		}
+	} catch {
+		/* ignore */
+	}
+	return out;
+}
+
+/**
+ * Merge remote dismissals into local (union per canvas).
+ * Keys must already be local canvas ids.
+ */
+export function importDismissedMap(map: DismissedByCanvas): void {
+	for (const [canvasId, noteIds] of Object.entries(map)) {
+		if (!canvasId || !Array.isArray(noteIds) || noteIds.length === 0) continue;
+		const ids = readSet(canvasId);
+		for (const id of noteIds) {
+			if (typeof id === 'string' && id) ids.add(id);
+		}
+		writeSet(canvasId, ids);
+	}
+}
