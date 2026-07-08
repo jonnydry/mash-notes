@@ -13,10 +13,11 @@ Fast, cute, minimal web notes — a canvas-first, local-only PWA. Open in any br
 
 ## What’s in the app
 
-- Vertical dock (Desk, Pinned, Folders, Tags, New, Search) with peel scanner tray
+- Vertical dock (Desk, Pinned, Folders, Tags, Linked, New, Search) with peel scanner tray
 - Freeform canvas: pan, zoom, snap, align, expand/bump neighbors, layout undo
 - Drag-to-mash, unmash, bulk tag/folder/copy/export
-- Sticky editor with markdown preview + `[[wikilink]]` navigation
+- Sticky editor with markdown preview + `[[wikilink]]` navigation and backlinks
+- File sync bundles (notes + desk layout) via ⌘K — LWW merge, no account
 - Command palette (⌘K), search, folders/tags filters
 - PWA install + offline static assets
 

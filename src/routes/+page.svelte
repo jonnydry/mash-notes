@@ -135,6 +135,9 @@
 			if (peel.currentFilter.type === 'tag' && peel.currentFilter.value === tag) {
 				peel.clearFilter();
 			}
+		},
+		onDeskSynced: async () => {
+			await canvas.loadContextCanvas(peel.canvasFolder);
 		}
 	});
 
@@ -600,9 +603,10 @@
 		{
 			label: 'Export sync bundle…',
 			action: () => {
-				downloadSyncBundle(library.notes);
+				void downloadSyncBundle(library.notes).then(() => {
+					flashToast('Exported sync bundle (notes + desk)');
+				});
 				showPalette = false;
-				flashToast('Exported sync bundle');
 			},
 			shortcut: ''
 		},

@@ -26,7 +26,13 @@ import {
 	exportNotesMarkdown,
 	notesFromSelection
 } from '$lib/mash';
-import { parseSyncBundle, mergeSyncBundle } from '$lib/sync-file';
+import {
+	parseSyncBundle,
+	mergeSyncBundle,
+	applyDeskSnapshot,
+	formatConflictSummary
+} from '$lib/sync-file';
+import type { SyncConflict } from '$lib/sync-model';
 
 export function filterNotes(
 	notes: Note[],
@@ -110,6 +116,8 @@ export type CreateNoteLibraryOpts = {
 	onNotesDeleted?: (ids: string[]) => void;
 	/** Clear peel filter when it matches a removed tag. */
 	onTagDeleted?: (tag: string) => void;
+	/** Called after sync applies desk layout so the open canvas reloads. */
+	onDeskSynced?: () => void | Promise<void>;
 };
 
 export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
@@ -388,29 +396,84 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 				removeNoteFromSearch(n.id);
 				addNoteToSearch(n);
 			}
+
+			let deskPart = '';
+			if (parsed.bundle.desk) {
+				const deskSummary = await applyDeskSnapshot(
+					parsed.bundle.desk,
+					new Set(mergedNotes.map((n) => n.id))
+				);
+				summary.desk = deskSummary;
+				deskPart = ` · desk ${deskSummary.itemsUpserted} placements`;
+				await opts.onDeskSynced?.();
+			}
+
 			const conflictFields = [
 				...new Set(summary.conflicts.map((c) => `${c.noteId}:${c.field}`))
 			];
 			opts.flashToast(
 				`Sync: ${summary.added} added · ${summary.updated} updated` +
-					(conflictFields.length ? ` · ${conflictFields.length} field conflicts (LWW)` : '')
+					deskPart +
+					(conflictFields.length ? ` · ${conflictFields.length} conflicts` : '')
 			);
+
 			if (summary.conflicts.length > 0) {
-				const bodyConflicts = summary.conflicts.filter((c) => c.field === 'body');
-				if (bodyConflicts.length > 0) {
-					const first = bodyConflicts[0];
-					opts.askConfirm({
-						title: 'Sync body conflict',
-						message: `Note ${first.noteId.slice(0, 8)}… had conflicting body. LWW kept ${first.chosen}. Re-export after reviewing if needed.`,
-						confirmLabel: 'OK',
-						danger: false,
-						action: () => {}
-					});
-				}
+				await resolveBodyConflicts(summary.conflicts, mergedNotes);
 			}
 		} catch {
 			opts.flashToast('Sync import failed');
 		}
+	}
+
+	/**
+	 * For body conflicts where LWW kept remote: offer restoring local body.
+	 * Cancel / dismiss keeps remote (already applied). Confirm restores local.
+	 */
+	function resolveBodyConflicts(conflicts: SyncConflict[], mergedNotes: Note[]) {
+		const bodyConflicts = conflicts.filter((c) => c.field === 'body' && c.chosen === 'remote');
+		if (bodyConflicts.length === 0) {
+			if (conflicts.length > 0) {
+				opts.askConfirm({
+					title: 'Sync conflicts (LWW)',
+					message:
+						'Some fields differed on both devices. Last-writer-wins kept one side:\n\n' +
+						formatConflictSummary(conflicts),
+					confirmLabel: 'OK',
+					danger: false,
+					action: () => {}
+				});
+			}
+			return;
+		}
+
+		const first = bodyConflicts[0];
+		const note = mergedNotes.find((n) => n.id === first.noteId);
+		const title = note?.title ?? first.noteId.slice(0, 8);
+		const localBody = typeof first.local === 'string' ? first.local : '';
+
+		opts.askConfirm({
+			title: 'Keep remote body?',
+			message:
+				`“${title}” had conflicting body text. Sync kept the remote version.\n\n` +
+				`Choose Restore local to put your previous text back, or Cancel to keep remote.\n\n` +
+				formatConflictSummary(conflicts, 4),
+			confirmLabel: 'Restore local',
+			danger: false,
+			action: async () => {
+				const target = notes.find((n) => n.id === first.noteId);
+				if (!target) return;
+				const updated = {
+					...target,
+					body: localBody,
+					links: extractWikilinks(localBody),
+					modified: Date.now()
+				};
+				await db.notes.put(updated);
+				notes = notes.map((n) => (n.id === updated.id ? updated : n));
+				updateNoteInSearch(updated, updated);
+				opts.flashToast(`Restored local body on “${title}”`);
+			}
+		});
 	}
 
 	async function handleImportFile(e: Event) {
