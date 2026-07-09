@@ -22,6 +22,7 @@
 		StretchHorizontal,
 		StretchVertical,
 		LayoutGrid,
+		Columns2,
 		Moon,
 		Sun
 	} from 'lucide-svelte';
@@ -29,6 +30,7 @@
 	import PeelScanner from '$lib/components/PeelScanner.svelte';
 	import SettingsPanel from '$lib/components/SettingsPanel.svelte';
 	import CanvasBoard from '$lib/components/CanvasBoard.svelte';
+	import EditorStage from '$lib/components/EditorStage.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { extractWikilinks } from '$lib/markdown';
 	import { combineNotes, exportNotesJson } from '$lib/mash';
@@ -53,6 +55,10 @@
 	} from '$lib/stores/note-library.svelte';
 	import { createPeelNav, windowPeelNotes } from '$lib/stores/peel-nav.svelte';
 	import { theme } from '$lib/stores/theme.svelte';
+	import {
+		createEditorStage,
+		type SnapZone
+	} from '$lib/stores/editor-stage.svelte';
 
 	let actionToast = $state('');
 	let toastTimer: ReturnType<typeof setTimeout> | null = null;
@@ -69,7 +75,8 @@
 	let paletteInput = $state<HTMLInputElement | null>(null);
 	let paletteHighlight = $state(0);
 	let settingsOpen = $state(false);
-	let snapEnabled = $state(false);
+	/** Sync from localStorage at init (ssr=false) so CanvasBoard never paints Free first. */
+	let snapEnabled = $state(loadSnapPref());
 
 	$effect(() => {
 		if (!showPalette) return;
@@ -111,6 +118,7 @@
 	}
 
 	const canvasHolder: { session?: ReturnType<typeof createCanvasSession> } = {};
+	const editorStage = createEditorStage();
 
 	const library = createNoteLibrary({
 		flashToast,
@@ -119,6 +127,10 @@
 		getFilteredNoteIds: () => filteredNotes.map((n) => n.id),
 		clearExpandedIfNote: (noteId) => {
 			if (canvas.expandedNoteId === noteId) canvas.expandedNoteId = null;
+			if (editorStage.panes.some((p) => p.noteId === noteId)) {
+				const pane = editorStage.panes.find((p) => p.noteId === noteId);
+				if (pane) editorStage.dismissPane(pane.id);
+			}
 		},
 		onNotesDeleted: (ids) => {
 			const idSet = new Set(ids);
@@ -145,7 +157,7 @@
 			}
 		},
 		onDeskSynced: async () => {
-			await canvas.loadContextCanvas(peel.canvasFolder);
+			await canvas.loadContextCanvas(peel.canvasKey);
 		}
 	});
 
@@ -173,7 +185,13 @@
 		flashToast,
 		getNotes: () => library.notes,
 		getNotesById: () => library.notesById,
-		getCanvasFolder: () => peel.canvasFolder,
+		getCanvasKey: () => peel.canvasKey,
+		ensureNotePinned: async (noteId) => {
+			const note = library.notesById.get(noteId);
+			if (note && note.pinned !== 1) {
+				await library.handleStickyMetaChange(noteId, { pinned: 1 });
+			}
+		},
 		getSelectionIds: () => library.selectionIds,
 		getSelectionSet: () => library.selectionSet,
 		getSelectedId: () => library.selectedId,
@@ -190,6 +208,30 @@
 		}
 	});
 	canvasHolder.session = canvas;
+
+	function openInStage(noteId: string, zone: SnapZone = 'maximize') {
+		if (canvas.expandedNoteId === noteId) canvas.collapseSticky();
+		library.selectNote(noteId, { keepSelection: true });
+		editorStage.openNote(noteId, zone);
+	}
+
+	function openSelectionInStage() {
+		const ids = [...new Set(library.selectionIds)];
+		if (ids.length === 0) return;
+		if (canvas.expandedNoteId) canvas.collapseSticky();
+		if (ids.length === 1) {
+			editorStage.openNote(ids[0]!, 'maximize');
+			return;
+		}
+		editorStage.openSplit(ids[0]!, ids[1]!);
+	}
+
+	function openBesideSelection() {
+		const id = library.selectedId ?? library.selectionIds[0];
+		if (!id) return;
+		if (canvas.expandedNoteId === id) canvas.collapseSticky();
+		editorStage.openBeside(id);
+	}
 
 	let filteredNotes = $derived(
 		filterNotes(library.notes, peel.currentFilter, peel.searchQuery)
@@ -353,7 +395,7 @@
 
 			for (let i = 0; i < sources.length; i++) {
 				const item = await addNoteToCanvas(canvas.activeCanvas.id, sources[i].id, {
-					x: baseX + i * 28,
+					x: baseX + i * 24,
 					y: baseY + i * 24,
 					w: COLLAPSED_CARD.w,
 					h: COLLAPSED_CARD.h
@@ -447,11 +489,13 @@
 	}
 
 	async function handleNewNote() {
+		const onPinned = peel.currentFilter.type === 'pinned';
 		const note = await createNote({
 			title: 'Untitled',
 			body: '',
 			folder: peel.currentFilter.type === 'folder' ? peel.currentFilter.value || '' : '',
-			links: []
+			links: [],
+			pinned: onPinned ? 1 : 0
 		});
 		addNoteToSearch(note);
 		library.notes = [note, ...library.notes];
@@ -537,6 +581,10 @@
 			}
 			if (showPalette) {
 				showPalette = false;
+				return;
+			}
+			if (editorStage.open) {
+				editorStage.dismissAll();
 				return;
 			}
 			if (canvas.expandedNoteId) {
@@ -755,7 +803,6 @@
 	}
 
 	onMount(() => {
-		snapEnabled = loadSnapPref();
 		void library.loadNotes();
 		window.addEventListener('keydown', handleKeydown);
 		window.addEventListener('pagehide', library.flushPendingSave);
@@ -888,6 +935,22 @@
 					expandFocus={canvas.expandFocus}
 					settlingIds={canvas.settlingIds}
 					canvasId={canvas.activeCanvas?.id ?? null}
+					edges={canvas.canvasEdges}
+					onConnectFlow={(from, to) => void canvas.connectFlowEdge(from, to)}
+					onDisconnectFlow={(id) => void canvas.disconnectFlowEdge(id)}
+					emptyMascot={
+						peel.currentFilter.type === 'pinned'
+							? {
+									src: '/icons/mash-pinned-mascot.png',
+									srcset:
+										'/icons/mash-pinned-mascot.png 1x, /icons/mash-pinned-mascot@2x.png 2x',
+									width: 160,
+									height: 160,
+									title: 'Pin notes here',
+									copy: 'Drop favorites onto this board — or pin from any sticky.'
+								}
+							: undefined
+					}
 					onSelect={canvas.handleCanvasSelect}
 					onSelectNotes={canvas.handleCanvasSelectNotes}
 					onMove={canvas.handleCanvasMove}
@@ -898,6 +961,11 @@
 					onRemove={canvas.handleCanvasRemove}
 					onExpand={canvas.expandSticky}
 					onCollapse={canvas.collapseSticky}
+					onOpenInStage={openInStage}
+					onStageSnapPreview={(zone) => editorStage.setPreview(zone)}
+					stagePanes={editorStage.panes}
+					stageSplitH={editorStage.splitH}
+					stageSplitV={editorStage.splitV}
 					onTitleChange={library.handleStickyTitleChange}
 					onBodyChange={library.handleStickyBodyChange}
 					onMetaChange={library.handleStickyMetaChange}
@@ -915,6 +983,15 @@
 					onUndo={canvas.undoCanvasLayout}
 					onRedo={canvas.redoCanvasLayout}
 					bind:snapEnabled
+				/>
+				<EditorStage
+					stage={editorStage}
+					notesById={library.notesById}
+					folders={library.uniqueFolders}
+					onTitleChange={library.handleStickyTitleChange}
+					onBodyChange={library.handleStickyBodyChange}
+					onMetaChange={library.handleStickyMetaChange}
+					onWikilink={(target) => void openWikilink(target)}
 				/>
 			</div>
 		</div>
@@ -1205,6 +1282,40 @@
 						<Layers class="h-3.5 w-3.5" />
 						Mash
 					</button>
+					{#if library.selectionIds.length >= 2}
+						<button
+							type="button"
+							onclick={openSelectionInStage}
+							class="mash-btn-ghost flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs"
+							title="Edit the first two selected notes side by side"
+						>
+							<Columns2 class="h-3.5 w-3.5" />
+							Split
+						</button>
+					{:else if editorStage.open}
+						<button
+							type="button"
+							onclick={openBesideSelection}
+							class="mash-btn-ghost flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs"
+							title="Open this note in the empty half"
+						>
+							<Columns2 class="h-3.5 w-3.5" />
+							Beside
+						</button>
+					{:else}
+						<button
+							type="button"
+							onclick={() => {
+								const id = library.selectedId ?? library.selectionIds[0];
+								if (id) openInStage(id, 'maximize');
+							}}
+							class="mash-btn-ghost flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs"
+							title="Open large editor"
+						>
+							<Columns2 class="h-3.5 w-3.5" />
+							Edit
+						</button>
+					{/if}
 					{#if library.canUnmash}
 						<button
 							type="button"
