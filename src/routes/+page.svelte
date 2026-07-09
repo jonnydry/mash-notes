@@ -21,7 +21,9 @@
 		AlignEndVertical,
 		StretchHorizontal,
 		StretchVertical,
-		LayoutGrid
+		LayoutGrid,
+		Moon,
+		Sun
 	} from 'lucide-svelte';
 	import MashDock from '$lib/components/MashDock.svelte';
 	import PeelScanner from '$lib/components/PeelScanner.svelte';
@@ -48,6 +50,7 @@
 		filterPeelNotes
 	} from '$lib/stores/note-library.svelte';
 	import { createPeelNav, windowPeelNotes } from '$lib/stores/peel-nav.svelte';
+	import { theme } from '$lib/stores/theme.svelte';
 
 	let actionToast = $state('');
 	let toastTimer: ReturnType<typeof setTimeout> | null = null;
@@ -751,7 +754,7 @@
 					class="mt-1 text-[11px] font-medium tracking-[0.14em] uppercase"
 					style="color: var(--mash-accent-bright);"
 				>
-					Infinite stovetop
+					Infinite textual stovetop
 				</span>
 			</div>
 		</div>
@@ -781,6 +784,19 @@
 		</div>
 
 		<div class="flex items-center gap-2">
+			<button
+				type="button"
+				class="mash-theme-toggle mash-focus"
+				onclick={() => theme.toggle()}
+				aria-label={theme.mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+				title={theme.mode === 'dark' ? 'Day kitchen' : 'Night kitchen'}
+			>
+				{#if theme.mode === 'dark'}
+					<Sun class="h-4 w-4" />
+				{:else}
+					<Moon class="h-4 w-4" />
+				{/if}
+			</button>
 			<div
 				class="hidden items-center gap-1 text-xs lg:flex"
 				style="color: var(--mash-ink-muted);"
@@ -798,7 +814,7 @@
 	{#if library.loadError}
 		<div
 			class="flex items-center justify-between gap-3 border-b px-4 py-2 text-xs"
-			style="border-color: var(--mash-tray-edge); background: rgba(196,92,74,0.15); color: var(--mash-ink);"
+			style="border-color: var(--mash-tray-edge); background: var(--mash-danger-wash); color: var(--mash-ink);"
 		>
 			<span>{library.loadError}</span>
 			<button
@@ -816,9 +832,9 @@
 		<div class="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
 			<div
 				class="mash-canvas-title-chip pointer-events-none absolute top-3 left-[4.75rem] z-10 rounded-full border px-3 py-1 text-[10px] backdrop-blur-sm"
-				style="border-color: rgba(80,60,30,0.18); background: rgba(247,241,230,0.72); color: var(--mash-card-muted);"
+				style="border-color: var(--mash-chrome-chip-border); background: var(--mash-chrome-chip-soft); color: var(--mash-chrome-muted);"
 			>
-				<span class="mash-display font-medium" style="color: var(--mash-card-ink);">{peel.canvasTitle}</span>
+				<span class="mash-display font-medium" style="color: var(--mash-chrome-ink);">{peel.canvasTitle}</span>
 				<span class="mx-1.5 opacity-40">·</span>
 				{canvas.canvasItems.length} on canvas
 			</div>
@@ -922,7 +938,7 @@
 			{@const ghostNote = library.notesById.get(canvas.touchPlaceGhost.noteId)}
 			<div
 				class="pointer-events-none fixed z-50 w-[180px] rounded-xl border px-3 py-2 shadow-xl"
-				style="left: {canvas.touchPlaceGhost.clientX - 40}px; top: {canvas.touchPlaceGhost.clientY - 20}px; border-color: rgba(80,60,30,0.25); background: rgba(247,241,230,0.95);"
+				style="left: {canvas.touchPlaceGhost.clientX - 40}px; top: {canvas.touchPlaceGhost.clientY - 20}px; border-color: var(--mash-paper-chip-border); background: var(--mash-paper-chip);"
 			>
 				<div class="text-xs font-semibold" style="color: var(--mash-card-ink);">
 					{ghostNote?.title ?? 'Note'}
@@ -939,7 +955,7 @@
 				{#if library.bulkMenu === 'tag'}
 					<div
 						class="w-64 rounded-xl border p-3 shadow-xl"
-						style="border-color: rgba(80,60,30,0.2); background: rgba(28, 24, 18, 0.95); backdrop-filter: blur(10px);"
+						style="border-color: var(--mash-panel-border); background: var(--mash-panel); backdrop-filter: blur(10px);"
 					>
 						<div class="mb-2 text-[10px] font-medium tracking-wide uppercase" style="color: var(--mash-accent-bright);">
 							Tag {library.selectionIds.length} note{library.selectionIds.length === 1 ? '' : 's'}
@@ -959,7 +975,7 @@
 							{#each library.uniqueTags as tag}
 								<button
 									type="button"
-									class="mash-chip rounded-full px-2 py-0.5 text-[10px] hover:bg-white/10"
+									class="mash-chip mash-chip-hover rounded-full px-2 py-0.5 text-[10px]"
 									onclick={() => library.tagSelection(tag)}
 								>
 									#{tag}
@@ -970,7 +986,7 @@
 				{:else if library.bulkMenu === 'folder'}
 					<div
 						class="w-64 rounded-xl border p-3 shadow-xl"
-						style="border-color: rgba(80,60,30,0.2); background: rgba(28, 24, 18, 0.95); backdrop-filter: blur(10px);"
+						style="border-color: var(--mash-panel-border); background: var(--mash-panel); backdrop-filter: blur(10px);"
 					>
 						<div class="mb-2 text-[10px] font-medium tracking-wide uppercase" style="color: var(--mash-accent-bright);">
 							Move {library.selectionIds.length} to folder
@@ -1009,7 +1025,7 @@
 				{:else if library.bulkMenu === 'align'}
 					<div
 						class="flex max-w-[min(92vw,28rem)] flex-wrap items-center justify-center gap-1 rounded-xl border p-2 shadow-xl"
-						style="border-color: rgba(80,60,30,0.2); background: rgba(28, 24, 18, 0.95); backdrop-filter: blur(10px);"
+						style="border-color: var(--mash-panel-border); background: var(--mash-panel); backdrop-filter: blur(10px);"
 						role="toolbar"
 						aria-label="Align selected"
 					>
@@ -1110,7 +1126,7 @@
 
 				<div
 					class="mash-dock flex items-center gap-1 rounded-2xl border px-2 py-1.5 shadow-xl"
-					style="border-color: rgba(80,60,30,0.2); background: rgba(28, 24, 18, 0.92); backdrop-filter: blur(10px);"
+					style="border-color: var(--mash-panel-border); background: var(--mash-panel); backdrop-filter: blur(10px);"
 				>
 					<span
 						class="px-2 text-[10px] font-medium tracking-wide uppercase"
@@ -1202,7 +1218,7 @@
 					<button
 						type="button"
 						onclick={library.clearSelection}
-						class="rounded-lg p-1.5 text-[var(--mash-ink-muted)] hover:bg-white/5 hover:text-[var(--mash-ink)]"
+						class="mash-row-hover rounded-lg p-1.5 text-[var(--mash-ink-muted)] hover:text-[var(--mash-ink)]"
 						aria-label="Clear selection"
 					>
 						<X class="h-3.5 w-3.5" />
@@ -1250,9 +1266,9 @@
 							.includes(paletteQuery.toLowerCase())) as action, i}
 						<button
 							onclick={action.action}
-							class="flex w-full items-center justify-between rounded px-3 py-2 text-left hover:bg-white/5 {i ===
+							class="mash-row-hover flex w-full items-center justify-between rounded px-3 py-2 text-left {i ===
 							paletteHighlight
-								? 'bg-white/8 ring-1 ring-[var(--mash-accent)]/40 ring-inset'
+								? 'mash-row-active'
 								: ''}"
 						>
 							<span>{action.label}</span>
@@ -1279,12 +1295,12 @@
 									void canvas.openStickyFromTray(note.id);
 									showPalette = false;
 								}}
-								class="flex w-full items-center justify-between rounded px-3 py-1.5 text-left text-xs hover:bg-white/5 {j +
+								class="mash-row-hover flex w-full items-center justify-between rounded px-3 py-1.5 text-left text-xs {j +
 									paletteActions.filter((a) =>
 										a.label.toLowerCase().includes(paletteQuery.toLowerCase())
 									).length ===
 								paletteHighlight
-									? 'bg-white/8 ring-1 ring-[var(--mash-accent)]/40 ring-inset'
+									? 'mash-row-active'
 									: ''}"
 							>
 								<span class="truncate">{note.title}</span>
@@ -1317,7 +1333,7 @@
 	{#if actionToast}
 		<div
 			class="pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-lg border px-3 py-1.5 text-xs shadow-lg"
-			style="border-color: var(--mash-tray-edge); background: rgba(28,24,18,0.95); color: var(--mash-ink);"
+			style="border-color: var(--mash-tray-edge); background: var(--mash-panel); color: var(--mash-ink);"
 		>
 			{actionToast}
 		</div>

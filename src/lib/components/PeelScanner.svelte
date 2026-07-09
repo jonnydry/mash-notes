@@ -310,8 +310,8 @@
 							class="mash-tray-chip group flex h-full w-full border-b px-2.5 py-2 text-left
 								{draggingId === note.id ? 'is-dragging' : ''}
 								{isSelected
-								? 'border-l-2 border-l-[var(--mash-accent)] bg-white/6'
-								: 'border-l-2 border-l-transparent hover:bg-white/4'}"
+								? 'mash-row-active border-l-2 border-l-[var(--mash-accent)]'
+								: 'mash-row-hover border-l-2 border-l-transparent'}"
 							style="border-color: var(--mash-tray-edge);"
 							role="option"
 							aria-selected={isSelected}

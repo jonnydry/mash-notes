@@ -1064,7 +1064,7 @@
 				>
 					{#if isMashTarget && !pendingMash}
 						<div
-							class="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-[rgba(79,122,62,0.18)]"
+							class="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-[var(--mash-accent-wash)]"
 						>
 							<span
 								class="mash-display rounded-full bg-[var(--mash-accent)] px-3 py-1 text-xs font-semibold text-[var(--mash-accent-ink)] shadow"
@@ -1080,7 +1080,7 @@
 							aria-modal="true"
 							aria-labelledby="mash-drag-confirm-title"
 							tabindex="-1"
-							class="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 rounded-xl bg-[rgba(28,24,18,0.88)] px-3 backdrop-blur-[2px]"
+							class="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 rounded-xl bg-[var(--mash-panel)] px-3 backdrop-blur-[2px]"
 							onpointerdown={(e) => e.stopPropagation()}
 							onclick={(e) => e.stopPropagation()}
 							onkeydown={(e) => e.stopPropagation()}
@@ -1088,7 +1088,7 @@
 							<p
 								id="mash-drag-confirm-title"
 								class="mash-display text-center text-sm font-medium"
-								style="color: var(--mash-card);"
+								style="color: var(--mash-ink);"
 							>
 								Mash these notes?
 							</p>
@@ -1107,7 +1107,7 @@
 								<button
 									type="button"
 									class="rounded-lg border px-3 py-1.5 text-xs"
-									style="border-color: rgba(240,235,227,0.25); color: var(--mash-card);"
+									style="border-color: var(--mash-glass-border); color: var(--mash-ink);"
 									onclick={(e) => {
 										e.stopPropagation();
 										cancelPendingMash();
@@ -1121,7 +1121,7 @@
 					{#if expanded}
 						<div
 							data-drag-handle
-							class="flex cursor-grab items-center gap-1 border-b border-[rgba(80,60,30,0.12)] px-2 py-1.5 active:cursor-grabbing"
+							class="flex cursor-grab items-center gap-1 border-b border-[var(--mash-card-edge)] px-2 py-1.5 active:cursor-grabbing"
 						>
 							<input
 								bind:this={titleInputEl}
@@ -1171,7 +1171,7 @@
 							</button>
 						</div>
 						<div
-							class="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-[rgba(80,60,30,0.08)] px-2 py-1"
+							class="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-[var(--mash-card-edge)] px-2 py-1"
 							data-no-drag
 							role="group"
 							aria-label="Note metadata"
@@ -1221,7 +1221,7 @@
 									{#if hits.length > 0 || note.folder}
 										<ul
 											class="absolute top-full left-0 z-30 mt-0.5 max-h-32 min-w-full overflow-auto rounded border py-0.5"
-											style="border-color: rgba(80,60,30,0.18); background: rgba(247,241,230,0.98); box-shadow: 0 4px 12px rgba(40,30,15,0.12);"
+											style="border-color: var(--mash-paper-chip-border); background: var(--mash-paper-chip); box-shadow: var(--mash-shadow-card);"
 											role="listbox"
 											aria-label="Existing folders"
 										>
@@ -1307,7 +1307,7 @@
 						</div>
 					{:else}
 						<div
-							class="flex items-start justify-between gap-1 border-b border-[rgba(80,60,30,0.1)] px-2.5 py-1.5"
+							class="flex items-start justify-between gap-1 border-b border-[var(--mash-card-edge)] px-2.5 py-1.5"
 						>
 							<span class="flex min-w-0 items-center gap-1 truncate text-xs font-semibold tracking-tight">
 								{#if note.pinned === 1}
@@ -1370,13 +1370,11 @@
 					class="mash-empty-mascot h-40 w-auto select-none sm:h-44"
 					draggable="false"
 				/>
-				<p
-					class="mash-display mt-4 text-xl font-medium tracking-tight text-[var(--mash-card-ink)]"
-				>
+				<p class="mash-display mash-empty-title mt-4 text-xl font-medium tracking-tight">
 					{isExternalDragOver ? 'Drop to place' : 'Drop notes here'}
 				</p>
 				{#if !isExternalDragOver}
-					<p class="mt-1.5 max-w-[16rem] text-sm text-[var(--mash-card-muted)]">
+					<p class="mash-empty-copy mt-1.5 max-w-[16rem] text-sm">
 						Drag notes from the tray onto the canvas. Double-click to edit.
 					</p>
 				{/if}
@@ -1384,7 +1382,7 @@
 		</div>
 	{:else if isExternalDragOver}
 		<div
-			class="pointer-events-none absolute inset-0 z-10 border-2 border-[var(--mash-accent)] bg-[rgba(79,122,62,0.08)]"
+			class="pointer-events-none absolute inset-0 z-10 border-2 border-[var(--mash-accent)] bg-[var(--mash-accent-wash)]"
 		></div>
 	{/if}
 
@@ -1393,13 +1391,11 @@
 		class="mash-canvas-chrome-top pointer-events-none absolute top-3 right-3 z-10 flex flex-wrap items-center justify-end gap-1.5"
 	>
 		<div
-			class="pointer-events-auto flex items-center rounded-md border border-[rgba(80,60,30,0.15)] bg-[rgba(247,241,230,0.92)] p-0.5 text-[10px]"
+			class="mash-board-chip pointer-events-auto flex items-center rounded-md p-0.5 text-[10px]"
 		>
 			<button
 				type="button"
-				class="rounded px-2 py-1 {!snapEnabled
-					? 'bg-[rgba(79,122,62,0.18)] font-semibold text-[var(--mash-card-ink)]'
-					: 'text-[var(--mash-card-muted)]'}"
+				class="mash-board-chip-btn rounded px-2 py-1 {!snapEnabled ? 'is-active' : ''}"
 				onclick={(e) => {
 					e.stopPropagation();
 					if (snapEnabled) toggleSnap();
@@ -1409,9 +1405,7 @@
 			</button>
 			<button
 				type="button"
-				class="rounded px-2 py-1 {snapEnabled
-					? 'bg-[rgba(79,122,62,0.18)] font-semibold text-[var(--mash-card-ink)]'
-					: 'text-[var(--mash-card-muted)]'}"
+				class="mash-board-chip-btn rounded px-2 py-1 {snapEnabled ? 'is-active' : ''}"
 				onclick={(e) => {
 					e.stopPropagation();
 					if (!snapEnabled) toggleSnap();
@@ -1422,13 +1416,13 @@
 			</button>
 		</div>
 		<span
-			class="rounded-md border border-[rgba(80,60,30,0.15)] bg-[rgba(247,241,230,0.85)] px-2 py-1 text-[10px] text-[var(--mash-card-muted)]"
+			class="mash-board-chip-soft rounded-md px-2 py-1 text-[10px]"
 		>
 			{Math.round(scale * 100)}%{altHeld ? ' · Alt' : ''}
 		</span>
 		<button
 			type="button"
-			class="pointer-events-auto rounded-md border border-[rgba(80,60,30,0.15)] bg-[rgba(247,241,230,0.9)] px-2 py-1 text-[10px] text-[var(--mash-card-muted)] hover:text-[var(--mash-card-ink)]"
+			class="mash-board-chip mash-board-chip-btn pointer-events-auto rounded-md px-2 py-1 text-[10px]"
 			onclick={(e) => {
 				e.stopPropagation();
 				zoomToFit(false);
@@ -1440,7 +1434,7 @@
 		{#if selectedCount > 0}
 			<button
 				type="button"
-				class="pointer-events-auto rounded-md border border-[rgba(80,60,30,0.15)] bg-[rgba(247,241,230,0.9)] px-2 py-1 text-[10px] text-[var(--mash-card-muted)] hover:text-[var(--mash-card-ink)]"
+				class="mash-board-chip mash-board-chip-btn pointer-events-auto rounded-md px-2 py-1 text-[10px]"
 				onclick={(e) => {
 					e.stopPropagation();
 					zoomToFit(true);
@@ -1452,7 +1446,7 @@
 		{/if}
 		<button
 			type="button"
-			class="pointer-events-auto rounded-md border border-[rgba(80,60,30,0.15)] bg-[rgba(247,241,230,0.9)] px-2 py-1 text-[10px] text-[var(--mash-card-muted)] hover:text-[var(--mash-card-ink)] disabled:opacity-35"
+			class="mash-board-chip mash-board-chip-btn pointer-events-auto rounded-md px-2 py-1 text-[10px] disabled:opacity-35"
 			disabled={!canUndo}
 			onclick={(e) => {
 				e.stopPropagation();
@@ -1464,7 +1458,7 @@
 		</button>
 		<button
 			type="button"
-			class="pointer-events-auto rounded-md border border-[rgba(80,60,30,0.15)] bg-[rgba(247,241,230,0.9)] px-2 py-1 text-[10px] text-[var(--mash-card-muted)] hover:text-[var(--mash-card-ink)] disabled:opacity-35"
+			class="mash-board-chip mash-board-chip-btn pointer-events-auto rounded-md px-2 py-1 text-[10px] disabled:opacity-35"
 			disabled={!canRedo}
 			onclick={(e) => {
 				e.stopPropagation();
@@ -1476,7 +1470,7 @@
 		</button>
 		<button
 			type="button"
-			class="pointer-events-auto rounded-md border border-[rgba(80,60,30,0.15)] bg-[rgba(247,241,230,0.9)] px-2 py-1 text-[10px] text-[var(--mash-card-muted)] hover:text-[var(--mash-card-ink)]"
+			class="mash-board-chip mash-board-chip-btn pointer-events-auto rounded-md px-2 py-1 text-[10px]"
 			onclick={(e) => {
 				e.stopPropagation();
 				resetView();
@@ -1493,7 +1487,7 @@
 		class="mash-canvas-chrome-pan pointer-events-auto absolute right-3 bottom-3 z-10 flex flex-col items-center gap-1"
 	>
 		<div
-			class="grid grid-cols-3 gap-0.5 rounded-lg border border-[rgba(80,60,30,0.15)] bg-[rgba(247,241,230,0.94)] p-1 shadow"
+			class="mash-board-chip grid grid-cols-3 gap-0.5 rounded-lg p-1 shadow"
 		>
 			<span class="col-start-2">
 				<button
@@ -1557,7 +1551,7 @@
 			</span>
 		</div>
 		<div
-			class="flex items-center gap-0.5 rounded-lg border border-[rgba(80,60,30,0.15)] bg-[rgba(247,241,230,0.94)] p-1 shadow"
+			class="mash-board-chip flex items-center gap-0.5 rounded-lg p-1 shadow"
 		>
 			<button
 				type="button"
@@ -1578,7 +1572,7 @@
 			>
 				−
 			</button>
-			<span class="min-w-[2.5rem] text-center text-[10px] tabular-nums text-[var(--mash-card-muted)]">
+			<span class="min-w-[2.5rem] text-center text-[10px] tabular-nums text-[var(--mash-chrome-muted)]">
 				{Math.round(scale * 100)}%
 			</span>
 			<button
@@ -1601,7 +1595,7 @@
 				+
 			</button>
 		</div>
-		<p class="mash-chrome-hint max-w-[10rem] text-center text-[9px] leading-tight text-[var(--mash-card-muted)]">
+		<p class="mash-chrome-hint max-w-[10rem] text-center text-[9px] leading-tight text-[var(--mash-chrome-muted)]">
 			Drag to select · Scroll to pan · Space+drag pan · ⌘/Ctrl+scroll zoom
 		</p>
 	</div>
