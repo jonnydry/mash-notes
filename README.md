@@ -59,7 +59,7 @@ npm run test:e2e
 npm run ci
 ```
 
-GitHub Actions runs `check`, unit tests, production build, and Playwright e2e (smoke + linked) on every pull request and push to `main`. Sync bundle merge is covered by unit tests.
+GitHub Actions runs `check`, unit tests, production build, and Playwright e2e (smoke, linked, sync) on every pull request and push to `main`.
 
 ## License
 

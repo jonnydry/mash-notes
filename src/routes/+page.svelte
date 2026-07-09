@@ -718,10 +718,13 @@
 		window.addEventListener('keydown', handleKeydown);
 		window.addEventListener('pagehide', library.flushPendingSave);
 		document.addEventListener('visibilitychange', library.handleVisibilityChange);
+		// E2E / diagnostics: import a sync bundle without relying on hidden file inputs.
+		window.__mashImportSync = (text: string) => library.importSyncText(text);
 		return () => {
 			window.removeEventListener('keydown', handleKeydown);
 			window.removeEventListener('pagehide', library.flushPendingSave);
 			document.removeEventListener('visibilitychange', library.handleVisibilityChange);
+			delete window.__mashImportSync;
 		};
 	});
 </script>
