@@ -743,9 +743,9 @@
 				src="/icons/mash-logo-sprouts.png"
 				srcset="/icons/mash-logo-sprouts.png 1x, /icons/mash-logo-sprouts@2x.png 2x"
 				alt="Mash"
-				width="48"
-				height="60"
-				class="mash-logo h-[3.25rem] w-auto select-none"
+				width="56"
+				height="70"
+				class="mash-logo h-[4rem] w-auto select-none"
 				draggable="false"
 			/>
 			<div class="flex flex-col leading-none">
