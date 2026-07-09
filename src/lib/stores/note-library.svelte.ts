@@ -371,27 +371,35 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 		isLoading = false;
 	}
 
-	async function handleSyncFile(e: Event) {
-		const input = e.currentTarget as HTMLInputElement;
-		const file = input.files?.[0];
-		input.value = '';
-		if (!file) return;
+	async function importSyncText(text: string): Promise<{
+		ok: boolean;
+		message: string;
+		added?: number;
+		updated?: number;
+	}> {
 		try {
-			const text = await file.text();
 			if (text.length > 8_000_000) {
-				opts.flashToast('Sync file too large');
-				return;
+				const message = 'Sync file too large';
+				opts.flashToast(message);
+				return { ok: false, message };
 			}
 			const parsed = parseSyncBundle(text);
 			if (!parsed.ok) {
 				opts.flashToast(parsed.error);
-				return;
+				return { ok: false, message: parsed.error };
 			}
 			const { notes: mergedNotes, summary } = mergeSyncBundle(notes, parsed.bundle);
-			for (const n of mergedNotes) {
+			// Dexie can't structured-clone Svelte $state proxies — always put plain objects.
+			const plainNotes = mergedNotes.map((n) => ({
+				...n,
+				tags: [...n.tags],
+				...(n.links ? { links: [...n.links] } : {}),
+				...(n.mashedFrom ? { mashedFrom: [...n.mashedFrom] } : {})
+			}));
+			for (const n of plainNotes) {
 				await db.notes.put(n);
 			}
-			notes = mergedNotes;
+			notes = plainNotes;
 			for (const n of mergedNotes) {
 				removeNoteFromSearch(n.id);
 				addNoteToSearch(n);
@@ -415,16 +423,37 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 			const conflictFields = [
 				...new Set(summary.conflicts.map((c) => `${c.noteId}:${c.field}`))
 			];
-			opts.flashToast(
+			const message =
 				`Sync: ${summary.added} added · ${summary.updated} updated` +
-					deskPart +
-					(conflictFields.length ? ` · ${conflictFields.length} conflicts` : ''),
-				3200
-			);
+				deskPart +
+				(conflictFields.length ? ` · ${conflictFields.length} conflicts` : '');
+			opts.flashToast(message, 3200);
 
 			if (summary.conflicts.length > 0) {
 				await resolveBodyConflicts(summary.conflicts, mergedNotes);
 			}
+			return {
+				ok: true,
+				message,
+				added: summary.added,
+				updated: summary.updated
+			};
+		} catch (err) {
+			const detail = err instanceof Error ? err.message : String(err);
+			const message = `Sync import failed: ${detail}`;
+			opts.flashToast(message);
+			return { ok: false, message };
+		}
+	}
+
+	async function handleSyncFile(e: Event) {
+		const input = e.currentTarget as HTMLInputElement;
+		const file = input.files?.[0];
+		input.value = '';
+		if (!file) return;
+		try {
+			const text = await file.text();
+			await importSyncText(text);
 		} catch {
 			opts.flashToast('Sync import failed');
 		}
@@ -733,6 +762,7 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 		flushPendingSave,
 		handleVisibilityChange,
 		handleImportFile,
-		handleSyncFile
+		handleSyncFile,
+		importSyncText
 	};
 }

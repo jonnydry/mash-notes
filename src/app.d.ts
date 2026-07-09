@@ -8,6 +8,16 @@ declare global {
 		// interface PageState {}
 		// interface Platform {}
 	}
+
+	interface Window {
+		/** E2E hook: import a sync-bundle JSON string without a file input. */
+		__mashImportSync?: (text: string) => Promise<{
+			ok: boolean;
+			message: string;
+			added?: number;
+			updated?: number;
+		}>;
+	}
 }
 
 export {};

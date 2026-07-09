@@ -109,6 +109,7 @@ export function updateNoteInSearch(partial: Partial<Note> & { id: string }, full
 
 export function removeNoteFromSearch(id: string): void {
 	if (!isInitialized) return;
+	if (!miniSearch.has(id)) return;
 	miniSearch.discard(id);
 }
 
