@@ -1,6 +1,6 @@
 /**
  * Kitchen theme — day (light) / night (dark) modes.
- * Stickies stay parchment; chrome + canvas invert around them.
+ * Stickies follow the theme (parchment by day, warm dusk paper by night).
  */
 export type MashTheme = 'light' | 'dark';
 

@@ -19,6 +19,7 @@ import type { Note } from '$lib/types';
 import type { NavFilter } from '$lib/note-ui';
 import { extractWikilinks } from '$lib/markdown';
 import { parseNotesJson } from '$lib/import-notes';
+import { filesFromFileList, parseMarkdownVault } from '$lib/import-markdown';
 import {
 	combineNotes,
 	copyText,
@@ -89,11 +90,27 @@ export function uniqueTagsFrom(notes: Note[]): string[] {
 	return [...new Set(notes.flatMap((n) => n.tags))].sort();
 }
 
+/** Reserved canvas.folder key for the Pinned desk (not a real note folder). */
+export const PINNED_CANVAS_KEY = '__mash_pinned__';
+
+export function isPinnedCanvasKey(key: string): boolean {
+	return key === PINNED_CANVAS_KEY;
+}
+
+/** Dexie canvas key for the current nav filter (desk / folder / pinned). */
+export function canvasKeyFromFilter(filter: NavFilter): string {
+	if (filter.type === 'pinned') return PINNED_CANVAS_KEY;
+	if (filter.type === 'folder' && filter.value !== undefined) return filter.value;
+	return '';
+}
+
+/** Real note.folder for create/mash — never the reserved pinned canvas key. */
 export function canvasFolderFromFilter(filter: NavFilter): string {
 	return filter.type === 'folder' && filter.value !== undefined ? filter.value : '';
 }
 
 export function canvasTitleFromFilter(filter: NavFilter): string {
+	if (filter.type === 'pinned') return 'Pinned';
 	if (filter.type === 'folder' && filter.value) return filter.value;
 	return 'Desk';
 }
@@ -557,6 +574,43 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 		}
 	}
 
+	/**
+	 * Import an Obsidian vault folder or Bear markdown export (multi-file / directory).
+	 * Always creates new notes (new UUIDs) — does not merge by path.
+	 */
+	async function handleMarkdownImport(e: Event) {
+		const input = e.currentTarget as HTMLInputElement;
+		const list = input.files;
+		input.value = '';
+		if (!list || list.length === 0) return;
+		try {
+			opts.flashToast('Importing markdown…');
+			const files = await filesFromFileList(list);
+			const result = parseMarkdownVault(files);
+			if (!result.ok) {
+				opts.flashToast(result.error);
+				return;
+			}
+
+			const CHUNK = 100;
+			for (let i = 0; i < result.notes.length; i += CHUNK) {
+				const chunk = result.notes.slice(i, i + CHUNK);
+				await db.notes.bulkPut(chunk);
+				for (const note of chunk) addNoteToSearch(note);
+				notes = [...chunk, ...notes];
+				// Yield so the UI can paint progress toasts / stay responsive.
+				await new Promise((r) => setTimeout(r, 0));
+			}
+
+			const skipHint =
+				result.skipped > 0 ? ` (skipped ${result.skipped} non-markdown)` : '';
+			opts.flashToast(`Imported ${result.notes.length} markdown notes${skipHint}`);
+		} catch (err) {
+			console.error(err);
+			opts.flashToast('Markdown import failed');
+		}
+	}
+
 	async function handleDelete() {
 		const ids = selectionIds.length > 0 ? [...selectionIds] : selectedId ? [selectedId] : [];
 		if (ids.length === 0) return;
@@ -762,6 +816,7 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 		flushPendingSave,
 		handleVisibilityChange,
 		handleImportFile,
+		handleMarkdownImport,
 		handleSyncFile,
 		importSyncText
 	};

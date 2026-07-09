@@ -5,7 +5,7 @@ import { tick } from 'svelte';
 import type { DockAction } from '$lib/dock';
 import type { PeelMode } from '$lib/components/PeelScanner.svelte';
 import type { NavFilter } from '$lib/note-ui';
-import { canvasFolderFromFilter, canvasTitleFromFilter } from '$lib/stores/note-library.svelte';
+import { canvasFolderFromFilter, canvasKeyFromFilter, canvasTitleFromFilter } from '$lib/stores/note-library.svelte';
 
 export type PeelNavState = {
 	peelOpen: boolean;
@@ -88,6 +88,9 @@ export type DockActionHandlers = {
 	resolveLinkedFocus: () => string | null;
 	newNote: () => void;
 	focusSearch: () => void;
+	getSettingsOpen: () => boolean;
+	openSettings: () => void;
+	closeSettings: () => void;
 };
 
 export function dispatchDockAction(action: DockAction, h: DockActionHandlers): void {
@@ -125,6 +128,13 @@ export function dispatchDockAction(action: DockAction, h: DockActionHandlers): v
 			h.openPeel('notes');
 			h.focusSearch();
 			break;
+		case 'settings':
+			if (h.getSettingsOpen()) h.closeSettings();
+			else {
+				h.closePeel(true);
+				h.openSettings();
+			}
+			break;
 		default: {
 			const _exhaustive: never = action;
 			void _exhaustive;
@@ -145,6 +155,9 @@ export type CreatePeelNavOpts = {
 	getExpandedNoteId: () => string | null;
 	getSelectedId: () => string | null;
 	getFirstNoteId: () => string | null;
+	getSettingsOpen: () => boolean;
+	openSettings: () => void;
+	closeSettings: () => void;
 };
 
 export function createPeelNav(opts: CreatePeelNavOpts) {
@@ -161,9 +174,11 @@ export function createPeelNav(opts: CreatePeelNavOpts) {
 
 	const peelTitle = $derived(peelTitleFor(peelMode, searchQuery, currentFilter));
 	const canvasFolder = $derived(canvasFolderFromFilter(currentFilter));
+	const canvasKey = $derived(canvasKeyFromFilter(currentFilter));
 	const canvasTitle = $derived(canvasTitleFromFilter(currentFilter));
 
 	function openPeel(mode: PeelMode = 'notes') {
+		opts.closeSettings();
 		const patch = peelOpenPatch(mode);
 		peelMode = patch.peelMode;
 		peelOpen = patch.peelOpen;
@@ -236,7 +251,10 @@ export function createPeelNav(opts: CreatePeelNavOpts) {
 				linkedFocusId ??
 				opts.getFirstNoteId(),
 			newNote: opts.newNote,
-			focusSearch
+			focusSearch,
+			getSettingsOpen: opts.getSettingsOpen,
+			openSettings: opts.openSettings,
+			closeSettings: opts.closeSettings
 		});
 	}
 
@@ -310,6 +328,9 @@ export function createPeelNav(opts: CreatePeelNavOpts) {
 		},
 		get canvasFolder() {
 			return canvasFolder;
+		},
+		get canvasKey() {
+			return canvasKey;
 		},
 		get canvasTitle() {
 			return canvasTitle;

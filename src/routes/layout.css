@@ -1,7 +1,7 @@
 @import 'tailwindcss';
 
 /* ── Mash kitchen tokens ──
-   Day / night chrome around mode-invariant parchment stickies.
+   Day / night chrome + stickies that follow the theme.
    Chive = action · Mint = life/glow · Paper = notes. */
 
 :root,
@@ -17,13 +17,13 @@
 	--mash-board-dot: rgba(180, 160, 130, 0.1);
 	--mash-board-wash: rgba(255, 248, 235, 0.04);
 
-	/* Stickies — parchment (mode-invariant) */
-	--mash-card: #f7f1e6;
-	--mash-card-ink: #2c2418;
-	--mash-card-muted: #6b5e4e;
-	--mash-card-edge: rgba(80, 60, 30, 0.12);
-	--mash-card-edge-strong: rgba(80, 60, 30, 0.28);
-	--mash-card-hover: rgba(80, 60, 30, 0.08);
+	/* Stickies — warm dusk paper (readable, not glowing) */
+	--mash-card: #2a241c;
+	--mash-card-ink: #efe6d8;
+	--mash-card-muted: #a89a88;
+	--mash-card-edge: rgba(240, 230, 210, 0.1);
+	--mash-card-edge-strong: rgba(240, 230, 210, 0.22);
+	--mash-card-hover: rgba(255, 248, 235, 0.06);
 
 	/* Chrome ink */
 	--mash-ink: #f0ebe3;
@@ -67,16 +67,16 @@
 	--mash-chrome-ink: #f0ebe3;
 	--mash-chrome-muted: #a89f92;
 
-	/* Paper chips — menus that sit on parchment stickies */
-	--mash-paper-chip: rgba(247, 241, 230, 0.98);
-	--mash-paper-chip-border: rgba(80, 60, 30, 0.18);
+	/* Paper chips — menus that sit on stickies */
+	--mash-paper-chip: rgba(42, 36, 28, 0.98);
+	--mash-paper-chip-border: rgba(240, 230, 210, 0.14);
 
 	--mash-logo-shadow: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.45));
 
 	--mash-font-ui: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
 	--mash-font-display: 'Fraunces', ui-serif, Georgia, serif;
-	--mash-shadow-card: 0 1px 2px rgba(40, 28, 12, 0.12), 0 8px 24px rgba(40, 28, 12, 0.14);
-	--mash-shadow-lift: 0 4px 8px rgba(40, 28, 12, 0.18), 0 16px 40px rgba(40, 28, 12, 0.22);
+	--mash-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(0, 0, 0, 0.28);
+	--mash-shadow-lift: 0 4px 8px rgba(0, 0, 0, 0.4), 0 16px 40px rgba(0, 0, 0, 0.45);
 }
 
 [data-theme='light'] {
@@ -420,6 +420,92 @@ body {
 		0 0 0 3px color-mix(in srgb, var(--mash-accent-bright) 45%, transparent);
 	transform: scale(1.03);
 }
+.mash-note-card.is-flow-source {
+	border-color: var(--mash-accent);
+	box-shadow:
+		var(--mash-shadow-card),
+		0 0 0 3px color-mix(in srgb, var(--mash-accent) 35%, transparent);
+}
+.mash-note-card.is-flow-mode {
+	cursor: crosshair;
+}
+.mash-flow-edge-hit {
+	line-height: 1;
+	padding: 0;
+}
+.mash-flow-strip {
+	max-width: min(22rem, calc(100vw - 6rem));
+	max-height: min(40vh, 18rem);
+	overflow: auto;
+	border: 1px solid var(--mash-chrome-chip-border);
+	background: var(--mash-chrome-chip);
+	color: var(--mash-chrome-ink);
+	backdrop-filter: blur(10px);
+}
+.mash-flow-seq + .mash-flow-seq {
+	margin-top: 0.5rem;
+	padding-top: 0.45rem;
+	border-top: 1px solid var(--mash-chrome-chip-border);
+}
+.mash-flow-seq.is-invalid .mash-flow-seq-label .warn {
+	color: var(--mash-danger);
+	font-weight: 600;
+	text-transform: none;
+	letter-spacing: 0;
+}
+.mash-flow-seq-label {
+	margin: 0 0 0.25rem;
+	font-size: 9px;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--mash-chrome-muted);
+}
+.mash-flow-strip-list {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	font-size: 10px;
+	color: var(--mash-chrome-muted);
+}
+.mash-flow-strip-list li {
+	display: flex;
+	gap: 6px;
+	min-width: 0;
+}
+.mash-flow-strip-list .n {
+	flex-shrink: 0;
+	font-weight: 700;
+	color: var(--mash-accent-bright);
+	font-variant-numeric: tabular-nums;
+}
+.mash-flow-strip-list .t {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.mash-flow-page-badge {
+	position: absolute;
+	top: -0.4rem;
+	left: -0.35rem;
+	z-index: 5;
+	min-width: 1.35rem;
+	padding: 0.1rem 0.35rem;
+	border-radius: 999px;
+	border: 1px solid color-mix(in srgb, var(--mash-accent) 55%, transparent);
+	background: var(--mash-accent);
+	color: var(--mash-accent-ink);
+	font-size: 9px;
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+	line-height: 1.2;
+	text-align: center;
+	pointer-events: none;
+	box-shadow: var(--mash-shadow-card);
+}
 .mash-note-card.is-mash-confirming {
 	z-index: 12;
 	box-shadow: var(--mash-shadow-lift);
@@ -698,6 +784,132 @@ body {
 	letter-spacing: 0.02em;
 	color: var(--mash-ink-muted);
 }
+
+/* Settings tray — same chrome as peel, scrollable sections */
+.mash-settings .mash-settings-body {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	padding: 4px 0 12px;
+}
+.mash-settings-section {
+	padding: 10px 14px 12px;
+	border-bottom: 1px solid var(--mash-tray-edge);
+}
+.mash-settings-section--last {
+	border-bottom: none;
+}
+.mash-settings-heading {
+	margin: 0 0 8px;
+	font-size: 10px;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--mash-accent-bright);
+}
+.mash-settings-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+}
+.mash-settings-label {
+	font-size: 12px;
+	color: var(--mash-ink);
+}
+.mash-settings-seg {
+	display: inline-flex;
+	border-radius: 8px;
+	border: 1px solid var(--mash-tray-edge);
+	overflow: hidden;
+	background: var(--mash-tray);
+}
+.mash-settings-seg-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 5px 10px;
+	font-size: 11px;
+	font-weight: 500;
+	color: var(--mash-ink-muted);
+	background: transparent;
+	border: none;
+	cursor: pointer;
+}
+.mash-settings-seg-btn:hover {
+	color: var(--mash-ink);
+}
+.mash-settings-seg-btn.is-active {
+	color: var(--mash-accent-bright);
+	background: var(--mash-accent-wash);
+}
+.mash-settings-hint {
+	margin: 8px 0 0;
+	font-size: 10px;
+	line-height: 1.4;
+	color: var(--mash-ink-muted);
+}
+.mash-settings-hint--lead {
+	margin: 0 0 8px;
+}
+.mash-settings-actions {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+.mash-settings-action {
+	width: 100%;
+	text-align: left;
+	padding: 8px 10px;
+	border-radius: 8px;
+	border: 1px solid transparent;
+	font-size: 12px;
+	color: var(--mash-ink);
+	background: transparent;
+	cursor: pointer;
+}
+.mash-settings-action:hover {
+	background: var(--mash-hover-fill);
+	border-color: var(--mash-tray-edge);
+}
+.mash-settings-shortcuts {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+.mash-settings-shortcuts li {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 10px;
+	font-size: 11px;
+	color: var(--mash-ink-muted);
+}
+.mash-settings-shortcuts kbd {
+	flex-shrink: 0;
+	font-family: var(--mash-font-ui, 'IBM Plex Sans', sans-serif);
+	font-size: 10px;
+	font-weight: 600;
+	padding: 2px 6px;
+	border-radius: 5px;
+	border: 1px solid var(--mash-tray-edge);
+	background: var(--mash-tray);
+	color: var(--mash-ink);
+}
+.mash-settings-about {
+	margin: 0;
+	font-size: 11px;
+	line-height: 1.45;
+	color: var(--mash-ink-muted);
+}
+.mash-settings-about strong {
+	color: var(--mash-ink);
+	font-weight: 600;
+}
 .mash-peel-empty {
 	display: flex;
 	flex-direction: column;
@@ -816,6 +1028,11 @@ body {
 }
 
 @media (max-width: 720px) {
+	.mash-editor-stage {
+		/* Dock moves to the bottom on small screens — clear that strip instead. */
+		left: 0;
+		bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+	}
 	.mash-dock-slot {
 		top: auto;
 		bottom: max(0.75rem, env(safe-area-inset-bottom));
@@ -906,6 +1123,173 @@ body {
 	.mash-canvas-chrome-pan .mash-chrome-hint {
 		display: none;
 	}
+}
+
+/* —— Editor stage (screen-space tiled note panes) —— */
+.mash-editor-stage {
+	/* Clear the side dock so maximized / left panes don't sit under it. */
+	--mash-stage-dock-gutter: 5.25rem;
+	position: absolute;
+	inset: 0;
+	left: var(--mash-stage-dock-gutter);
+	z-index: 25;
+	pointer-events: none;
+}
+.mash-editor-stage.is-open {
+	/* Panes capture their own events; empty half stays pass-through for canvas drops. */
+	pointer-events: none;
+	background: color-mix(in srgb, var(--mash-desk) 40%, transparent);
+	backdrop-filter: blur(1px);
+}
+.mash-pane-splitter.is-dragging::after {
+	background: var(--mash-accent);
+	opacity: 1;
+}
+.mash-editor-stage.is-previewing:not(.is-open) {
+	pointer-events: none;
+}
+.mash-snap-preview {
+	position: absolute;
+	z-index: 1;
+	border-radius: 14px;
+	border: 2px solid color-mix(in srgb, var(--mash-accent) 70%, transparent);
+	background: color-mix(in srgb, var(--mash-accent) 18%, transparent);
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mash-accent-bright) 35%, transparent);
+	pointer-events: none;
+	transition:
+		inset 80ms ease,
+		width 80ms ease,
+		height 80ms ease;
+}
+.mash-empty-half {
+	position: absolute;
+	z-index: 1;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 14px;
+	border: 2px dashed color-mix(in srgb, var(--mash-accent) 45%, transparent);
+	background: color-mix(in srgb, var(--mash-chrome-chip) 55%, transparent);
+	pointer-events: none;
+}
+.mash-empty-half-label {
+	margin: 0;
+	padding: 0.75rem 1rem;
+	text-align: center;
+	font-size: 12px;
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	color: var(--mash-chrome-ink);
+}
+.mash-empty-half-label span {
+	display: block;
+	margin-top: 0.25rem;
+	font-size: 10px;
+	font-weight: 500;
+	color: var(--mash-chrome-muted);
+}
+.mash-editor-pane {
+	position: absolute;
+	z-index: 2;
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	min-height: 0;
+	border-radius: 14px;
+	border: 1px solid var(--mash-card-edge);
+	background: var(--mash-card);
+	color: var(--mash-card-ink);
+	box-shadow: var(--mash-shadow-lift);
+	overflow: hidden;
+	pointer-events: auto;
+}
+.mash-editor-pane.is-active {
+	border-color: color-mix(in srgb, var(--mash-accent) 45%, var(--mash-card-edge));
+	box-shadow:
+		var(--mash-shadow-lift),
+		0 0 0 2px color-mix(in srgb, var(--mash-accent) 25%, transparent);
+}
+.mash-editor-pane-titlebar {
+	display: flex;
+	align-items: center;
+	gap: 0.25rem;
+	padding: 0.45rem 0.5rem;
+	border-bottom: 1px solid var(--mash-card-edge);
+	cursor: grab;
+	background: color-mix(in srgb, var(--mash-card) 92%, var(--mash-accent-wash));
+}
+.mash-editor-pane-titlebar:active {
+	cursor: grabbing;
+}
+.mash-pane-btn {
+	flex-shrink: 0;
+	border-radius: 6px;
+	padding: 0.25rem;
+	color: var(--mash-card-muted);
+}
+.mash-pane-btn:hover {
+	background: color-mix(in srgb, var(--mash-card-ink) 6%, transparent);
+	color: var(--mash-card-ink);
+}
+.mash-pane-btn.is-accent {
+	color: var(--mash-accent);
+}
+.mash-editor-pane-meta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.35rem 0.75rem;
+	padding: 0.35rem 0.6rem;
+	border-bottom: 1px solid var(--mash-card-edge);
+}
+.mash-editor-pane-body {
+	min-height: 0;
+	flex: 1;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+}
+.mash-editor-pane-body :global(.mash-sticky-editor),
+.mash-editor-pane-body :global(.mash-sticky-editor textarea) {
+	height: 100%;
+	min-height: 0;
+}
+.mash-pane-splitter {
+	position: absolute;
+	z-index: 4;
+	pointer-events: auto;
+	background: transparent;
+}
+.mash-pane-splitter.is-h {
+	top: 0.5rem;
+	bottom: 0.5rem;
+	width: 10px;
+	margin-left: -5px;
+	cursor: col-resize;
+}
+.mash-pane-splitter.is-v {
+	left: 0.5rem;
+	right: 0.5rem;
+	height: 10px;
+	margin-top: -5px;
+	cursor: row-resize;
+}
+.mash-pane-splitter::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	margin: auto;
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--mash-accent) 55%, transparent);
+}
+.mash-pane-splitter.is-h::after {
+	width: 3px;
+	height: 28%;
+	min-height: 2.5rem;
+}
+.mash-pane-splitter.is-v::after {
+	height: 3px;
+	width: 28%;
+	min-width: 2.5rem;
 }
 
 @media (max-width: 720px) and (pointer: coarse) {

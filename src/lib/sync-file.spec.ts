@@ -137,10 +137,48 @@ describe('sync-file', () => {
 		};
 		const summary = await applyDeskSnapshot(desk, new Set(['n1', 'n2']));
 		expect(summary.itemsUpserted).toBe(1);
+		expect(summary.edgesUpserted).toBe(0);
 		const items = await db.canvasItems.where('canvasId').equals('local-root').toArray();
 		expect(items).toHaveLength(1);
 		expect(items[0].x).toBe(100);
 		expect([...getDismissedNoteIds('local-root')]).toEqual(['n2']);
+	});
+
+	it('applies desk flow edges remapped to local item ids', async () => {
+		await db.canvases.put({
+			id: 'local-root',
+			folder: '',
+			title: 'Desk',
+			created: 1,
+			modified: 1
+		});
+		const desk = {
+			canvases: [
+				{ id: 'remote-root', folder: '', title: 'Desk', created: 1, modified: 10 }
+			],
+			items: [
+				{ id: 'ri1', canvasId: 'remote-root', noteId: 'n1', x: 0, y: 0 },
+				{ id: 'ri2', canvasId: 'remote-root', noteId: 'n2', x: 100, y: 0 }
+			],
+			edges: [
+				{
+					id: 're1',
+					canvasId: 'remote-root',
+					fromItemId: 'ri1',
+					toItemId: 'ri2',
+					created: 1
+				}
+			],
+			dismissed: {}
+		};
+		const summary = await applyDeskSnapshot(desk, new Set(['n1', 'n2']));
+		expect(summary.edgesUpserted).toBe(1);
+		const edges = await db.canvasEdges.where('canvasId').equals('local-root').toArray();
+		expect(edges).toHaveLength(1);
+		const items = await db.canvasItems.where('canvasId').equals('local-root').toArray();
+		const byNote = new Map(items.map((i) => [i.noteId, i.id]));
+		expect(edges[0].fromItemId).toBe(byNote.get('n1'));
+		expect(edges[0].toItemId).toBe(byNote.get('n2'));
 	});
 
 	it('rejects bad JSON and invalid notes', () => {

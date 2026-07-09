@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { LayoutGrid, Pin, Folder, Hash, Link2, Plus, Search } from 'lucide-svelte';
+	import { LayoutGrid, Pin, Folder, Hash, Link2, Plus, Search, Settings } from 'lucide-svelte';
 	import type { NavFilter } from '$lib/note-ui';
 	import { isNavActive } from '$lib/note-ui';
 	import type { DockAction } from '$lib/dock';
@@ -10,6 +10,7 @@
 		foldersOpen?: boolean;
 		tagsOpen?: boolean;
 		linkedOpen?: boolean;
+		settingsOpen?: boolean;
 		/** Callback for dock button presses (avoid `on*` — Svelte 5 treats those as events). */
 		dockSelect: (action: DockAction) => void;
 	}
@@ -20,6 +21,7 @@
 		foldersOpen = false,
 		tagsOpen = false,
 		linkedOpen = false,
+		settingsOpen = false,
 		dockSelect
 	}: Props = $props();
 
@@ -38,7 +40,8 @@
 				isNavActive(currentFilter, 'all', undefined, searchQuery) &&
 				!foldersOpen &&
 				!tagsOpen &&
-				!linkedOpen
+				!linkedOpen &&
+				!settingsOpen
 		},
 		{
 			id: 'pinned',
@@ -61,7 +64,8 @@
 			active: linkedOpen
 		},
 		{ id: 'new', label: 'New note', accent: true, active: false },
-		{ id: 'search', label: 'Search', active: false }
+		{ id: 'search', label: 'Search', active: false },
+		{ id: 'settings', label: 'Settings', active: settingsOpen }
 	]);
 
 	let dockEl: HTMLElement | undefined = $state();
@@ -88,6 +92,8 @@
 				return Plus;
 			case 'search':
 				return Search;
+			case 'settings':
+				return Settings;
 			default: {
 				const _exhaustive: never = id;
 				return _exhaustive;
