@@ -776,7 +776,7 @@
 	<div class="relative flex min-h-0 flex-1">
 		<div class="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
 			<div
-				class="pointer-events-none absolute top-3 left-[4.75rem] z-10 rounded-full border px-3 py-1 text-[10px] backdrop-blur-sm"
+				class="mash-canvas-title-chip pointer-events-none absolute top-3 left-[4.75rem] z-10 rounded-full border px-3 py-1 text-[10px] backdrop-blur-sm"
 				style="border-color: rgba(80,60,30,0.18); background: rgba(247,241,230,0.72); color: var(--mash-card-muted);"
 			>
 				<span class="mash-display font-medium" style="color: var(--mash-card-ink);">{peel.canvasTitle}</span>
@@ -893,7 +893,10 @@
 		{/if}
 
 		{#if library.selectionIds.length > 0}
-			<div class="absolute bottom-5 left-1/2 z-20 flex -translate-x-1/2 flex-col items-center gap-2">
+			<div
+				class="mash-selection-bar absolute bottom-5 left-1/2 z-20 flex -translate-x-1/2 flex-col items-center gap-2"
+				class:mash-selection-bar--peel={peel.peelOpen}
+			>
 				{#if library.bulkMenu === 'tag'}
 					<div
 						class="w-64 rounded-xl border p-3 shadow-xl"

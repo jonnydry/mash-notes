@@ -106,23 +106,27 @@
 	 * overflow out of the pill. Distances use layout centers (not live
 	 * scaled rects) so the curve doesn't chase itself and jitter.
 	 */
-	function applyMag(clientY: number | null) {
+	function applyMag(clientX: number | null, clientY: number | null) {
 		if (!dockEl) return;
-		const dockTop = dockEl.getBoundingClientRect().top;
+		const dockRect = dockEl.getBoundingClientRect();
+		const horizontal = dockRect.width > dockRect.height;
 		const buttons = [...dockEl.querySelectorAll<HTMLElement>('[data-dock-item]')];
 		let nearest: { id: string; dist: number } | null = null;
+		const pointer = horizontal ? clientX : clientY;
 
 		for (const btn of buttons) {
 			// Layout center — stable while transforms change.
-			const cy = dockTop + btn.offsetTop + ICON_SIZE / 2;
+			const center = horizontal
+				? dockRect.left + btn.offsetLeft + ICON_SIZE / 2
+				: dockRect.top + btn.offsetTop + ICON_SIZE / 2;
 
-			if (clientY === null) {
+			if (pointer === null) {
 				btn.style.setProperty('--dock-scale', '1');
 				btn.classList.remove('is-hot');
 				continue;
 			}
 
-			const dist = Math.abs(clientY - cy);
+			const dist = Math.abs(pointer - center);
 			const scale = 1 + falloff(dist) * MAG_PEAK;
 			btn.style.setProperty('--dock-scale', String(scale));
 			if (!nearest || dist < nearest.dist) {
@@ -131,7 +135,7 @@
 		}
 
 		const nextHot =
-			clientY !== null && nearest && nearest.dist < MAG_RADIUS * 0.85 ? nearest.id : null;
+			pointer !== null && nearest && nearest.dist < MAG_RADIUS * 0.85 ? nearest.id : null;
 		for (const btn of buttons) {
 			btn.classList.toggle('is-hot', btn.dataset.dockItem === nextHot);
 		}
@@ -145,11 +149,11 @@
 			leaveTimer = 0;
 		}
 		dockEl.classList.remove('is-settling');
-		const clientY = e.clientY;
+		const { clientX, clientY } = e;
 		if (magRaf) cancelAnimationFrame(magRaf);
 		magRaf = requestAnimationFrame(() => {
 			magRaf = 0;
-			applyMag(clientY);
+			applyMag(clientX, clientY);
 		});
 	}
 
@@ -157,7 +161,7 @@
 		if (magRaf) cancelAnimationFrame(magRaf);
 		magRaf = 0;
 		if (dockEl) dockEl.classList.add('is-settling');
-		applyMag(null);
+		applyMag(null, null);
 		leaveTimer = window.setTimeout(() => {
 			dockEl?.classList.remove('is-settling');
 			leaveTimer = 0;

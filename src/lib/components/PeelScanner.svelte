@@ -113,19 +113,38 @@
 		}
 	}
 
+	const LONG_PRESS_MS = 420;
+	const LONG_PRESS_MOVE_PX = 10;
 	let longPressTimer = 0;
+	let longPressOrigin: { x: number; y: number; noteId: string } | null = null;
+
 	function onHandlePointerDown(e: PointerEvent, noteId: string) {
 		if (!onTouchPlaceStart) return;
 		if (e.pointerType === 'mouse') return;
+		longPressOrigin = { x: e.clientX, y: e.clientY, noteId };
 		longPressTimer = window.setTimeout(() => {
-			onTouchPlaceStart(noteId, e.clientX, e.clientY);
-		}, 420);
+			if (!longPressOrigin || longPressOrigin.noteId !== noteId) return;
+			onTouchPlaceStart(noteId, longPressOrigin.x, longPressOrigin.y);
+			longPressOrigin = null;
+			longPressTimer = 0;
+		}, LONG_PRESS_MS);
 	}
+
+	function onHandlePointerMove(e: PointerEvent) {
+		if (!longPressOrigin || !longPressTimer) return;
+		const dx = e.clientX - longPressOrigin.x;
+		const dy = e.clientY - longPressOrigin.y;
+		if (dx * dx + dy * dy > LONG_PRESS_MOVE_PX * LONG_PRESS_MOVE_PX) {
+			clearLongPress();
+		}
+	}
+
 	function clearLongPress() {
 		if (longPressTimer) {
 			clearTimeout(longPressTimer);
 			longPressTimer = 0;
 		}
+		longPressOrigin = null;
 	}
 </script>
 
@@ -306,6 +325,7 @@
 								ondragstart={(e) => onDragStart(e, note.id)}
 								ondragend={onDragEnd}
 								onpointerdown={(e) => onHandlePointerDown(e, note.id)}
+								onpointermove={onHandlePointerMove}
 								onpointerup={clearLongPress}
 								onpointercancel={clearLongPress}
 								onpointerleave={clearLongPress}
@@ -353,7 +373,9 @@
 		</div>
 
 		{#if mode === 'notes'}
-			<div class="mash-peel-footer">Drag handle onto canvas · Enter to expand · Space to select</div>
+			<div class="mash-peel-footer">
+				Drag handle · long-press to place · Enter expand · Space select
+			</div>
 		{:else if mode === 'linked'}
 			<div class="mash-peel-footer">Open a linked note on the canvas</div>
 		{/if}
