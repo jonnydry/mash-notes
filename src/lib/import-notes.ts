@@ -46,6 +46,11 @@ export function normalizeImportedNote(raw: unknown, index: number): Note | strin
 	const mashedFrom = Array.isArray(raw.mashedFrom)
 		? raw.mashedFrom.filter((l): l is string => typeof l === 'string')
 		: undefined;
+	const textAlignRaw = asString(raw.textAlign);
+	const textAlign =
+		textAlignRaw === 'left' || textAlignRaw === 'center' || textAlignRaw === 'right'
+			? textAlignRaw
+			: undefined;
 	return {
 		id,
 		title,
@@ -56,7 +61,8 @@ export function normalizeImportedNote(raw: unknown, index: number): Note | strin
 		modified: asNumber(raw.modified, now),
 		pinned,
 		links,
-		mashedFrom
+		mashedFrom,
+		textAlign
 	};
 }
 

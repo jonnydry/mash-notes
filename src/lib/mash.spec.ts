@@ -3,7 +3,8 @@ import {
 	combineNotes,
 	notesToJson,
 	slugifyFilename,
-	notesFromSelection
+	notesFromSelection,
+	sequencePrintHtml
 } from './mash';
 import type { Note } from './types';
 
@@ -81,5 +82,26 @@ describe('notesFromSelection', () => {
 		];
 		const selected = notesFromSelection(notes, ['c', 'missing', 'a']);
 		expect(selected.map((n) => n.id)).toEqual(['c', 'a']);
+	});
+});
+
+describe('sequencePrintHtml', () => {
+	it('emits one section per note with page breaks', () => {
+		const html = sequencePrintHtml([
+			note({ id: '1', title: 'Project ideas', body: '- Build' }),
+			note({ id: '2', title: 'Goals', body: '1. Fast' })
+		]);
+		expect(html).toContain('Page 1 of 2');
+		expect(html).toContain('Page 2 of 2');
+		expect(html).toContain('Project ideas');
+		expect(html).toContain('Goals');
+		expect(html).toContain('page-break-after: always');
+	});
+
+	it('applies note textAlign to each page', () => {
+		const html = sequencePrintHtml([
+			note({ id: '1', title: 'Centered', body: 'Hi', textAlign: 'center' })
+		]);
+		expect(html).toContain('text-align: center');
 	});
 });

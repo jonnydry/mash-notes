@@ -5,6 +5,9 @@
  * db, search, UI components, and future sync layers.
  */
 
+/** Body text alignment in the sticky editor / preview. */
+export type TextAlign = 'left' | 'center' | 'right';
+
 export interface Note {
 	id: string;
 	title: string;
@@ -17,6 +20,8 @@ export interface Note {
 	links?: string[];
 	/** Source note ids when this note was created by a Mash action. */
 	mashedFrom?: string[];
+	/** Sticky body alignment (edit + preview). Defaults to left when unset. */
+	textAlign?: TextAlign;
 }
 
 export interface Folder {

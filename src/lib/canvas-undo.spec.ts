@@ -27,6 +27,22 @@ describe('canvas-undo', () => {
 		expect(stack.canUndo).toBe(false);
 	});
 
+	it('records edge-only mutations', () => {
+		const stack = new CanvasUndoStack();
+		stack.push({
+			label: 'Unstitch',
+			before: [],
+			after: [],
+			edgesBefore: [
+				{ id: 'e1', canvasId: 'c', fromItemId: 'a', toItemId: 'b', created: 1 }
+			],
+			edgesAfter: []
+		});
+		expect(stack.canUndo).toBe(true);
+		const undone = stack.undo();
+		expect(undone?.edgesBefore).toHaveLength(1);
+	});
+
 	it('orders notes spatially and ranges between them', () => {
 		const order = spatialNoteOrder([
 			{ noteId: 'c', x: 100, y: 0 },

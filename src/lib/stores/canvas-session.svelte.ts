@@ -11,6 +11,7 @@ import {
 	removeCanvasEdge,
 	removeCanvasItem,
 	removeNotesFromCanvas,
+	replaceCanvasEdges,
 	updateCanvasItemPosition
 } from '$lib/db';
 import type { Canvas, CanvasEdge, CanvasItem, Note } from '$lib/types';
@@ -26,9 +27,19 @@ import {
 	spatialNoteOrder,
 	type CanvasLayoutSnapshot
 } from '$lib/canvas-undo';
-import { bumpOverlappingRects, gridSlotPosition, type AlignMode } from '$lib/canvas-geom';
+import {
+	bumpOverlappingRects,
+	gridSlotPosition,
+	resolveOverlapsKeepingFixed,
+	type AlignMode
+} from '$lib/canvas-geom';
 import { isPinnedCanvasKey } from '$lib/stores/note-library.svelte';
-import { canLinkAsNextPage } from '$lib/canvas-flow';
+import {
+	canLinkAsNextPage,
+	edgesInSequence,
+	layoutFlowSequence,
+	listFlowSequences
+} from '$lib/canvas-flow';
 
 export const COLLAPSED_CARD = { w: 220, h: 120 };
 export const EXPANDED_CARD = { w: 360, h: 320 };
@@ -107,6 +118,7 @@ export type CanvasBoardApi = {
 	getSpawnPoint: (size: { w: number; h: number }, cascadeIndex?: number) => { x: number; y: number };
 	ensureNoteVisible: (noteId: string) => void;
 	applyAlign: (mode: AlignMode) => void;
+	organizeToSnap?: () => void;
 	clientToWorld?: (clientX: number, clientY: number) => { x: number; y: number };
 };
 
@@ -279,6 +291,98 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		canvasEdges = await listCanvasEdges(activeCanvas.id);
 	}
 
+	async function snapSequenceForLink(fromItemId: string, toItemId: string) {
+		const { sequences } = listFlowSequences(canvasItems, canvasEdges);
+		const seq = sequences.find(
+			(s) =>
+				!s.invalid &&
+				s.pages.some((p) => p.id === fromItemId) &&
+				s.pages.some((p) => p.id === toItemId)
+		);
+		if (!seq || seq.pages.length < 2) return;
+		await applyFlowLayout(seq.pages, { recordUndo: false });
+	}
+
+	/**
+	 * Pack a sequence L→R, then push other cards clear so the chain doesn’t
+	 * land on top of unrelated notes.
+	 */
+	async function applyFlowLayout(
+		pages: CanvasItem[],
+		layoutOpts?: { recordUndo?: boolean }
+	) {
+		if (pages.length === 0) return;
+		const laid = layoutFlowSequence(pages);
+		const pageIds = new Set(pages.map((p) => p.id));
+		const rects = canvasItems.map((i) => {
+			const s = cardDisplaySize(i, expandedNoteId);
+			const pos = laid.get(i.id);
+			return { id: i.id, x: pos?.x ?? i.x, y: pos?.y ?? i.y, w: s.w, h: s.h };
+		});
+		const bumped = resolveOverlapsKeepingFixed(rects, pageIds, BUMP_GAP);
+		const before: Array<{ itemId: string; x: number; y: number }> = [];
+		const moves: Array<{ itemId: string; x: number; y: number }> = [];
+		for (const item of canvasItems) {
+			const next = bumped.get(item.id) ?? laid.get(item.id);
+			if (!next) continue;
+			if (next.x === item.x && next.y === item.y) continue;
+			before.push({ itemId: item.id, x: item.x, y: item.y });
+			moves.push({ itemId: item.id, x: next.x, y: next.y });
+		}
+		if (moves.length === 0) return;
+		await handleCanvasMoveEnd(moves, before, {
+			recordUndo: layoutOpts?.recordUndo !== false
+		});
+	}
+
+	/** Re-pack every valid sequence in one undoable arrange. */
+	async function relayoutFlowSequences() {
+		const { sequences } = listFlowSequences(canvasItems, canvasEdges);
+		const valid = sequences.filter((s) => !s.invalid && s.pages.length >= 2);
+		if (valid.length === 0) return;
+
+		const working = new Map(
+			canvasItems.map((i) => {
+				const s = cardDisplaySize(i, expandedNoteId);
+				return [i.id, { id: i.id, x: i.x, y: i.y, w: s.w, h: s.h }];
+			})
+		);
+
+		for (const seq of valid) {
+			const pages = seq.pages.map((p) => {
+				const cur = working.get(p.id)!;
+				return { ...p, x: cur.x, y: cur.y, w: cur.w, h: cur.h };
+			});
+			const laid = layoutFlowSequence(pages);
+			for (const [id, pos] of laid) {
+				const cur = working.get(id);
+				if (!cur) continue;
+				cur.x = pos.x;
+				cur.y = pos.y;
+			}
+			const pageIds = new Set(pages.map((p) => p.id));
+			const bumped = resolveOverlapsKeepingFixed([...working.values()], pageIds, BUMP_GAP);
+			for (const [id, pos] of bumped) {
+				const cur = working.get(id);
+				if (!cur) continue;
+				cur.x = pos.x;
+				cur.y = pos.y;
+			}
+		}
+
+		const before: Array<{ itemId: string; x: number; y: number }> = [];
+		const moves: Array<{ itemId: string; x: number; y: number }> = [];
+		for (const item of canvasItems) {
+			const next = working.get(item.id);
+			if (!next) continue;
+			if (next.x === item.x && next.y === item.y) continue;
+			before.push({ itemId: item.id, x: item.x, y: item.y });
+			moves.push({ itemId: item.id, x: next.x, y: next.y });
+		}
+		if (moves.length === 0) return;
+		await handleCanvasMoveEnd(moves, before);
+	}
+
 	async function connectFlowEdge(fromItemId: string, toItemId: string): Promise<boolean> {
 		if (!activeCanvas) return false;
 		const check = canLinkAsNextPage(canvasEdges, fromItemId, toItemId);
@@ -304,11 +408,16 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 			}
 			return false;
 		}
+		const edgesBefore = canvasEdges.map((e) => ({ ...e }));
+		const layoutBefore = snapshotItems(canvasItems.map((i) => i.id));
 		try {
 			const edge = await addCanvasEdge(activeCanvas.id, fromItemId, toItemId);
 			if (!canvasEdges.some((e) => e.id === edge.id)) {
 				canvasEdges = [...canvasEdges, edge];
 			}
+			await snapSequenceForLink(fromItemId, toItemId);
+			const layoutAfter = snapshotItems(layoutBefore.map((s) => s.itemId));
+			pushCanvasUndo('Link', layoutBefore, layoutAfter, edgesBefore, canvasEdges.map((e) => ({ ...e })));
 			return true;
 		} catch (e) {
 			console.error(e);
@@ -318,8 +427,42 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 	}
 
 	async function disconnectFlowEdge(edgeId: string) {
+		const edgesBefore = canvasEdges.map((e) => ({ ...e }));
 		await removeCanvasEdge(edgeId);
 		canvasEdges = canvasEdges.filter((e) => e.id !== edgeId);
+		pushCanvasUndo(
+			'Unlink',
+			[],
+			[],
+			edgesBefore,
+			canvasEdges.map((e) => ({ ...e }))
+		);
+	}
+
+	/** Remove every link in a sequence so cards become free again. */
+	async function unstitchSequence(seqIndex: number): Promise<number> {
+		const { sequences } = listFlowSequences(canvasItems, canvasEdges);
+		const seq = sequences[seqIndex];
+		if (!seq || seq.pages.length === 0) return 0;
+		const toRemove = edgesInSequence(seq.pages, canvasEdges);
+		if (toRemove.length === 0) return 0;
+		const edgesBefore = canvasEdges.map((e) => ({ ...e }));
+		const ids = new Set(toRemove.map((e) => e.id));
+		await Promise.all(toRemove.map((e) => removeCanvasEdge(e.id)));
+		canvasEdges = canvasEdges.filter((e) => !ids.has(e.id));
+		pushCanvasUndo(
+			'Unstitch',
+			[],
+			[],
+			edgesBefore,
+			canvasEdges.map((e) => ({ ...e }))
+		);
+		opts.flashToast(
+			toRemove.length === 1
+				? 'Sequence unstitched'
+				: `Unstitched ${toRemove.length} links`
+		);
+		return toRemove.length;
 	}
 
 	async function handleDropNotes(noteIds: string[], x: number, y: number) {
@@ -374,25 +517,36 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		return out;
 	}
 
-	function applyLayoutSnapshots(snaps: CanvasLayoutSnapshot[]) {
+	async function applyLayoutSnapshots(snaps: CanvasLayoutSnapshot[]) {
 		const byId = new Map(snaps.map((s) => [s.itemId, s]));
 		canvasItems = canvasItems.map((item) => {
 			const s = byId.get(item.id);
 			return s ? { ...item, x: s.x, y: s.y, w: s.w, h: s.h } : item;
 		});
-		void Promise.all(
+		await Promise.all(
 			snaps.map((s) =>
 				updateCanvasItemPosition(s.itemId, { x: s.x, y: s.y, w: s.w, h: s.h })
 			)
 		);
 	}
 
+	async function applyEdgeSnapshots(edges: CanvasEdge[]) {
+		if (!activeCanvas) {
+			canvasEdges = edges;
+			return;
+		}
+		canvasEdges = edges;
+		await replaceCanvasEdges(activeCanvas.id, edges);
+	}
+
 	function pushCanvasUndo(
 		label: string,
 		before: CanvasLayoutSnapshot[],
-		after: CanvasLayoutSnapshot[]
+		after: CanvasLayoutSnapshot[],
+		edgesBefore?: CanvasEdge[],
+		edgesAfter?: CanvasEdge[]
 	) {
-		canvasUndo.push({ label, before, after });
+		canvasUndo.push({ label, before, after, edgesBefore, edgesAfter });
 		canvasUndoTick++;
 	}
 
@@ -401,19 +555,29 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		canvasUndoTick++;
 	}
 
-	function undoCanvasLayout() {
+	async function undoCanvasLayout() {
 		const entry = canvasUndo.undo();
 		canvasUndoTick++;
 		if (!entry) return;
-		applyLayoutSnapshots(entry.before);
+		if (entry.before.length > 0) {
+			await applyLayoutSnapshots(entry.before);
+		}
+		if (entry.edgesBefore) {
+			await applyEdgeSnapshots(entry.edgesBefore);
+		}
 		opts.flashToast(`Undo ${entry.label}`);
 	}
 
-	function redoCanvasLayout() {
+	async function redoCanvasLayout() {
 		const entry = canvasUndo.redo();
 		canvasUndoTick++;
 		if (!entry) return;
-		applyLayoutSnapshots(entry.after);
+		if (entry.after.length > 0) {
+			await applyLayoutSnapshots(entry.after);
+		}
+		if (entry.edgesAfter) {
+			await applyEdgeSnapshots(entry.edgesAfter);
+		}
 		opts.flashToast(`Redo ${entry.label}`);
 	}
 
@@ -476,7 +640,7 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		pushCanvasUndo('Resize', [beforeSnap], [{ itemId, x: item.x, y: item.y, w, h }]);
 		await updateCanvasItemPosition(itemId, { x: item.x, y: item.y, w, h });
 		if (expandedNoteId === item.noteId) {
-			bumpNeighborsAround(itemId, { w, h });
+			void bumpNeighborsAround(itemId, { w, h });
 		}
 	}
 
@@ -543,7 +707,7 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 	}
 
 	/** Push neighbors clear of an expanded/resized card; remember originals for collapse. */
-	function bumpNeighborsAround(anchorId: string, size: { w: number; h: number }) {
+	async function bumpNeighborsAround(anchorId: string, size: { w: number; h: number }) {
 		const anchor = canvasItems.find((i) => i.id === anchorId);
 		if (!anchor) return;
 		const others = canvasItems
@@ -574,7 +738,7 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		setTimeout(() => {
 			settlingIds = new Set();
 		}, 320);
-		void Promise.all(
+		await Promise.all(
 			[...moved.entries()].map(([id, pos]) =>
 				updateCanvasItemPosition(id, { x: pos.x, y: pos.y })
 			)
@@ -582,7 +746,7 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 	}
 
 	/** Snap bumped neighbors back to their pre-expand positions. */
-	function restoreBumpLayout() {
+	async function restoreBumpLayout() {
 		const restore = bumpRestore;
 		bumpRestore = null;
 		if (!restore || restore.size === 0) return;
@@ -595,7 +759,7 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		setTimeout(() => {
 			settlingIds = new Set();
 		}, 320);
-		void Promise.all(
+		await Promise.all(
 			[...restore.entries()].map(([itemId, pos]) =>
 				updateCanvasItemPosition(itemId, { x: pos.x, y: pos.y })
 			)
@@ -604,7 +768,7 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 
 	function expandSticky(noteId: string, focus: 'title' | 'body' = 'body') {
 		if (expandedNoteId && expandedNoteId !== noteId) {
-			restoreBumpLayout();
+			void restoreBumpLayout();
 		}
 		opts.selectNote(noteId, { keepSelection: true });
 		expandFocus = focus;
@@ -618,14 +782,14 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 			canvasItems = canvasItems.map((i) => (i.id === item.id ? { ...i, w, h } : i));
 			void updateCanvasItemPosition(item.id, { x: item.x, y: item.y, w, h });
 		}
-		bumpNeighborsAround(item.id, { w, h });
+		void bumpNeighborsAround(item.id, { w, h });
 	}
 
 	function collapseSticky() {
 		const noteId = expandedNoteId;
 		expandedNoteId = null;
 		expandFocus = null;
-		restoreBumpLayout();
+		void restoreBumpLayout();
 		if (!noteId) return;
 		const item = canvasItems.find((i) => i.noteId === noteId);
 		if (!item) return;
@@ -807,6 +971,8 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		refreshCanvasItems,
 		connectFlowEdge,
 		disconnectFlowEdge,
+		unstitchSequence,
+		relayoutFlowSequences,
 		handleDropNotes,
 		snapshotItems,
 		applyLayoutSnapshots,

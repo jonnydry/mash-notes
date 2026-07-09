@@ -6,7 +6,10 @@ import {
 	listFlowSequences,
 	orderCanvasFlow,
 	flowOutlineMarkdown,
-	flowPageBadges
+	flowPageBadges,
+	layoutFlowSequence,
+	flowEdgePath,
+	edgesInSequence
 } from './canvas-flow';
 import type { CanvasEdge, CanvasItem } from './types';
 
@@ -95,5 +98,45 @@ describe('canvas-flow page sequences', () => {
 		const items = [item('a', 0, 0), item('b', 10, 0)];
 		const { order } = orderCanvasFlow(items, [edge('a', 'b')]);
 		expect(order.map((i) => i.id)).toEqual(['a', 'b']);
+	});
+
+	it('layoutFlowSequence packs pages left-to-right from the head', () => {
+		const pages = [item('a', 50, 70), item('b', 10, 200), item('c', 400, 10)];
+		const next = layoutFlowSequence(pages);
+		expect(next.get('a')).toEqual({ x: 48, y: 72 });
+		// 220 + 72 gap from 48 → 340, snapped to grid
+		expect(next.get('b')).toEqual({ x: 336, y: 72 });
+		expect(next.get('c')).toEqual({ x: 624, y: 72 });
+	});
+
+	it('layoutFlowSequence respects real card widths so tall cards do not overlap', () => {
+		const pages = [
+			{ ...item('a', 48, 48), w: 360, h: 320 },
+			{ ...item('b', 100, 48), w: 220, h: 120 }
+		];
+		const next = layoutFlowSequence(pages);
+		expect(next.get('a')).toEqual({ x: 48, y: 48 });
+		// 48 + 360 + 72 = 480 (already on grid)
+		expect(next.get('b')).toEqual({ x: 480, y: 48 });
+	});
+
+	it('layoutFlowSequence is a no-op for an empty chain', () => {
+		expect(layoutFlowSequence([])).toEqual(new Map());
+	});
+
+	it('flowEdgePath runs left-to-right when target is to the right', () => {
+		const path = flowEdgePath(
+			{ x: 0, y: 0, w: 220, h: 120 },
+			{ x: 260, y: 0, w: 220, h: 120 }
+		);
+		expect(path.d.startsWith('M 220 60')).toBe(true);
+		expect(path.d.includes('260 60')).toBe(true);
+		expect(path.midX).toBeGreaterThan(220);
+	});
+
+	it('edgesInSequence returns only links inside the page set', () => {
+		const pages = [item('a', 0, 0), item('b', 100, 0)];
+		const edges = [edge('a', 'b'), edge('b', 'c'), edge('x', 'y')];
+		expect(edgesInSequence(pages, edges).map((e) => e.id)).toEqual(['a->b']);
 	});
 });

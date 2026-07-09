@@ -6,6 +6,7 @@
 		snapEnabled: boolean;
 		onClose: () => void;
 		onSnapChange: (on: boolean) => void;
+		onOrganize: () => void;
 		onImportMarkdown: () => void;
 		onImportJson: () => void;
 		onExportJson: () => void;
@@ -17,6 +18,7 @@
 		snapEnabled,
 		onClose,
 		onSnapChange,
+		onOrganize,
 		onImportMarkdown,
 		onImportJson,
 		onExportJson,
@@ -99,7 +101,15 @@
 					</button>
 				</div>
 			</div>
-			<p class="mash-settings-hint">Hold Alt while dragging to temporarily invert snap.</p>
+			<p class="mash-settings-hint">
+				Snap only affects future drags. Hold Alt while dragging to temporarily invert. Use Organize
+				to tidy the whole desk onto the grid.
+			</p>
+			<div class="mash-settings-actions">
+				<button type="button" class="mash-settings-action" onclick={onOrganize}>
+					Organize desk
+				</button>
+			</div>
 		</section>
 
 		<section class="mash-settings-section">

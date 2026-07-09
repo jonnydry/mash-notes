@@ -301,7 +301,12 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 
 	function handleStickyMetaChange(
 		noteId: string,
-		patch: { folder?: string; tags?: string[]; pinned?: 0 | 1 }
+		patch: {
+			folder?: string;
+			tags?: string[];
+			pinned?: 0 | 1;
+			textAlign?: 'left' | 'center' | 'right';
+		}
 	) {
 		const note = notes.find((n) => n.id === noteId);
 		if (!note) return;
@@ -323,7 +328,8 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 				folder: note.folder,
 				tags: note.tags,
 				pinned: note.pinned,
-				links: note.links
+				links: note.links,
+				textAlign: note.textAlign
 			});
 			updateNoteInSearch(
 				{

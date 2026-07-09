@@ -5,6 +5,7 @@
  * Multiple disjoint chains on one board are separate export sequences.
  */
 import type { CanvasEdge, CanvasItem } from './types';
+import { GRID, snapPoint, snapValue } from './canvas-geom';
 
 export type FlowSequence = {
 	id: string;
@@ -263,4 +264,71 @@ export function flowPageBadges(
 		});
 	});
 	return map;
+}
+
+/** Edges whose both ends sit in the given page set (the links that stitch a sequence). */
+export function edgesInSequence(
+	pages: CanvasItem[],
+	edges: CanvasEdge[]
+): CanvasEdge[] {
+	const ids = new Set(pages.map((p) => p.id));
+	if (ids.size === 0) return [];
+	return edges.filter((e) => ids.has(e.fromItemId) && ids.has(e.toItemId));
+}
+
+/** Gap between sequenced cards — room for the arrow + unlink control. */
+export const FLOW_LAYOUT_GAP = GRID * 3; // 72
+
+/**
+ * Lay a valid page sequence into a left-to-right storyboard row.
+ * Anchors on the first page’s snapped position; later pages pack by
+ * each card’s real width + gap so tall/wide cards don’t overlap.
+ */
+export function layoutFlowSequence(
+	pages: CanvasItem[],
+	opts?: { gap?: number; defaultW?: number }
+): Map<string, { x: number; y: number }> {
+	const out = new Map<string, { x: number; y: number }>();
+	if (pages.length === 0) return out;
+	const gap = opts?.gap ?? FLOW_LAYOUT_GAP;
+	const defaultW = opts?.defaultW ?? 220;
+	const origin = snapPoint(pages[0].x, pages[0].y);
+	let x = origin.x;
+	for (const page of pages) {
+		out.set(page.id, { x, y: origin.y });
+		const w = page.w && page.w > 0 ? page.w : defaultW;
+		x = snapValue(x + w + gap);
+	}
+	return out;
+}
+
+/** Build a short horizontal connector path from source → target. */
+export function flowEdgePath(
+	from: { x: number; y: number; w: number; h: number },
+	to: { x: number; y: number; w: number; h: number }
+): { d: string; midX: number; midY: number } {
+	const x1 = from.x + from.w;
+	const y1 = from.y + from.h / 2;
+	const x2 = to.x;
+	const y2 = to.y + to.h / 2;
+	const dx = x2 - x1;
+	const dy = y2 - y1;
+	// Prefer a short stub when cards sit in order (target to the right).
+	if (dx >= 16) {
+		const cx = x1 + dx / 2;
+		return {
+			d: `M ${x1} ${y1} C ${cx} ${y1}, ${cx} ${y2}, ${x2} ${y2}`,
+			midX: (x1 + x2) / 2,
+			midY: (y1 + y2) / 2
+		};
+	}
+	// Fallback: gentle arc above when overlapping or reversed spatially.
+	const lift = Math.max(36, Math.abs(dy) * 0.35 + 28);
+	const midX = (x1 + x2) / 2;
+	const midY = Math.min(y1, y2) - lift;
+	return {
+		d: `M ${x1} ${y1} Q ${midX} ${midY}, ${x2} ${y2}`,
+		midX,
+		midY
+	};
 }

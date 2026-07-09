@@ -5,6 +5,7 @@
  * "Mash" here is an action: pull notes together and move them out.
  */
 
+import { renderMarkdown } from './markdown';
 import type { Note } from './types';
 
 const SECTION_SEP = '\n\n---\n\n';
@@ -106,4 +107,144 @@ export function notesFromSelection(notes: Note[], selectedIds: Iterable<string>)
 		if (note) result.push(note);
 	}
 	return result;
+}
+
+function escapeHtml(s: string): string {
+	return s
+		.replace(/&/g, '&amp;')
+		.replace(/</g, '&lt;')
+		.replace(/>/g, '&gt;')
+		.replace(/"/g, '&quot;');
+}
+
+/** Plain-text body for print — avoids interactive wikilink buttons in the print doc. */
+function printBodyHtml(body: string): string {
+	const plain = body.replace(/\[\[([^\]|#]+)(?:\|([^\]]+))?\]\]/g, (_m, target, label) =>
+		String(label ?? target).trim()
+	);
+	try {
+		return renderMarkdown(plain).replace(
+			/<button\b[^>]*>(.*?)<\/button>/gi,
+			'$1'
+		);
+	} catch {
+		return `<pre>${escapeHtml(body)}</pre>`;
+	}
+}
+
+/** Printable HTML: one note per page (browser Print → Save as PDF). */
+export function sequencePrintHtml(notes: Note[], docTitle = 'Page sequence'): string {
+	const pages = notes
+		.map((n, i) => {
+			const title = n.title.trim() || 'Untitled';
+			const body = n.body.trim() ? printBodyHtml(n.body) : '<p class="empty"> </p>';
+			const align =
+				n.textAlign === 'center' || n.textAlign === 'right' ? n.textAlign : 'left';
+			const breakAfter = i < notes.length - 1 ? ' page-break-after: always;' : '';
+			return `<section class="page" style="text-align: ${align};${breakAfter}">
+  <p class="page-num">Page ${i + 1} of ${notes.length}</p>
+  <h1>${escapeHtml(title)}</h1>
+  <div class="body">${body}</div>
+</section>`;
+		})
+		.join('\n');
+
+	return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>${escapeHtml(docTitle)}</title>
+<style>
+  @page { margin: 0.75in; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+    font-size: 12pt;
+    line-height: 1.45;
+    color: #1a1a1a;
+  }
+  .page { min-height: 90vh; padding: 0; }
+  .page-num {
+    margin: 0 0 0.75rem;
+    font-size: 9pt;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #666;
+  }
+  h1 {
+    margin: 0 0 1rem;
+    font-family: Fraunces, Georgia, serif;
+    font-size: 22pt;
+    font-weight: 600;
+    line-height: 1.2;
+  }
+  .body :first-child { margin-top: 0; }
+  .body :last-child { margin-bottom: 0; }
+  .body p, .body ul, .body ol, .body pre, .body blockquote { margin: 0.65em 0; }
+  .body ul, .body ol { padding-left: 1.25em; }
+  .body pre {
+    white-space: pre-wrap;
+    font-size: 10pt;
+    background: #f4f4f4;
+    padding: 0.6em 0.75em;
+    border-radius: 4px;
+    text-align: left;
+  }
+  .body code { font-size: 0.92em; }
+  .empty { margin: 0; }
+  @media print {
+    .page { min-height: 0; }
+  }
+</style>
+</head>
+<body>
+${pages}
+<script>
+  window.addEventListener('load', function () {
+    setTimeout(function () {
+      try { window.focus(); window.print(); } catch (e) {}
+    }, 100);
+  });
+<\/script>
+</body>
+</html>`;
+}
+
+/**
+ * Open a print dialog for a page sequence (Save as PDF in the browser).
+ * Opens a blob URL in a new tab (avoids iframe print crashes in Chromium/PWAs).
+ * If the popup is blocked, downloads an HTML file instead.
+ * No-op outside the browser.
+ */
+export function printSequenceAsPdf(notes: Note[], docTitle?: string): boolean {
+	if (typeof window === 'undefined' || notes.length === 0) return false;
+	const title =
+		docTitle ??
+		(notes.length === 1
+			? notes[0].title.trim() || 'Untitled'
+			: `Sequence · ${notes.length} pages`);
+	let html: string;
+	try {
+		html = sequencePrintHtml(notes, title);
+	} catch (e) {
+		console.error(e);
+		return false;
+	}
+	const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+	const url = URL.createObjectURL(blob);
+	// Do not pass noopener — it makes window.open return null in Chromium.
+	const win = window.open(url, '_blank', 'width=900,height=700');
+	if (!win) {
+		URL.revokeObjectURL(url);
+		downloadTextFile(html, `${slugifyFilename(title, 'sequence')}.html`, 'text/html;charset=utf-8');
+		return true;
+	}
+	try {
+		win.opener = null;
+	} catch {
+		/* ignore */
+	}
+	setTimeout(() => URL.revokeObjectURL(url), 60_000);
+	return true;
 }
