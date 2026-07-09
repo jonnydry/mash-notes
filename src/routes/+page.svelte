@@ -78,12 +78,12 @@
 	let importInputEl: HTMLInputElement | undefined = $state();
 	let syncInputEl: HTMLInputElement | undefined = $state();
 
-	function flashToast(msg: string) {
+	function flashToast(msg: string, ms = 1600) {
 		actionToast = msg;
 		if (toastTimer) clearTimeout(toastTimer);
 		toastTimer = setTimeout(() => {
 			actionToast = '';
-		}, 1600);
+		}, ms);
 	}
 
 	function askConfirm(opts: {
@@ -272,7 +272,32 @@
 	}
 
 	async function combineSelection() {
-		await mashNotesIntoBubble(library.selectedNotes);
+		const notes = library.selectedNotes;
+		if (notes.length < 2) {
+			flashToast('Select at least 2 notes to mash');
+			return;
+		}
+		const preview = notes
+			.slice(0, 3)
+			.map((n) => n.title)
+			.join(', ');
+		const extra = notes.length > 3 ? ` +${notes.length - 3}` : '';
+		const noteIds = notes.map((n) => n.id);
+		askConfirm({
+			title: 'Mash these notes?',
+			message: `Combine ${notes.length} notes (${preview}${extra}) into one sticky. Sources leave the desk until you Unmash.`,
+			confirmLabel: 'Mash',
+			action: async () => {
+				const latest = noteIds
+					.map((id) => library.notesById.get(id))
+					.filter((n): n is Note => Boolean(n));
+				if (latest.length < 2) {
+					flashToast('Select at least 2 notes to mash');
+					return;
+				}
+				await mashNotesIntoBubble(latest);
+			}
+		});
 	}
 
 	/** Restore source notes onto the canvas and remove the mash bubble. */
@@ -337,22 +362,33 @@
 	}
 
 	async function openWikilink(target: string) {
-		const needle = target.trim().toLowerCase();
+		const title = target.trim();
+		const needle = title.toLowerCase();
 		if (!needle) return;
-		let note = library.notes.find((n) => n.title.trim().toLowerCase() === needle);
-		if (!note) {
-			note = await createNote({
-				title: target.trim(),
-				body: '',
-				folder: peel.canvasFolder,
-				links: []
-			});
-			addNoteToSearch(note);
-			library.notes = [note, ...library.notes];
-			flashToast(`Created “${note.title}”`);
+		const existing = library.notes.find((n) => n.title.trim().toLowerCase() === needle);
+		if (existing) {
+			peel.openLinkedPeel(existing.id);
+			await canvas.openStickyFromTray(existing.id);
+			return;
 		}
-		peel.openLinkedPeel(note.id);
-		await canvas.openStickyFromTray(note.id);
+		askConfirm({
+			title: 'Create note?',
+			message: `No note titled “${title}” yet. Create it and open it on the desk?`,
+			confirmLabel: 'Create',
+			action: async () => {
+				const note = await createNote({
+					title,
+					body: '',
+					folder: peel.canvasFolder,
+					links: []
+				});
+				addNoteToSearch(note);
+				library.notes = [note, ...library.notes];
+				flashToast(`Created “${note.title}”`);
+				peel.openLinkedPeel(note.id);
+				await canvas.openStickyFromTray(note.id);
+			}
+		});
 	}
 
 	async function handleMashCards(sourceItemId: string, targetItemId: string) {
@@ -500,12 +536,12 @@
 	const paletteActions = [
 		{ label: 'New note', action: handleNewNote, shortcut: '⌘N' },
 		{
-			label: 'Combine selected into mash sticky',
+			label: 'Mash selected notes',
 			action: () => {
 				void combineSelection();
 				showPalette = false;
 			},
-			shortcut: ''
+			shortcut: '⌘M'
 		},
 		{
 			label: 'Copy selected as Markdown',
@@ -1084,6 +1120,7 @@
 						onclick={() => void combineSelection()}
 						class="mash-btn flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold"
 						disabled={library.selectionIds.length < 2}
+						title="Combine into one sticky — sources leave the desk until Unmash"
 					>
 						<Layers class="h-3.5 w-3.5" />
 						Mash
@@ -1259,6 +1296,7 @@
 
 	<input
 		bind:this={importInputEl}
+		data-testid="notes-import"
 		type="file"
 		accept="application/json,.json"
 		class="hidden"
@@ -1266,6 +1304,7 @@
 	/>
 	<input
 		bind:this={syncInputEl}
+		data-testid="sync-import"
 		type="file"
 		accept="application/json,.json"
 		class="hidden"

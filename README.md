@@ -2,23 +2,24 @@
 
 **Mash your ideas together in a reliable place.**
 
-Fast, cute, minimal web notes — a canvas-first, local-only PWA. Open in any browser, no signup, no server required. Notes live in IndexedDB; export or import JSON anytime.
+Fast, cute, minimal web notes — a canvas-first, local-only PWA. Open in any browser, no signup, no server required. Notes live in IndexedDB; export JSON anytime, or move a **sync bundle** (notes + desk layout) between devices via file.
 
 ## Why Mash?
 
 - **Instant** — Open the URL and start arranging notes on a desk.
 - **Canvas-first** — Dock + peel to find notes; stickies on a board to mash them together.
-- **Private by default** — Everything stays in your browser. No accounts, no cloud sync (yet).
+- **Private by default** — Everything stays in your browser. No accounts. Optional file sync bundles for a two-device loop.
 - **Yours** — MIT open source. Self-host as a static site. Export Markdown + JSON.
 
 ## What’s in the app
 
 - Vertical dock (Desk, Pinned, Folders, Tags, Linked, New, Search) with peel scanner tray
 - Freeform canvas: pan, zoom, snap, align, expand/bump neighbors, layout undo
-- Drag-to-mash, unmash, bulk tag/folder/copy/export
-- Sticky editor with markdown preview + `[[wikilink]]` navigation and backlinks
-- File sync bundles (notes + desk layout) via ⌘K — LWW merge, no account
+- Drag-to-mash, selection Mash (with confirm), unmash, bulk tag/folder/copy/export
+- Sticky editor with markdown preview + `[[wikilink]]` navigation (missing targets ask before create) and Linked peel / backlinks
+- File sync bundles via ⌘K — **Export / Import sync bundle…** (notes + canvases + placements + dismissals, LWW merge)
 - Command palette (⌘K), search, folders/tags filters
+- Mobile / coarse-pointer desk: bottom dock, peel + selection bar above it, long-press place from peel
 - PWA install + offline static assets
 
 ## Quick start
@@ -29,6 +30,14 @@ npm run dev
 ```
 
 Open http://localhost:5173
+
+## Sync between devices
+
+1. On device A: ⌘K → **Export sync bundle…** → save the JSON file.
+2. On device B: ⌘K → **Import sync bundle…** → pick that file.
+3. Notes merge last-write-wins; desk layout (placements / dismissals) comes along. Body conflicts offer **Restore local**.
+
+Notes-only **Export / Import JSON** still exists for backups without desk state.
 
 ## Tech stack
 
@@ -50,7 +59,7 @@ npm run test:e2e
 npm run ci
 ```
 
-GitHub Actions runs `check`, unit tests, production build, and the Playwright smoke on every pull request and push to `main`.
+GitHub Actions runs `check`, unit tests, production build, and Playwright e2e (smoke + linked) on every pull request and push to `main`. Sync bundle merge is covered by unit tests.
 
 ## License
 
