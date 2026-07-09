@@ -656,6 +656,109 @@ function snapAway(
 	return { x: sx, y: sy };
 }
 
+/**
+ * Snap every rect to the nearest grid point, then push overlaps apart
+ * while staying on the lattice. Earlier (top-left) cards stay preferred.
+ */
+export function snapRectsWithoutOverlap(
+	rects: Rect[],
+	opts?: { gap?: number; grid?: number }
+): Map<string, { x: number; y: number }> {
+	const out = new Map<string, { x: number; y: number }>();
+	if (rects.length === 0) return out;
+	const gap = opts?.gap ?? BUMP_GAP;
+	const grid = opts?.grid ?? GRID;
+
+	const current: BumpRect[] = rects.map((r) => {
+		const s = snapPoint(r.x, r.y, grid);
+		return { id: r.id, x: s.x, y: s.y, w: r.w, h: r.h };
+	});
+	current.sort((a, b) => a.y - b.y || a.x - b.x || a.id.localeCompare(b.id));
+
+	const byId = new Map(current.map((r) => [r.id, r]));
+
+	const applyMoved = (moved: Map<string, { x: number; y: number }>) => {
+		let changed = false;
+		for (const [id, pos] of moved) {
+			const rect = byId.get(id);
+			if (!rect) continue;
+			if (rect.x === pos.x && rect.y === pos.y) continue;
+			rect.x = pos.x;
+			rect.y = pos.y;
+			changed = true;
+		}
+		return changed;
+	};
+
+	const anyOverlap = (): boolean => {
+		for (let i = 0; i < current.length; i++) {
+			for (let j = i + 1; j < current.length; j++) {
+				if (rectsOverlapWithGap(current[i]!, current[j]!, gap)) return true;
+			}
+		}
+		return false;
+	};
+
+	// Reading order: keep earlier cards fixed, bump later ones clear.
+	for (let i = 0; i < current.length; i++) {
+		const anchor = current[i]!;
+		const others = current.slice(i + 1);
+		if (others.length === 0) continue;
+		applyMoved(bumpOverlappingRects(anchor, others, gap));
+	}
+
+	// One settle pass only if overlaps remain (dense packs).
+	if (anyOverlap()) {
+		for (let i = 0; i < current.length; i++) {
+			const anchor = current[i]!;
+			const others = current.filter((r) => r.id !== anchor.id);
+			if (!applyMoved(bumpOverlappingRects(anchor, others, gap))) continue;
+			if (!anyOverlap()) break;
+		}
+	}
+
+	for (const rect of current) {
+		out.set(rect.id, { x: rect.x, y: rect.y });
+	}
+	return out;
+}
+
+/**
+ * Keep `moved` cards fixed (already snapped) and push overlapping neighbors clear.
+ * Returns positions for any card that changed (moved + bumped).
+ */
+export function resolveOverlapsKeepingFixed(
+	all: Rect[],
+	fixedIds: Iterable<string>,
+	gap = BUMP_GAP
+): Map<string, { x: number; y: number }> {
+	const out = new Map<string, { x: number; y: number }>();
+	const fixed = new Set(fixedIds);
+	if (all.length === 0 || fixed.size === 0) return out;
+
+	const byId = new Map(all.map((r) => [r.id, { ...r }]));
+	for (const id of fixed) {
+		const anchor = byId.get(id);
+		if (!anchor) continue;
+		const others = [...byId.values()].filter((r) => r.id !== id);
+		const moved = bumpOverlappingRects(anchor, others, gap);
+		for (const [mid, pos] of moved) {
+			const rect = byId.get(mid);
+			if (!rect) continue;
+			rect.x = pos.x;
+			rect.y = pos.y;
+		}
+	}
+
+	for (const rect of byId.values()) {
+		const origin = all.find((r) => r.id === rect.id);
+		if (!origin) continue;
+		if (origin.x === rect.x && origin.y === rect.y) continue;
+		out.set(rect.id, { x: rect.x, y: rect.y });
+	}
+	return out;
+}
+
 const SNAP_PREF_KEY = 'mash.canvasSnap';
 
 export function loadSnapPref(): boolean {

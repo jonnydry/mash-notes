@@ -1,6 +1,8 @@
 /**
- * Lightweight undo stack for canvas layout mutations (move / resize / align).
+ * Lightweight undo stack for canvas layout + flow-edge mutations.
  */
+
+import type { CanvasEdge } from './types';
 
 export type CanvasLayoutSnapshot = {
 	itemId: string;
@@ -14,9 +16,31 @@ export type CanvasUndoEntry = {
 	label: string;
 	before: CanvasLayoutSnapshot[];
 	after: CanvasLayoutSnapshot[];
+	/** Full edge list before the action (when links changed). */
+	edgesBefore?: CanvasEdge[];
+	/** Full edge list after the action. */
+	edgesAfter?: CanvasEdge[];
 };
 
 const MAX_ENTRIES = 40;
+
+function layoutChanged(before: CanvasLayoutSnapshot[], after: CanvasLayoutSnapshot[]): boolean {
+	if (before.length === 0 && after.length === 0) return false;
+	return before.some((b) => {
+		const a = after.find((x) => x.itemId === b.itemId);
+		if (!a) return true;
+		return a.x !== b.x || a.y !== b.y || a.w !== b.w || a.h !== b.h;
+	});
+}
+
+function edgesChanged(before?: CanvasEdge[], after?: CanvasEdge[]): boolean {
+	if (!before && !after) return false;
+	const b = before ?? [];
+	const a = after ?? [];
+	if (b.length !== a.length) return true;
+	const aIds = new Set(a.map((e) => e.id));
+	return b.some((e) => !aIds.has(e.id));
+}
 
 export class CanvasUndoStack {
 	private stack: CanvasUndoEntry[] = [];
@@ -35,12 +59,9 @@ export class CanvasUndoStack {
 	}
 
 	push(entry: CanvasUndoEntry): void {
-		if (entry.before.length === 0) return;
-		const meaningful = entry.before.some((b) => {
-			const a = entry.after.find((x) => x.itemId === b.itemId);
-			if (!a) return true;
-			return a.x !== b.x || a.y !== b.y || a.w !== b.w || a.h !== b.h;
-		});
+		const meaningful =
+			layoutChanged(entry.before, entry.after) ||
+			edgesChanged(entry.edgesBefore, entry.edgesAfter);
 		if (!meaningful) return;
 		this.stack.push(entry);
 		if (this.stack.length > MAX_ENTRIES) this.stack.shift();

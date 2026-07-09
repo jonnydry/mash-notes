@@ -117,6 +117,7 @@ export async function createNote(partial: {
 	links?: string[];
 	mashedFrom?: string[];
 	pinned?: 0 | 1;
+	textAlign?: Note['textAlign'];
 }): Promise<Note> {
 	const note: Note = {
 		id: newId(),
@@ -128,7 +129,8 @@ export async function createNote(partial: {
 		mashedFrom: partial.mashedFrom,
 		created: Date.now(),
 		modified: Date.now(),
-		pinned: partial.pinned === 1 ? 1 : 0
+		pinned: partial.pinned === 1 ? 1 : 0,
+		textAlign: partial.textAlign
 	};
 
 	await db.notes.add(note);
@@ -364,6 +366,24 @@ export async function removeCanvasEdge(id: string): Promise<void> {
 	if (edge) {
 		await db.canvases.update(edge.canvasId, { modified: Date.now() });
 	}
+}
+
+/** Replace all edges on a canvas (used by undo/redo of link actions). */
+export async function replaceCanvasEdges(
+	canvasId: string,
+	edges: CanvasEdge[]
+): Promise<void> {
+	await db.transaction('rw', db.canvasEdges, db.canvases, async () => {
+		const existing = await db.canvasEdges.where('canvasId').equals(canvasId).toArray();
+		if (existing.length > 0) {
+			await db.canvasEdges.bulkDelete(existing.map((e) => e.id));
+		}
+		const next = edges.filter((e) => e.canvasId === canvasId);
+		if (next.length > 0) {
+			await db.canvasEdges.bulkAdd(next);
+		}
+		await db.canvases.update(canvasId, { modified: Date.now() });
+	});
 }
 
 /** Delete all flow edges that touch a canvas item (as source or target). */

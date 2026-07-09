@@ -13,6 +13,8 @@
 		panToShowRect,
 		saveSnapPref,
 		snapPoint,
+		snapRectsWithoutOverlap,
+		resolveOverlapsKeepingFixed,
 		snapSize,
 		viewCenterPlacement
 	} from '$lib/canvas-geom';
@@ -20,10 +22,13 @@
 	import StickyEditor from '$lib/components/StickyEditor.svelte';
 	import { linkSummary } from '$lib/links';
 	import {
+		flowEdgePath,
 		flowOutlineMarkdown,
 		flowPageBadges,
 		listFlowSequences
 	} from '$lib/canvas-flow';
+	import { printSequenceAsPdf } from '$lib/mash';
+	import { exportSequencePdf as downloadSequencePdf } from '$lib/sequence-pdf';
 	import {
 		detectFillOrSnapZone,
 		stageContentRect,
@@ -70,6 +75,10 @@
 		edges?: CanvasEdge[];
 		onConnectFlow?: (fromItemId: string, toItemId: string) => void | Promise<void>;
 		onDisconnectFlow?: (edgeId: string) => void | Promise<void>;
+		/** Clear all links in a sequence (by index in listFlowSequences). */
+		onUnstitchSequence?: (seqIndex: number) => void | Promise<void>;
+		/** Re-pack sequences with the current flow gap (called when entering Sequence mode). */
+		onRelayoutFlow?: () => void | Promise<void>;
 		/** Empty-state mascot + copy for this board (desk vs pinned). */
 		emptyMascot?: {
 			src: string;
@@ -111,7 +120,12 @@
 		onBodyChange: (noteId: string, body: string) => void;
 		onMetaChange?: (
 			noteId: string,
-			patch: { folder?: string; tags?: string[]; pinned?: 0 | 1 }
+			patch: {
+				folder?: string;
+				tags?: string[];
+				pinned?: 0 | 1;
+				textAlign?: 'left' | 'center' | 'right';
+			}
 		) => void;
 		onWikilink?: (target: string) => void;
 		/** Open peel Linked for this note (links chip). */
@@ -140,6 +154,8 @@
 		edges = [],
 		onConnectFlow,
 		onDisconnectFlow,
+		onUnstitchSequence,
+		onRelayoutFlow,
 		emptyMascot = {
 			src: '/icons/mash-empty-mascot.png',
 			srcset: '/icons/mash-empty-mascot.png 1x, /icons/mash-empty-mascot@2x.png 2x',
@@ -234,24 +250,78 @@
 			const from = byId.get(edge.fromItemId);
 			const to = byId.get(edge.toItemId);
 			if (!from || !to) continue;
-			const fw = from.w ?? COLLAPSED_W;
-			const fh = from.h ?? COLLAPSED_H;
-			const tw = to.w ?? COLLAPSED_W;
-			const th = to.h ?? COLLAPSED_H;
-			const x1 = from.x + fw;
-			const y1 = from.y + fh / 2;
-			const x2 = to.x;
-			const y2 = to.y + th / 2;
-			const cx = (x1 + x2) / 2;
-			paths.push({
-				id: edge.id,
-				d: `M ${x1} ${y1} C ${cx} ${y1}, ${cx} ${y2}, ${x2} ${y2}`,
-				midX: (x1 + x2) / 2,
-				midY: (y1 + y2) / 2
-			});
+			const fs = cardSize(from, from.noteId);
+			const ts = cardSize(to, to.noteId);
+			const path = flowEdgePath(
+				{ x: from.x, y: from.y, w: fs.w, h: fs.h },
+				{ x: to.x, y: to.y, w: ts.w, h: ts.h }
+			);
+			paths.push({ id: edge.id, ...path });
 		}
 		return paths;
 	});
+
+	function exitFlowMode() {
+		flowMode = false;
+		flowFromItemId = null;
+	}
+
+	/** Prefer an explicit index; otherwise the first valid sequence. */
+	function resolveExportSeqIndex(preferred = 0): number {
+		const seqs = flowBoard.sequences;
+		if (seqs.length === 0) return -1;
+		const pref = seqs[preferred];
+		if (pref && !pref.invalid && pref.pages.length > 0) return preferred;
+		const firstValid = seqs.findIndex((s) => !s.invalid && s.pages.length > 0);
+		return firstValid;
+	}
+
+	function notesForSequence(seqIndex: number): { notes: Note[]; title: string } | null {
+		const seq = flowBoard.sequences[seqIndex];
+		if (!seq || seq.invalid || seq.pages.length === 0) return null;
+		const notes = seq.pages
+			.map((p) => notesById.get(p.noteId))
+			.filter((n): n is Note => Boolean(n));
+		if (notes.length === 0) return null;
+		const title =
+			flowBoard.sequences.length > 1
+				? `Sequence ${seqIndex + 1}`
+				: notes[0]?.title?.trim() || 'Page sequence';
+		return { notes, title };
+	}
+
+	async function exportSequencePdf(seqIndex = 0) {
+		const idx = resolveExportSeqIndex(seqIndex);
+		if (idx < 0) return;
+		const payload = notesForSequence(idx);
+		if (!payload) return;
+		try {
+			const ok = await downloadSequencePdf(payload.notes, payload.title);
+			if (!ok) {
+				console.error('Export PDF failed');
+				return;
+			}
+			exitFlowMode();
+		} catch (e) {
+			console.error(e);
+		}
+	}
+
+	function printSequence(seqIndex = 0) {
+		const idx = resolveExportSeqIndex(seqIndex);
+		if (idx < 0) return;
+		const payload = notesForSequence(idx);
+		if (!payload) return;
+		try {
+			printSequenceAsPdf(payload.notes, payload.title);
+		} catch (e) {
+			console.error(e);
+		}
+	}
+
+	let canExportAnySequence = $derived(
+		flowBoard.sequences.some((s) => !s.invalid && s.pages.length > 0)
+	);
 
 	$effect(() => {
 		if (!expandedNoteId || folderSuggestNoteId !== expandedNoteId) {
@@ -525,12 +595,68 @@
 				moves.push({ itemId: sourceId, x: snapped.x, y: snapped.y });
 			}
 		}
+
+		const willMash = group.length <= 1 && Boolean(targetId) && targetId !== sourceId;
+		const mashImmediate = willMash && hasSeenDragMashConfirm();
+		const beforeById = new Map(group.map((g) => [g.id, { x: g.originX, y: g.originY }]));
+
+		// Snap mode: land dragged cards on the lattice, then only bump
+		// neighbors that collide — avoid full-board reorganize.
+		if (snapEffective && !willMash) {
+			const byMove = new Map(moves.map((m) => [m.itemId, m]));
+			const movedIds = new Set(byMove.keys());
+			const rects = items.map((i) => {
+				const s = cardSize(i, i.noteId);
+				const m = byMove.get(i.id);
+				return {
+					id: i.id,
+					x: m?.x ?? i.x,
+					y: m?.y ?? i.y,
+					w: s.w,
+					h: s.h
+				};
+			});
+			const organized = resolveOverlapsKeepingFixed(rects, movedIds, GRID);
+			const allMoves: Array<{ itemId: string; x: number; y: number }> = [];
+			for (const m of moves) {
+				const bumped = organized.get(m.itemId);
+				allMoves.push({
+					itemId: m.itemId,
+					x: bumped?.x ?? m.x,
+					y: bumped?.y ?? m.y
+				});
+			}
+			for (const [itemId, pos] of organized) {
+				if (movedIds.has(itemId)) continue;
+				allMoves.push({ itemId, x: pos.x, y: pos.y });
+			}
+			const changed = allMoves.filter((m) => {
+				const origin = beforeById.get(m.itemId);
+				const cur = items.find((i) => i.id === m.itemId);
+				const fromX = origin?.x ?? cur?.x;
+				const fromY = origin?.y ?? cur?.y;
+				return fromX !== m.x || fromY !== m.y;
+			});
+			if (changed.length > 0) {
+				const before = changed.map((m) => {
+					const origin = beforeById.get(m.itemId);
+					const cur = items.find((i) => i.id === m.itemId)!;
+					return {
+						itemId: m.itemId,
+						x: origin?.x ?? cur.x,
+						y: origin?.y ?? cur.y
+					};
+				});
+				onMoveMany(changed);
+				onMoveEnd?.(changed, before);
+			}
+			return;
+		}
+
 		if (snapEffective) {
 			onMoveMany(moves);
 		}
 		const before = group.map((g) => ({ itemId: g.id, x: g.originX, y: g.originY }));
-		const willMash = group.length <= 1 && Boolean(targetId) && targetId !== sourceId;
-		const mashImmediate = willMash && hasSeenDragMashConfirm();
 		// Immediate mash clears the undo stack — don't leave a stale move entry.
 		// First-time confirm keeps the move so Cancel → Undo can restore.
 		onMoveEnd?.(moves, before, { recordUndo: !mashImmediate });
@@ -924,6 +1050,32 @@
 		saveSnapPref(snapEnabled);
 	}
 
+	/** Snap every card to the grid and push overlaps apart (undoable Arrange). */
+	export function organizeToSnap() {
+		if (items.length === 0) return;
+		const rects = items.map((i) => {
+			const s = cardSize(i, i.noteId);
+			return { id: i.id, x: i.x, y: i.y, w: s.w, h: s.h };
+		});
+		const next = snapRectsWithoutOverlap(rects);
+		const before = rects.map((r) => ({ itemId: r.id, x: r.x, y: r.y }));
+		const moves = [...next.entries()].map(([itemId, pos]) => ({
+			itemId,
+			x: pos.x,
+			y: pos.y
+		}));
+		const changed = moves.filter((m) => {
+			const cur = items.find((i) => i.id === m.itemId);
+			return !cur || cur.x !== m.x || cur.y !== m.y;
+		});
+		if (changed.length === 0) return;
+		onMoveMany(changed);
+		onMoveEnd?.(
+			changed,
+			before.filter((b) => changed.some((c) => c.itemId === b.itemId))
+		);
+	}
+
 	/**
 	 * Autocomplete for existing folder paths — not a required picker.
 	 * Hide when the only hit is exactly what's already typed (avoids echo menus).
@@ -1073,11 +1225,13 @@
 		function onKeyDown(e: KeyboardEvent) {
 			if (e.key === 'Alt') altHeld = true;
 			if (e.key === 'Escape' && (flowFromItemId || flowMode)) {
+				e.preventDefault();
 				if (flowFromItemId) {
-					e.preventDefault();
 					flowFromItemId = null;
 					return;
 				}
+				exitFlowMode();
+				return;
 			}
 			if (
 				e.key === ' ' &&
@@ -1504,14 +1658,16 @@
 							<StickyEditor
 								body={note.body}
 								noteId={note.id}
+								textAlign={note.textAlign}
 								autofocus={expandFocus !== 'title'}
 								onBodyChange={(b) => onBodyChange(note.id, b)}
+								onTextAlignChange={(align) => onMetaChange?.(note.id, { textAlign: align })}
 								onWikilink={(target) => onWikilink?.(target)}
 							/>
 						</div>
 					{:else}
 						<div
-							class="flex items-start justify-between gap-1 border-b border-[var(--mash-card-edge)] px-2.5 py-1.5"
+							class="mash-card-title-row flex items-start justify-between gap-1 border-b border-[var(--mash-card-edge)] px-2.5 py-1.5"
 						>
 							<span class="flex min-w-0 items-center gap-1 truncate text-xs font-semibold tracking-tight">
 								{#if note.pinned === 1}
@@ -1536,6 +1692,9 @@
 						<div
 							data-card-scroll
 							class="mash-card-preview min-h-0 flex-1 overflow-y-auto overscroll-contain px-2.5 py-2 text-[11px] leading-snug text-[var(--mash-card-muted)]"
+							style="text-align: {note.textAlign === 'center' || note.textAlign === 'right'
+								? note.textAlign
+								: 'left'};"
 							onwheel={(e) => e.stopPropagation()}
 						>
 							{notePreview(note.body, 220)}
@@ -1583,10 +1742,10 @@
 						d={path.d}
 						fill="none"
 						stroke="var(--mash-accent)"
-						stroke-width="2.5"
+						stroke-width="2"
 						stroke-linecap="round"
 						marker-end="url(#mash-flow-arrow)"
-						opacity="0.85"
+						opacity="0.9"
 					/>
 				{/each}
 			</svg>
@@ -1654,6 +1813,7 @@
 					e.stopPropagation();
 					if (snapEnabled) toggleSnap();
 				}}
+				title="Free placement — no grid snap while dragging"
 			>
 				Free
 			</button>
@@ -1664,11 +1824,23 @@
 					e.stopPropagation();
 					if (!snapEnabled) toggleSnap();
 				}}
-				title="Alt temporarily flips mode"
+				title="Snap future drags to the grid (Alt flips temporarily)"
 			>
 				Snap
 			</button>
 		</div>
+		<button
+			type="button"
+			class="mash-board-chip mash-board-chip-btn pointer-events-auto rounded-md px-2 py-1 text-[10px]"
+			onclick={(e) => {
+				e.stopPropagation();
+				organizeToSnap();
+			}}
+			title="Snap all cards to the grid and clear overlaps"
+			disabled={items.length === 0}
+		>
+			Organize
+		</button>
 		<button
 			type="button"
 			class="mash-board-chip mash-board-chip-btn pointer-events-auto rounded-md px-2 py-1 text-[10px] {flowMode
@@ -1676,18 +1848,22 @@
 				: ''}"
 			onclick={(e) => {
 				e.stopPropagation();
-				flowMode = !flowMode;
-				flowFromItemId = null;
+				if (flowMode) exitFlowMode();
+				else {
+					flowMode = true;
+					flowFromItemId = null;
+					void onRelayoutFlow?.();
+				}
 			}}
 			title={flowMode
-				? 'Exit sequence mode'
+				? 'Done — exit sequence mode'
 				: 'Link next page (multiple sequences per board)'}
 			aria-pressed={flowMode}
 		>
 			{flowMode
 				? flowFromItemId
 					? 'Pick next page…'
-					: 'Sequence · pick page'
+					: 'Done'
 				: 'Sequence'}
 		</button>
 		<span
@@ -1872,7 +2048,7 @@
 		</div>
 		<p class="mash-chrome-hint max-w-[10rem] text-center text-[9px] leading-tight text-[var(--mash-chrome-muted)]">
 			{#if flowMode}
-				Next page: click A then B · Esc cancels · × removes · separate chains = separate sequences
+				Click A then B · snaps in order · Unstitch clears links · Export PDF downloads a file
 			{:else}
 				Drag to select · Edge = half editor · Drop into empty half to split · ⌘/Ctrl+scroll zoom
 			{/if}
@@ -1890,22 +2066,74 @@
 						? `Sequence · ${flowBoard.sequences[0].pages.length}p`
 						: `${flowBoard.sequences.length} sequences`}
 				</span>
-				<button
-					type="button"
-					class="mash-board-chip-btn rounded px-1.5 py-0.5 text-[10px] font-semibold text-[var(--mash-chrome-muted)] hover:text-[var(--mash-chrome-ink)]"
-					onclick={async (e) => {
-						e.stopPropagation();
-						const md = flowOutlineMarkdown(flowBoard.sequences, notesById);
-						try {
-							await navigator.clipboard.writeText(md);
-						} catch {
-							/* ignore */
-						}
-					}}
-					title="Copy page outline(s)"
-				>
-					Copy outline
-				</button>
+				<div class="flex items-center gap-1">
+					{#if flowMode}
+						<button
+							type="button"
+							class="mash-board-chip-btn rounded px-1.5 py-0.5 text-[10px] font-semibold text-[var(--mash-chrome-muted)] hover:text-[var(--mash-chrome-ink)]"
+							onclick={(e) => {
+								e.stopPropagation();
+								exitFlowMode();
+							}}
+							title="Finish linking pages"
+						>
+							Done
+						</button>
+					{/if}
+					{#if flowBoard.sequences.length === 1}
+						<button
+							type="button"
+							class="mash-board-chip-btn rounded px-1.5 py-0.5 text-[10px] font-semibold text-[var(--mash-chrome-muted)] hover:text-[var(--mash-chrome-ink)]"
+							onclick={(e) => {
+								e.stopPropagation();
+								void onUnstitchSequence?.(0);
+							}}
+							title="Remove all links in this sequence"
+						>
+							Unstitch
+						</button>
+					{/if}
+					<button
+						type="button"
+						class="mash-board-chip-btn rounded px-1.5 py-0.5 text-[10px] font-semibold text-[var(--mash-accent-bright)] hover:text-[var(--mash-chrome-ink)]"
+						onclick={(e) => {
+							e.stopPropagation();
+							void exportSequencePdf(0);
+						}}
+						title="Download PDF — one note per page"
+						disabled={!canExportAnySequence}
+					>
+						Export PDF
+					</button>
+					<button
+						type="button"
+						class="mash-board-chip-btn rounded px-1.5 py-0.5 text-[10px] font-semibold text-[var(--mash-chrome-muted)] hover:text-[var(--mash-chrome-ink)]"
+						onclick={(e) => {
+							e.stopPropagation();
+							printSequence(0);
+						}}
+						title="Open print preview (Save as PDF from the dialog)"
+						disabled={!canExportAnySequence}
+					>
+						Print…
+					</button>
+					<button
+						type="button"
+						class="mash-board-chip-btn rounded px-1.5 py-0.5 text-[10px] font-semibold text-[var(--mash-chrome-muted)] hover:text-[var(--mash-chrome-ink)]"
+						onclick={async (e) => {
+							e.stopPropagation();
+							const md = flowOutlineMarkdown(flowBoard.sequences, notesById);
+							try {
+								await navigator.clipboard.writeText(md);
+							} catch {
+								/* ignore */
+							}
+						}}
+						title="Copy page outline(s)"
+					>
+						Copy
+					</button>
+				</div>
 			</div>
 			{#each flowBoard.sequences as seq, si (seq.id)}
 				<div class="mash-flow-seq" class:is-invalid={seq.invalid}>
@@ -1913,6 +2141,41 @@
 						<p class="mash-flow-seq-label">
 							Seq {si + 1}{#if seq.invalid}
 								<span class="warn"> · fix links</span>{/if}
+							<button
+								type="button"
+								class="mash-board-chip-btn ml-1 rounded px-1 py-0 text-[9px] font-semibold text-[var(--mash-chrome-muted)] hover:text-[var(--mash-chrome-ink)]"
+								onclick={(e) => {
+									e.stopPropagation();
+									void onUnstitchSequence?.(si);
+								}}
+								title="Remove all links in this sequence"
+							>
+								Unstitch
+							</button>
+							{#if !seq.invalid}
+								<button
+									type="button"
+									class="mash-board-chip-btn ml-1 rounded px-1 py-0 text-[9px] font-semibold text-[var(--mash-accent-bright)]"
+									onclick={(e) => {
+										e.stopPropagation();
+										void exportSequencePdf(si);
+									}}
+									title="Download this sequence as PDF"
+								>
+									PDF
+								</button>
+								<button
+									type="button"
+									class="mash-board-chip-btn ml-1 rounded px-1 py-0 text-[9px] font-semibold text-[var(--mash-chrome-muted)]"
+									onclick={(e) => {
+										e.stopPropagation();
+										printSequence(si);
+									}}
+									title="Print this sequence"
+								>
+									Print
+								</button>
+							{/if}
 						</p>
 					{/if}
 					<ol class="mash-flow-strip-list">

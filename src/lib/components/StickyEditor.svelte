@@ -2,17 +2,29 @@
 	/**
 	 * Sticky-native editor for canvas bubbles.
 	 * Edit / preview toggle with safe markdown + clickable wikilinks.
-	 * Tiny write toolbar: bold, list, [[link]].
+	 * Tiny write toolbar: bold, list, [[link]], text align.
 	 */
-	import { Bold, Eye, Link2, List, Pencil } from 'lucide-svelte';
+	import {
+		AlignCenter,
+		AlignLeft,
+		AlignRight,
+		Bold,
+		Eye,
+		Link2,
+		List,
+		Pencil
+	} from 'lucide-svelte';
 	import { renderMarkdown } from '$lib/markdown';
+	import type { TextAlign } from '$lib/types';
 
 	interface Props {
 		body: string;
 		noteId: string;
+		textAlign?: TextAlign;
 		autofocus?: boolean;
 		mode?: 'edit' | 'preview';
 		onBodyChange: (body: string) => void;
+		onTextAlignChange?: (align: TextAlign) => void;
 		onModeChange?: (mode: 'edit' | 'preview') => void;
 		onWikilink?: (target: string) => void;
 	}
@@ -20,9 +32,11 @@
 	let {
 		body,
 		noteId,
+		textAlign = 'left',
 		autofocus = true,
 		mode = $bindable<'edit' | 'preview'>('edit'),
 		onBodyChange,
+		onTextAlignChange,
 		onModeChange,
 		onWikilink
 	}: Props = $props();
@@ -30,7 +44,12 @@
 	let bodyEl: HTMLTextAreaElement | undefined = $state();
 	let focusedNoteId: string | null = null;
 
-	let previewHtml = $derived(renderMarkdown(body || ''));
+	let previewHtml = $derived(
+		mode === 'preview' ? renderMarkdown(body || '') : ''
+	);
+	let align = $derived(
+		textAlign === 'center' || textAlign === 'right' ? textAlign : 'left'
+	);
 
 	$effect(() => {
 		if (autofocus && mode === 'edit' && noteId !== focusedNoteId) {
@@ -45,6 +64,10 @@
 		if (next === 'edit') {
 			requestAnimationFrame(() => bodyEl?.focus());
 		}
+	}
+
+	function setAlign(next: TextAlign) {
+		onTextAlignChange?.(next);
 	}
 
 	function onPreviewClick(e: MouseEvent) {
@@ -161,6 +184,49 @@
 				>
 					<Link2 class="h-3 w-3" />
 				</button>
+				<span class="mash-sticky-toolbar-sep" aria-hidden="true"></span>
+				<button
+					type="button"
+					class="mash-sticky-mode-btn"
+					class:is-active={align === 'left'}
+					onclick={(e) => {
+						e.stopPropagation();
+						setAlign('left');
+					}}
+					aria-label="Align left"
+					aria-pressed={align === 'left'}
+					title="Align left"
+				>
+					<AlignLeft class="h-3 w-3" />
+				</button>
+				<button
+					type="button"
+					class="mash-sticky-mode-btn"
+					class:is-active={align === 'center'}
+					onclick={(e) => {
+						e.stopPropagation();
+						setAlign('center');
+					}}
+					aria-label="Align center"
+					aria-pressed={align === 'center'}
+					title="Align center"
+				>
+					<AlignCenter class="h-3 w-3" />
+				</button>
+				<button
+					type="button"
+					class="mash-sticky-mode-btn"
+					class:is-active={align === 'right'}
+					onclick={(e) => {
+						e.stopPropagation();
+						setAlign('right');
+					}}
+					aria-label="Align right"
+					aria-pressed={align === 'right'}
+					title="Align right"
+				>
+					<AlignRight class="h-3 w-3" />
+				</button>
 			</div>
 		{:else}
 			<span class="px-1 text-[9px] text-[var(--mash-card-muted)]">Preview</span>
@@ -203,7 +269,7 @@
 				value={body}
 				placeholder="Write here… Use [[Note title]] for links."
 				class="mash-sticky-body absolute inset-0 h-full w-full resize-none overflow-y-auto overscroll-contain bg-transparent px-3 py-2 text-[13px] leading-relaxed outline-none"
-				style="color: var(--mash-card-ink);"
+				style="color: var(--mash-card-ink); text-align: {align};"
 				oninput={(e) => onBodyChange((e.currentTarget as HTMLTextAreaElement).value)}
 				onpointerdown={(e) => e.stopPropagation()}
 				onwheel={(e) => e.stopPropagation()}
@@ -216,7 +282,7 @@
 		<div
 			data-card-scroll
 			class="mash-sticky-preview min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-2 text-[13px] leading-relaxed"
-			style="color: var(--mash-card-ink);"
+			style="color: var(--mash-card-ink); text-align: {align};"
 			role="article"
 			onclick={onPreviewClick}
 			onpointerdown={(e) => e.stopPropagation()}
@@ -240,6 +306,14 @@
 	}
 	.mash-sticky-body::placeholder {
 		color: var(--mash-card-muted, #6b5e4e);
+		opacity: 0.7;
+	}
+	.mash-sticky-toolbar-sep {
+		display: inline-block;
+		width: 1px;
+		height: 14px;
+		margin: 0 2px;
+		background: var(--mash-card-edge-strong);
 		opacity: 0.7;
 	}
 	.mash-sticky-mode-btn {
@@ -300,6 +374,7 @@
 		border-radius: 8px;
 		background: var(--mash-card-hover);
 		font-size: 0.85em;
+		text-align: left;
 	}
 	.mash-sticky-preview :global(pre code) {
 		padding: 0;

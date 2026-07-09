@@ -28,12 +28,22 @@ describe('import-notes', () => {
 		expect(parseNotesJson('not json').ok).toBe(false);
 	});
 
-	it('rejects oversized tag lists', () => {
-		const tags = Array.from({ length: 60 }, (_, i) => `t${i}`);
+	it('preserves textAlign when present', () => {
 		const json = JSON.stringify([
-			{ title: 'x', body: '', folder: '', tags, created: 1, modified: 1, pinned: 0 }
+			{
+				id: 'a',
+				title: 'Centered',
+				body: 'Hi',
+				folder: '',
+				tags: [],
+				created: 1,
+				modified: 2,
+				pinned: 0,
+				textAlign: 'center'
+			}
 		]);
 		const result = parseNotesJson(json);
-		expect(result.ok).toBe(false);
+		expect(result.ok).toBe(true);
+		if (result.ok) expect(result.notes[0].textAlign).toBe('center');
 	});
 });

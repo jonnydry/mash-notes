@@ -11,6 +11,8 @@ import {
 	panToShowRect,
 	bumpOverlappingRects,
 	gridSlotPosition,
+	snapRectsWithoutOverlap,
+	resolveOverlapsKeepingFixed,
 	loadSnapPref,
 	saveSnapPref,
 	GRID,
@@ -271,5 +273,38 @@ describe('canvas-geom', () => {
 		expect(loadSnapPref()).toBe(false);
 		saveSnapPref(true);
 		expect(loadSnapPref()).toBe(true);
+	});
+
+	it('snapRectsWithoutOverlap snaps to grid and clears overlaps', () => {
+		const next = snapRectsWithoutOverlap([
+			{ id: 'a', x: 10, y: 10, w: 220, h: 120 },
+			{ id: 'b', x: 30, y: 20, w: 220, h: 120 }
+		]);
+		const a = next.get('a')!;
+		const b = next.get('b')!;
+		expect(a.x % GRID).toBe(0);
+		expect(a.y % GRID).toBe(0);
+		expect(b.x % GRID).toBe(0);
+		expect(b.y % GRID).toBe(0);
+		// No overlap with GRID gap
+		const overlapX = a.x < b.x + 220 + GRID && b.x < a.x + 220 + GRID;
+		const overlapY = a.y < b.y + 120 + GRID && b.y < a.y + 120 + GRID;
+		expect(overlapX && overlapY).toBe(false);
+	});
+
+	it('resolveOverlapsKeepingFixed keeps moved cards and bumps neighbors', () => {
+		const next = resolveOverlapsKeepingFixed(
+			[
+				{ id: 'a', x: 0, y: 0, w: 220, h: 120 },
+				{ id: 'b', x: 24, y: 24, w: 220, h: 120 }
+			],
+			['a'],
+			GRID
+		);
+		expect(next.has('a')).toBe(false);
+		expect(next.has('b')).toBe(true);
+		const b = next.get('b')!;
+		expect(b.x % GRID).toBe(0);
+		expect(b.y % GRID).toBe(0);
 	});
 });

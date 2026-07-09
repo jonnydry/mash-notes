@@ -273,7 +273,9 @@ body {
 	box-shadow: var(--mash-shadow-card);
 	border: 1px solid var(--mash-card-edge);
 	cursor: grab;
-	overflow: hidden;
+	/* Visible so page badges can sit on the corner without clipping;
+	   inner preview / editor panes still clip their own overflow. */
+	overflow: visible;
 	transition:
 		box-shadow 160ms ease,
 		transform 160ms ease,
@@ -298,7 +300,7 @@ body {
 	z-index: 5;
 	box-shadow: var(--mash-shadow-lift);
 	border-color: color-mix(in srgb, var(--mash-accent) 40%, transparent);
-	overflow: hidden;
+	overflow: visible;
 	min-width: 280px;
 	min-height: 220px;
 }
@@ -413,6 +415,10 @@ body {
 	color: var(--mash-chrome-ink);
 	font-weight: 600;
 }
+.mash-board-chip-btn:disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
+}
 .mash-note-card.is-mash-target {
 	border-color: color-mix(in srgb, var(--mash-accent) 85%, transparent);
 	box-shadow:
@@ -489,11 +495,15 @@ body {
 }
 .mash-flow-page-badge {
 	position: absolute;
-	top: -0.4rem;
-	left: -0.35rem;
-	z-index: 5;
-	min-width: 1.35rem;
-	padding: 0.1rem 0.35rem;
+	top: 6px;
+	left: 6px;
+	z-index: 6;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 1.4rem;
+	height: 1.15rem;
+	padding: 0 0.4rem;
 	border-radius: 999px;
 	border: 1px solid color-mix(in srgb, var(--mash-accent) 55%, transparent);
 	background: var(--mash-accent);
@@ -501,10 +511,14 @@ body {
 	font-size: 9px;
 	font-weight: 700;
 	font-variant-numeric: tabular-nums;
-	line-height: 1.2;
+	line-height: 1;
 	text-align: center;
 	pointer-events: none;
 	box-shadow: var(--mash-shadow-card);
+}
+.mash-note-card:has(.mash-flow-page-badge) > [data-drag-handle],
+.mash-note-card:has(.mash-flow-page-badge) > .mash-card-title-row {
+	padding-left: 2.1rem;
 }
 .mash-note-card.is-mash-confirming {
 	z-index: 12;

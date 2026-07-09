@@ -21,7 +21,12 @@
 		onBodyChange: (noteId: string, body: string) => void;
 		onMetaChange?: (
 			noteId: string,
-			patch: { folder?: string; tags?: string[]; pinned?: 0 | 1 }
+			patch: {
+				folder?: string;
+				tags?: string[];
+				pinned?: 0 | 1;
+				textAlign?: 'left' | 'center' | 'right';
+			}
 		) => void;
 		onWikilink?: (target: string) => void;
 	}
@@ -341,8 +346,10 @@
 						<StickyEditor
 							body={note.body}
 							noteId={note.id}
+							textAlign={note.textAlign}
 							autofocus={stage.activeNoteId === note.id}
 							onBodyChange={(b) => onBodyChange(note.id, b)}
+							onTextAlignChange={(align) => onMetaChange?.(note.id, { textAlign: align })}
 							onWikilink={(target) => onWikilink?.(target)}
 						/>
 					</div>

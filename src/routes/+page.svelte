@@ -539,8 +539,8 @@
 			const tag = (e.target as HTMLElement)?.tagName;
 			if (tag !== 'INPUT' && tag !== 'TEXTAREA') {
 				e.preventDefault();
-				if (e.shiftKey) canvas.redoCanvasLayout();
-				else canvas.undoCanvasLayout();
+				if (e.shiftKey) void canvas.redoCanvasLayout();
+				else void canvas.undoCanvasLayout();
 				return;
 			}
 		}
@@ -938,6 +938,8 @@
 					edges={canvas.canvasEdges}
 					onConnectFlow={(from, to) => void canvas.connectFlowEdge(from, to)}
 					onDisconnectFlow={(id) => void canvas.disconnectFlowEdge(id)}
+					onUnstitchSequence={(i) => void canvas.unstitchSequence(i)}
+					onRelayoutFlow={() => void canvas.relayoutFlowSequences()}
 					emptyMascot={
 						peel.currentFilter.type === 'pinned'
 							? {
@@ -980,8 +982,8 @@
 					}}
 					canUndo={canvas.canCanvasUndo}
 					canRedo={canvas.canCanvasRedo}
-					onUndo={canvas.undoCanvasLayout}
-					onRedo={canvas.redoCanvasLayout}
+					onUndo={() => void canvas.undoCanvasLayout()}
+					onRedo={() => void canvas.redoCanvasLayout()}
 					bind:snapEnabled
 				/>
 				<EditorStage
@@ -1016,6 +1018,7 @@
 					{snapEnabled}
 					onClose={() => (settingsOpen = false)}
 					onSnapChange={setSnapEnabled}
+					onOrganize={() => canvas.canvasBoard?.organizeToSnap?.()}
 					onImportMarkdown={() => markdownImportInputEl?.click()}
 					onImportJson={() => importInputEl?.click()}
 					onExportJson={() => exportNotesJson(library.notes, 'mash-notes-export.json')}
