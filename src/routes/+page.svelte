@@ -22,9 +22,7 @@
 		StretchHorizontal,
 		StretchVertical,
 		LayoutGrid,
-		Columns2,
-		Moon,
-		Sun
+		Columns2
 	} from 'lucide-svelte';
 	import MashDock from '$lib/components/MashDock.svelte';
 	import PeelScanner from '$lib/components/PeelScanner.svelte';
@@ -875,12 +873,28 @@
 				class="mash-theme-toggle mash-focus"
 				onclick={() => theme.toggle()}
 				aria-label={theme.mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-				title={theme.mode === 'dark' ? 'Day kitchen' : 'Night kitchen'}
+				title={theme.mode === 'dark' ? 'Night kitchen — switch to day' : 'Day kitchen — switch to night'}
 			>
 				{#if theme.mode === 'dark'}
-					<Sun class="h-4 w-4" />
+					<img
+						src="/icons/mash-flame-night.png"
+						srcset="/icons/mash-flame-night.png 1x, /icons/mash-flame-night@2x.png 2x"
+						alt=""
+						width="40"
+						height="40"
+						class="mash-theme-flame"
+						draggable="false"
+					/>
 				{:else}
-					<Moon class="h-4 w-4" />
+					<img
+						src="/icons/mash-flame-day.png"
+						srcset="/icons/mash-flame-day.png 1x, /icons/mash-flame-day@2x.png 2x"
+						alt=""
+						width="40"
+						height="40"
+						class="mash-theme-flame"
+						draggable="false"
+					/>
 				{/if}
 			</button>
 			<div

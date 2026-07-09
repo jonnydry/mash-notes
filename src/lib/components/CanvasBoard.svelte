@@ -766,16 +766,21 @@
 	function onWheel(e: WheelEvent) {
 		if (!boardEl) return;
 
-		// ⌘/Ctrl + scroll → zoom toward cursor
+		// ⌘/Ctrl + scroll / trackpad pinch → zoom toward cursor
 		if (e.ctrlKey || e.metaKey) {
 			e.preventDefault();
 			const rect = boardEl.getBoundingClientRect();
 			const mx = e.clientX - rect.left;
 			const my = e.clientY - rect.top;
 			const before = scale;
-			const factor = e.deltaY > 0 ? 0.9 : 1.1;
+			// Normalize wheel units, then apply a soft exponential step.
+			// Trackpad pinch sends many small pixel deltas; mouse wheels send larger line/page ticks.
+			const raw =
+				e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * rect.height : e.deltaY;
+			const ZOOM_SENSITIVITY = 0.0018;
+			const factor = Math.exp(-raw * ZOOM_SENSITIVITY);
 			const next = Math.min(2, Math.max(0.4, scale * factor));
-			if (next === before) return;
+			if (Math.abs(next - before) < 0.0005) return;
 			panX = mx - ((mx - panX) * next) / before;
 			panY = my - ((my - panY) * next) / before;
 			scale = next;
