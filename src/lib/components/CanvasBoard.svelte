@@ -14,7 +14,6 @@
 		saveSnapPref,
 		snapPoint,
 		snapRectsWithoutOverlap,
-		resolveOverlapsKeepingFixed,
 		snapSize,
 		viewCenterPlacement
 	} from '$lib/canvas-geom';
@@ -25,6 +24,7 @@
 		flowEdgePath,
 		flowOutlineMarkdown,
 		flowPageBadges,
+		invalidSequenceEdgeIds,
 		listFlowSequences
 	} from '$lib/canvas-flow';
 	import { printSequenceAsPdf } from '$lib/mash';
@@ -66,6 +66,8 @@
 		items: CanvasItem[];
 		notesById: Map<string, Note>;
 		selectedIds: Set<string>;
+		/** Primary selected note — receives tabindex=0 for keyboard focus. */
+		primarySelectedId?: string | null;
 		expandedNoteId?: string | null;
 		/** When expanding, focus title (new notes) or body (existing). */
 		expandFocus?: 'title' | 'body' | null;
@@ -73,12 +75,19 @@
 		canvasId?: string | null;
 		/** Directed flow edges between cards on this board. */
 		edges?: CanvasEdge[];
-		onConnectFlow?: (fromItemId: string, toItemId: string) => void | Promise<void>;
+		onConnectFlow?: (
+			fromItemId: string,
+			toItemId: string
+		) => boolean | Promise<boolean>;
 		onDisconnectFlow?: (edgeId: string) => void | Promise<void>;
 		/** Clear all links in a sequence (by index in listFlowSequences). */
 		onUnstitchSequence?: (seqIndex: number) => void | Promise<void>;
 		/** Re-pack sequences with the current flow gap (called when entering Sequence mode). */
-		onRelayoutFlow?: () => void | Promise<void>;
+		onRelayoutFlow?: () => boolean | Promise<boolean>;
+		/** Clear note selection (used when entering Sequence so Mash/Align don’t stack). */
+		onClearSelection?: () => void;
+		/** Brief status toast (Snap overlap hint, Copy outline, etc.). */
+		onToast?: (msg: string) => void;
 		/** Empty-state mascot + copy for this board (desk vs pinned). */
 		emptyMascot?: {
 			src: string;
@@ -139,6 +148,8 @@
 		canRedo?: boolean;
 		onUndo?: () => void;
 		onRedo?: () => void;
+		/** Open the keyboard shortcuts overlay. */
+		onOpenShortcuts?: () => void;
 		/** Shared with Settings — bindable so dock prefs stay in sync. */
 		snapEnabled?: boolean;
 	}
@@ -147,6 +158,7 @@
 		items,
 		notesById,
 		selectedIds,
+		primarySelectedId = null,
 		expandedNoteId = null,
 		expandFocus = null,
 		settlingIds = new Set(),
@@ -156,13 +168,15 @@
 		onDisconnectFlow,
 		onUnstitchSequence,
 		onRelayoutFlow,
+		onClearSelection,
+		onToast,
 		emptyMascot = {
 			src: '/icons/mash-empty-mascot.png',
 			srcset: '/icons/mash-empty-mascot.png 1x, /icons/mash-empty-mascot@2x.png 2x',
 			width: 116,
 			height: 200,
 			title: 'Drop notes here',
-			copy: 'Drag notes from the tray onto the canvas. Double-click to edit.'
+			copy: 'Drag notes from the tray onto the canvas. Double-click to open the large editor.'
 		},
 		onSelect,
 		onSelectNotes,
@@ -192,6 +206,7 @@
 		canRedo = false,
 		onUndo,
 		onRedo,
+		onOpenShortcuts,
 		// Default from storage when unbound; parent bind:snapEnabled owns the live value.
 		snapEnabled = $bindable(loadSnapPref())
 	}: Props = $props();
@@ -235,9 +250,77 @@
 	let snapEffective = $derived(altHeld ? !snapEnabled : snapEnabled);
 	let flowMode = $state(false);
 	let flowFromItemId = $state<string | null>(null);
+	/** Sequence whose end-card menu stays open (invalid repair / click). */
+	let pinnedFlowMenuSeqId = $state<string | null>(null);
+	let hoveredFlowMenuSeqId = $state<string | null>(null);
+	let flowMenuLeaveTimer: ReturnType<typeof setTimeout> | null = null;
+
+	function clearFlowMenuLeaveTimer() {
+		if (flowMenuLeaveTimer) {
+			clearTimeout(flowMenuLeaveTimer);
+			flowMenuLeaveTimer = null;
+		}
+	}
+
+	function setHoveredFlowMenu(seqId: string | null) {
+		clearFlowMenuLeaveTimer();
+		if (seqId) {
+			hoveredFlowMenuSeqId = seqId;
+			return;
+		}
+		// Brief delay so the pointer can cross the card → menu gap.
+		flowMenuLeaveTimer = setTimeout(() => {
+			hoveredFlowMenuSeqId = null;
+			flowMenuLeaveTimer = null;
+		}, 180);
+	}
 
 	let flowBoard = $derived(listFlowSequences(items, edges));
 	let flowBadges = $derived(flowPageBadges(flowBoard.sequences));
+	let invalidEdgeIds = $derived(invalidSequenceEdgeIds(flowBoard.sequences, edges));
+	let primaryFocusNoteId = $derived(
+		primarySelectedId && selectedIds.has(primarySelectedId)
+			? primarySelectedId
+			: ([...selectedIds][0] ?? null)
+	);
+	let invalidExportToastShown = $state(false);
+	let lastAutoExpandedInvalidKey = $state('');
+	let flowEndMenus = $derived.by(() => {
+		return flowBoard.sequences.map((seq, si) => {
+			const last = seq.pages[seq.pages.length - 1];
+			if (!last) return null;
+			const size = cardSize(last, last.noteId);
+			return {
+				seq,
+				si,
+				itemId: last.id,
+				// Sit just past the last card’s right edge (trigger stays hittable).
+				x: last.x + size.w + 4,
+				y: last.y + Math.max(0, (size.h - 28) / 2)
+			};
+		}).filter((m): m is NonNullable<typeof m> => Boolean(m));
+	});
+	let flowEndItemToSeqId = $derived(
+		new Map(flowEndMenus.map((m) => [m.itemId, m.seq.id]))
+	);
+	$effect(() => {
+		const invalidKeys = flowBoard.sequences
+			.map((s, i) => (s.invalid ? `${i}:${s.id}` : null))
+			.filter((k): k is string => Boolean(k));
+		const key = invalidKeys.join('|');
+		if (!key) {
+			lastAutoExpandedInvalidKey = '';
+			invalidExportToastShown = false;
+			if (pinnedFlowMenuSeqId && !flowBoard.sequences.some((s) => s.id === pinnedFlowMenuSeqId)) {
+				pinnedFlowMenuSeqId = null;
+			}
+			return;
+		}
+		if (key === lastAutoExpandedInvalidKey) return;
+		lastAutoExpandedInvalidKey = key;
+		const firstInvalid = flowBoard.sequences.find((s) => s.invalid);
+		if (firstInvalid) pinnedFlowMenuSeqId = firstInvalid.id;
+	});
 	let flowPaths = $derived.by(() => {
 		const byId = new Map(items.map((i) => [i.id, i]));
 		const paths: Array<{
@@ -299,11 +382,14 @@
 			const ok = await downloadSequencePdf(payload.notes, payload.title);
 			if (!ok) {
 				console.error('Export PDF failed');
+				onToast?.('Could not export PDF');
 				return;
 			}
+			onToast?.('PDF downloaded');
 			exitFlowMode();
 		} catch (e) {
 			console.error(e);
+			onToast?.('Could not export PDF');
 		}
 	}
 
@@ -314,14 +400,44 @@
 		if (!payload) return;
 		try {
 			printSequenceAsPdf(payload.notes, payload.title);
+			exitFlowMode();
 		} catch (e) {
 			console.error(e);
+			onToast?.('Could not open print preview');
+		}
+	}
+
+	async function copySequenceOutline(seqIndex?: number) {
+		const seqs =
+			seqIndex === undefined
+				? flowBoard.sequences
+				: flowBoard.sequences[seqIndex]
+					? [flowBoard.sequences[seqIndex]!]
+					: [];
+		if (seqs.length === 0) return;
+		const md = flowOutlineMarkdown(seqs, notesById);
+		try {
+			await navigator.clipboard.writeText(md);
+			onToast?.('Outline copied');
+		} catch {
+			onToast?.('Could not copy outline');
 		}
 	}
 
 	let canExportAnySequence = $derived(
 		flowBoard.sequences.some((s) => !s.invalid && s.pages.length > 0)
 	);
+
+	$effect(() => {
+		if (canExportAnySequence || edges.length === 0) {
+			invalidExportToastShown = false;
+			return;
+		}
+		const hasInvalid = flowBoard.sequences.some((s) => s.invalid);
+		if (!hasInvalid || invalidExportToastShown) return;
+		invalidExportToastShown = true;
+		onToast?.('Fix or Unstitch broken sequences to export');
+	});
 
 	$effect(() => {
 		if (!expandedNoteId || folderSuggestNoteId !== expandedNoteId) {
@@ -425,10 +541,12 @@
 
 		if (flowFromItemId) {
 			flowFromItemId = null;
+			pinnedFlowMenuSeqId = null;
 			onBlankPointerDown?.();
 			return;
 		}
 
+		pinnedFlowMenuSeqId = null;
 		onBlankPointerDown?.();
 
 		// Pan: Space+drag or middle-click (scroll/trackpad also pans).
@@ -536,6 +654,15 @@
 			if (overlaps) hit.push(item.noteId);
 		}
 		onSelectNotes(hit, { additive: marqueeAdditive });
+		if (hit.length > 0 && !pendingMash && !expandedNoteId) {
+			const focusId = hit[0]!;
+			requestAnimationFrame(() => {
+				const el = boardEl?.querySelector<HTMLElement>(
+					`[data-canvas-card][data-note-id="${CSS.escape(focusId)}"]`
+				);
+				el?.focus({ preventScroll: true });
+			});
+		}
 	}
 
 	function finishDrag() {
@@ -556,9 +683,6 @@
 
 		// Edge snap → open in editor stage (single-card drag only).
 		if (group.length <= 1 && boardEl && onOpenInStage) {
-			const rect = boardEl.getBoundingClientRect();
-			// Use last known pointer from the event path via board center fallback:
-			// finishDrag is also called from pointerup; prefer client coords if available.
 			const zone = pendingEdgeZone;
 			pendingEdgeZone = null;
 			onStageSnapPreview?.(null);
@@ -574,7 +698,6 @@
 					return;
 				}
 			}
-			void rect;
 		} else {
 			pendingEdgeZone = null;
 			onStageSnapPreview?.(null);
@@ -600,37 +723,10 @@
 		const mashImmediate = willMash && hasSeenDragMashConfirm();
 		const beforeById = new Map(group.map((g) => [g.id, { x: g.originX, y: g.originY }]));
 
-		// Snap mode: land dragged cards on the lattice, then only bump
-		// neighbors that collide — avoid full-board reorganize.
+		// Snap mode: land dragged cards on the lattice only — leave stationary
+		// neighbors where they are (Organize is the explicit tidy action).
 		if (snapEffective && !willMash) {
-			const byMove = new Map(moves.map((m) => [m.itemId, m]));
-			const movedIds = new Set(byMove.keys());
-			const rects = items.map((i) => {
-				const s = cardSize(i, i.noteId);
-				const m = byMove.get(i.id);
-				return {
-					id: i.id,
-					x: m?.x ?? i.x,
-					y: m?.y ?? i.y,
-					w: s.w,
-					h: s.h
-				};
-			});
-			const organized = resolveOverlapsKeepingFixed(rects, movedIds, GRID);
-			const allMoves: Array<{ itemId: string; x: number; y: number }> = [];
-			for (const m of moves) {
-				const bumped = organized.get(m.itemId);
-				allMoves.push({
-					itemId: m.itemId,
-					x: bumped?.x ?? m.x,
-					y: bumped?.y ?? m.y
-				});
-			}
-			for (const [itemId, pos] of organized) {
-				if (movedIds.has(itemId)) continue;
-				allMoves.push({ itemId, x: pos.x, y: pos.y });
-			}
-			const changed = allMoves.filter((m) => {
+			const changed = moves.filter((m) => {
 				const origin = beforeById.get(m.itemId);
 				const cur = items.find((i) => i.id === m.itemId);
 				const fromX = origin?.x ?? cur?.x;
@@ -649,6 +745,28 @@
 				});
 				onMoveMany(changed);
 				onMoveEnd?.(changed, before);
+
+				const movedIds = new Set(changed.map((m) => m.itemId));
+				const overlapsNeighbor = changed.some((m) => {
+					const moved = items.find((i) => i.id === m.itemId);
+					if (!moved) return false;
+					const ms = cardSize(moved, moved.noteId);
+					for (const other of items) {
+						if (movedIds.has(other.id)) continue;
+						const os = cardSize(other, other.noteId);
+						const overlaps = !(
+							m.x + ms.w <= other.x ||
+							other.x + os.w <= m.x ||
+							m.y + ms.h <= other.y ||
+							other.y + os.h <= m.y
+						);
+						if (overlaps) return true;
+					}
+					return false;
+				});
+				if (overlapsNeighbor) {
+					onToast?.('Overlapping — Organize to tidy');
+				}
 			}
 			return;
 		}
@@ -657,8 +775,9 @@
 			onMoveMany(moves);
 		}
 		const before = group.map((g) => ({ itemId: g.id, x: g.originX, y: g.originY }));
-		// Immediate mash clears the undo stack — don't leave a stale move entry.
-		// First-time confirm keeps the move so Cancel → Undo can restore.
+		// Immediate mash prunes undo entries for removed cards — don't leave a
+		// stale move entry for the source. First-time confirm keeps the move so
+		// Cancel → Undo can restore.
 		onMoveEnd?.(moves, before, { recordUndo: !mashImmediate });
 
 		if (willMash && targetId) {
@@ -824,8 +943,11 @@
 				flowFromItemId = null;
 			} else {
 				const from = flowFromItemId;
-				flowFromItemId = null;
-				void onConnectFlow?.(from, item.id);
+				void (async () => {
+					const ok = await onConnectFlow?.(from, item.id);
+					// Keep chaining from the new last page; on failure keep the source.
+					if (ok === true) flowFromItemId = item.id;
+				})();
 			}
 			return;
 		}
@@ -864,6 +986,14 @@
 				additive: e.metaKey || e.ctrlKey,
 				range: e.shiftKey
 			});
+			if (!pendingMash && !expandedNoteId) {
+				requestAnimationFrame(() => {
+					const el = boardEl?.querySelector<HTMLElement>(
+						`[data-canvas-card][data-note-id="${CSS.escape(item.noteId)}"]`
+					);
+					el?.focus({ preventScroll: true });
+				});
+			}
 		}
 		if (dragItemId) finishDrag();
 	}
@@ -1251,7 +1381,42 @@
 			if (pendingMash) return;
 			const tag = (e.target as HTMLElement)?.tagName;
 			if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+			if (
+				(e.metaKey || e.ctrlKey) &&
+				e.key.toLowerCase() === 'a' &&
+				pointerOverBoard &&
+				items.length > 0
+			) {
+				e.preventDefault();
+				toggleSelectAllOnBoard();
+				return;
+			}
+			if ((e.metaKey || e.ctrlKey) && e.key === '1' && pointerOverBoard) {
+				e.preventDefault();
+				zoomToFit(false);
+				return;
+			}
+			if ((e.metaKey || e.ctrlKey) && e.key === '0' && pointerOverBoard) {
+				e.preventDefault();
+				resetView();
+				return;
+			}
 			if (selectedIds.size === 0) return;
+			if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+				const active = e.target as HTMLElement | null;
+				if (active?.isContentEditable) return;
+				const onCard = active?.closest?.('[data-canvas-card]');
+				const noteId =
+					onCard?.getAttribute('data-note-id') ??
+					primaryFocusNoteId ??
+					[...selectedIds][0] ??
+					null;
+				if (!noteId || flowMode) return;
+				e.preventDefault();
+				if (onOpenInStage) onOpenInStage(noteId, 'maximize');
+				else onExpand(noteId);
+				return;
+			}
 			if (e.key === 'ArrowLeft') {
 				e.preventDefault();
 				nudgeSelection(e.shiftKey ? -4 : -1, 0);
@@ -1288,6 +1453,17 @@
 	});
 
 	let selectedCount = $derived(selectedIds.size);
+
+	let boardNoteIds = $derived([...new Set(items.map((i) => i.noteId))]);
+	let allBoardNotesSelected = $derived(
+		boardNoteIds.length > 0 && boardNoteIds.every((id) => selectedIds.has(id))
+	);
+
+	function toggleSelectAllOnBoard() {
+		if (boardNoteIds.length === 0) return;
+		if (allBoardNotesSelected) onSelectNotes([], { additive: false });
+		else onSelectNotes(boardNoteIds, { additive: false });
+	}
 
 	/** Cull cards far outside the viewport (keep a generous pad for smooth pan). */
 	let visibleItemIds = $derived.by(() => {
@@ -1373,10 +1549,15 @@
 				{@const isMash = Boolean(note.mashedFrom?.length)}
 				{@const links = linkSummary([...notesById.values()], note)}
 				{@const pageBadge = flowBadges.get(item.id)}
+				{@const isPrimaryFocus = primaryFocusNoteId === note.id}
+				{@const endSeqId = flowEndItemToSeqId.get(item.id)}
 				<div
 					data-canvas-card
+					data-note-id={note.id}
 					role="group"
 					aria-label={note.title}
+					aria-selected={selected}
+					tabindex={isPrimaryFocus ? 0 : -1}
 					data-expanded={expanded ? 'true' : undefined}
 					class="mash-note-card absolute flex flex-col rounded-xl {selected
 						? 'is-selected'
@@ -1392,6 +1573,23 @@
 					style="left: {item.x}px; top: {item.y}px; width: {size.w}px; height: {size.h}px;"
 					onpointerdown={(e) => startCardDrag(e, item)}
 					onpointerup={(e) => endCardDrag(e, item)}
+					onpointerenter={() => {
+						if (endSeqId) setHoveredFlowMenu(endSeqId);
+					}}
+					onpointerleave={() => {
+						if (endSeqId) setHoveredFlowMenu(null);
+					}}
+					onkeydown={(e) => {
+						if (e.key !== 'Enter' || e.metaKey || e.ctrlKey || e.altKey) return;
+						if (flowMode || expanded) return;
+						const t = e.target as HTMLElement;
+						if (t !== e.currentTarget && t.closest('button, input, textarea, [contenteditable]'))
+							return;
+						e.preventDefault();
+						e.stopPropagation();
+						if (onOpenInStage) onOpenInStage(note.id, 'maximize');
+						else onExpand(note.id);
+					}}
 					ondblclick={(e) => {
 						e.stopPropagation();
 						if (flowMode) return;
@@ -1741,15 +1939,30 @@
 					>
 						<path d="M0,0 L6,3 L0,6 Z" fill="var(--mash-accent)" />
 					</marker>
+					<marker
+						id="mash-flow-arrow-warn"
+						markerWidth="8"
+						markerHeight="8"
+						refX="6"
+						refY="3"
+						orient="auto"
+						markerUnits="strokeWidth"
+					>
+						<path d="M0,0 L6,3 L0,6 Z" fill="var(--mash-danger)" />
+					</marker>
 				</defs>
 				{#each flowPaths as path (path.id)}
 					<path
 						d={path.d}
 						fill="none"
-						stroke="var(--mash-accent)"
-						stroke-width="2"
+						stroke={invalidEdgeIds.has(path.id)
+							? 'var(--mash-danger)'
+							: 'var(--mash-accent)'}
+						stroke-width={invalidEdgeIds.has(path.id) ? '2.75' : '2'}
 						stroke-linecap="round"
-						marker-end="url(#mash-flow-arrow)"
+						marker-end={invalidEdgeIds.has(path.id)
+							? 'url(#mash-flow-arrow-warn)'
+							: 'url(#mash-flow-arrow)'}
 						opacity="0.9"
 					/>
 				{/each}
@@ -1758,10 +1971,18 @@
 				<button
 					type="button"
 					data-flow-edge
-					class="mash-flow-edge-hit absolute z-[4] -translate-x-1/2 -translate-y-1/2 rounded-full border border-[var(--mash-accent)] bg-[var(--mash-card)] text-[10px] font-bold text-[var(--mash-accent)] shadow"
+					class="mash-flow-edge-hit absolute z-[4] -translate-x-1/2 -translate-y-1/2 rounded-full border bg-[var(--mash-card)] text-[10px] font-bold shadow {invalidEdgeIds.has(
+						path.id
+					)
+						? 'is-invalid border-[var(--mash-danger)] text-[var(--mash-danger)]'
+						: 'border-[var(--mash-accent)] text-[var(--mash-accent)]'}"
 					style="left: {path.midX}px; top: {path.midY}px; width: 18px; height: 18px;"
-					title="Remove flow link"
-					aria-label="Remove flow link"
+					title={invalidEdgeIds.has(path.id)
+						? 'Broken sequence link — remove to repair'
+						: 'Remove flow link'}
+					aria-label={invalidEdgeIds.has(path.id)
+						? 'Remove broken flow link'
+						: 'Remove flow link'}
 					onclick={(e) => {
 						e.stopPropagation();
 						void onDisconnectFlow?.(path.id);
@@ -1771,6 +1992,127 @@
 				</button>
 			{/each}
 		{/if}
+
+		{#each flowEndMenus as menu (menu.seq.id)}
+			{@const open =
+				pinnedFlowMenuSeqId === menu.seq.id || hoveredFlowMenuSeqId === menu.seq.id}
+			<div
+				data-canvas-chrome
+				data-flow-end-menu
+				class="mash-flow-end-menu absolute z-[6]"
+				class:is-open={open}
+				class:is-invalid={menu.seq.invalid}
+				style="left: {menu.x}px; top: {menu.y}px;"
+				role="group"
+				aria-label={flowBoard.sequences.length > 1
+					? `Sequence ${menu.si + 1} options`
+					: 'Sequence options'}
+				onpointerenter={() => {
+					setHoveredFlowMenu(menu.seq.id);
+				}}
+				onpointerleave={() => {
+					setHoveredFlowMenu(null);
+				}}
+			>
+				<button
+					type="button"
+					class="mash-flow-end-menu-trigger"
+					title={menu.seq.invalid
+						? 'Broken sequence — open options'
+						: 'Sequence options'}
+					aria-expanded={open}
+					aria-haspopup="true"
+					onclick={(e) => {
+						e.stopPropagation();
+						pinnedFlowMenuSeqId =
+							pinnedFlowMenuSeqId === menu.seq.id ? null : menu.seq.id;
+					}}
+				>
+					{flowBoard.sequences.length > 1 ? `S${menu.si + 1}` : 'Seq'}
+					{#if menu.seq.invalid}<span class="warn">!</span>{/if}
+				</button>
+				{#if open}
+					<div class="mash-flow-end-menu-panel">
+						{#if flowMode}
+							<button
+								type="button"
+								class="mash-board-chip-btn"
+								onclick={(e) => {
+									e.stopPropagation();
+									exitFlowMode();
+								}}
+								title="Finish linking pages"
+							>
+								Done
+							</button>
+						{/if}
+						<button
+							type="button"
+							class="mash-board-chip-btn"
+							onclick={(e) => {
+								e.stopPropagation();
+								onSelectNotes(
+									menu.seq.pages.map((p) => p.noteId),
+									{ additive: false }
+								);
+							}}
+							title="Select cards in this sequence"
+						>
+							Select
+						</button>
+						<button
+							type="button"
+							class="mash-board-chip-btn"
+							onclick={(e) => {
+								e.stopPropagation();
+								void onUnstitchSequence?.(menu.si);
+								pinnedFlowMenuSeqId = null;
+							}}
+							title="Remove all links in this sequence"
+						>
+							Unstitch
+						</button>
+						{#if !menu.seq.invalid}
+							<button
+								type="button"
+								class="mash-board-chip-btn is-accent"
+								onclick={(e) => {
+									e.stopPropagation();
+									void exportSequencePdf(menu.si);
+								}}
+								title="Download this sequence as PDF"
+							>
+								PDF
+							</button>
+							<button
+								type="button"
+								class="mash-board-chip-btn"
+								onclick={(e) => {
+									e.stopPropagation();
+									printSequence(menu.si);
+								}}
+								title="Print this sequence"
+							>
+								Print
+							</button>
+							<button
+								type="button"
+								class="mash-board-chip-btn"
+								onclick={(e) => {
+									e.stopPropagation();
+									void copySequenceOutline(menu.si);
+								}}
+								title="Copy page outline"
+							>
+								Copy
+							</button>
+						{:else}
+							<span class="mash-flow-end-menu-hint">Fix links or Unstitch</span>
+						{/if}
+					</div>
+				{/if}
+			</div>
+		{/each}
 	</div>
 
 	{#if items.length === 0}
@@ -1818,7 +2160,7 @@
 					e.stopPropagation();
 					if (snapEnabled) toggleSnap();
 				}}
-				title="Free placement — no grid snap while dragging"
+				title="Free placement — cards stay where you drop them"
 			>
 				Free
 			</button>
@@ -1829,7 +2171,7 @@
 					e.stopPropagation();
 					if (!snapEnabled) toggleSnap();
 				}}
-				title="Snap future drags to the grid (Alt flips temporarily)"
+				title="Snap drags to the grid (does not clear overlaps — use Organize). Alt flips temporarily"
 			>
 				Snap
 			</button>
@@ -1841,10 +2183,24 @@
 				e.stopPropagation();
 				organizeToSnap();
 			}}
-			title="Snap all cards to the grid and clear overlaps"
+			title="Tidy: snap every card to the grid and clear overlaps"
 			disabled={items.length === 0}
 		>
 			Organize
+		</button>
+		<button
+			type="button"
+			class="mash-board-chip mash-board-chip-btn pointer-events-auto rounded-md px-2 py-1 text-[10px]"
+			onclick={(e) => {
+				e.stopPropagation();
+				toggleSelectAllOnBoard();
+			}}
+			title={allBoardNotesSelected
+				? 'Clear canvas selection'
+				: 'Select every note on this desk (⌘A)'}
+			disabled={items.length === 0}
+		>
+			{allBoardNotesSelected ? 'Deselect' : 'Select all'}
 		</button>
 		<button
 			type="button"
@@ -1855,14 +2211,21 @@
 				e.stopPropagation();
 				if (flowMode) exitFlowMode();
 				else {
+					onClearSelection?.();
 					flowMode = true;
 					flowFromItemId = null;
-					void onRelayoutFlow?.();
+					// Relayout only when entering with existing links.
+					if (edges.length > 0) {
+						void (async () => {
+							const moved = await onRelayoutFlow?.();
+							if (moved) onToast?.('Sequences packed in order');
+						})();
+					}
 				}
 			}}
 			title={flowMode
 				? 'Done — exit sequence mode'
-				: 'Link next page (multiple sequences per board)'}
+				: 'Link pages in order: click last page, then next (keeps chaining)'}
 			aria-pressed={flowMode}
 		>
 			{flowMode
@@ -1883,7 +2246,7 @@
 				e.stopPropagation();
 				zoomToFit(false);
 			}}
-			title="Fit all cards"
+			title="Fit all cards (⌘1)"
 		>
 			Fit
 		</button>
@@ -1931,10 +2294,23 @@
 				e.stopPropagation();
 				resetView();
 			}}
-			title="Reset pan & zoom"
+			title="Reset pan & zoom (⌘0)"
 		>
 			Reset
 		</button>
+		{#if onOpenShortcuts}
+			<button
+				type="button"
+				class="mash-board-chip mash-board-chip-btn pointer-events-auto rounded-md px-2 py-1 text-[10px]"
+				onclick={(e) => {
+					e.stopPropagation();
+					onOpenShortcuts();
+				}}
+				title="Keyboard shortcuts (?)"
+			>
+				?
+			</button>
+		{/if}
 	</div>
 
 	<!-- Pan / zoom pad -->
@@ -2053,154 +2429,11 @@
 		</div>
 		<p class="mash-chrome-hint max-w-[10rem] text-center text-[9px] leading-tight text-[var(--mash-chrome-muted)]">
 			{#if flowMode}
-				Click A then B · snaps in order · Unstitch clears links · Export PDF downloads a file
+				Click last page → next · keeps chaining · Unstitch clears links · Export PDF downloads a file
 			{:else}
 				Drag to select · Edge = half editor · Drop into empty half to split · ⌘/Ctrl+scroll zoom
 			{/if}
 		</p>
 	</div>
-
-	{#if edges.length > 0}
-		<div
-			data-canvas-chrome
-			class="mash-flow-strip pointer-events-auto absolute bottom-3 left-[4.75rem] z-10 rounded-xl px-3 py-2 shadow"
-		>
-			<div class="mb-1.5 flex items-center justify-between gap-2">
-				<span class="text-[10px] font-semibold tracking-wide uppercase text-[var(--mash-accent-bright)]">
-					{flowBoard.sequences.length === 1
-						? `Sequence · ${flowBoard.sequences[0].pages.length}p`
-						: `${flowBoard.sequences.length} sequences`}
-				</span>
-				<div class="flex items-center gap-1">
-					{#if flowMode}
-						<button
-							type="button"
-							class="mash-board-chip-btn rounded px-1.5 py-0.5 text-[10px] font-semibold text-[var(--mash-chrome-muted)] hover:text-[var(--mash-chrome-ink)]"
-							onclick={(e) => {
-								e.stopPropagation();
-								exitFlowMode();
-							}}
-							title="Finish linking pages"
-						>
-							Done
-						</button>
-					{/if}
-					{#if flowBoard.sequences.length === 1}
-						<button
-							type="button"
-							class="mash-board-chip-btn rounded px-1.5 py-0.5 text-[10px] font-semibold text-[var(--mash-chrome-muted)] hover:text-[var(--mash-chrome-ink)]"
-							onclick={(e) => {
-								e.stopPropagation();
-								void onUnstitchSequence?.(0);
-							}}
-							title="Remove all links in this sequence"
-						>
-							Unstitch
-						</button>
-					{/if}
-					<button
-						type="button"
-						class="mash-board-chip-btn rounded px-1.5 py-0.5 text-[10px] font-semibold text-[var(--mash-accent-bright)] hover:text-[var(--mash-chrome-ink)]"
-						onclick={(e) => {
-							e.stopPropagation();
-							void exportSequencePdf(0);
-						}}
-						title="Download PDF — one note per page"
-						disabled={!canExportAnySequence}
-					>
-						Export PDF
-					</button>
-					<button
-						type="button"
-						class="mash-board-chip-btn rounded px-1.5 py-0.5 text-[10px] font-semibold text-[var(--mash-chrome-muted)] hover:text-[var(--mash-chrome-ink)]"
-						onclick={(e) => {
-							e.stopPropagation();
-							printSequence(0);
-						}}
-						title="Open print preview (Save as PDF from the dialog)"
-						disabled={!canExportAnySequence}
-					>
-						Print…
-					</button>
-					<button
-						type="button"
-						class="mash-board-chip-btn rounded px-1.5 py-0.5 text-[10px] font-semibold text-[var(--mash-chrome-muted)] hover:text-[var(--mash-chrome-ink)]"
-						onclick={async (e) => {
-							e.stopPropagation();
-							const md = flowOutlineMarkdown(flowBoard.sequences, notesById);
-							try {
-								await navigator.clipboard.writeText(md);
-							} catch {
-								/* ignore */
-							}
-						}}
-						title="Copy page outline(s)"
-					>
-						Copy
-					</button>
-				</div>
-			</div>
-			{#each flowBoard.sequences as seq, si (seq.id)}
-				<div class="mash-flow-seq" class:is-invalid={seq.invalid}>
-					{#if flowBoard.sequences.length > 1 || seq.invalid}
-						<p class="mash-flow-seq-label">
-							Seq {si + 1}{#if seq.invalid}
-								<span class="warn"> · fix links</span>{/if}
-							<button
-								type="button"
-								class="mash-board-chip-btn ml-1 rounded px-1 py-0 text-[9px] font-semibold text-[var(--mash-chrome-muted)] hover:text-[var(--mash-chrome-ink)]"
-								onclick={(e) => {
-									e.stopPropagation();
-									void onUnstitchSequence?.(si);
-								}}
-								title="Remove all links in this sequence"
-							>
-								Unstitch
-							</button>
-							{#if !seq.invalid}
-								<button
-									type="button"
-									class="mash-board-chip-btn ml-1 rounded px-1 py-0 text-[9px] font-semibold text-[var(--mash-accent-bright)]"
-									onclick={(e) => {
-										e.stopPropagation();
-										void exportSequencePdf(si);
-									}}
-									title="Download this sequence as PDF"
-								>
-									PDF
-								</button>
-								<button
-									type="button"
-									class="mash-board-chip-btn ml-1 rounded px-1 py-0 text-[9px] font-semibold text-[var(--mash-chrome-muted)]"
-									onclick={(e) => {
-										e.stopPropagation();
-										printSequence(si);
-									}}
-									title="Print this sequence"
-								>
-									Print
-								</button>
-							{/if}
-						</p>
-					{/if}
-					<ol class="mash-flow-strip-list">
-						{#each seq.pages as item, i (item.id)}
-							{@const note = notesById.get(item.noteId)}
-							<li>
-								<span class="n">{i + 1}.</span>
-								<span class="t">{note?.title ?? 'Untitled'}</span>
-							</li>
-						{/each}
-					</ol>
-				</div>
-			{/each}
-			{#if flowBoard.orphans.length > 0}
-				<p class="mt-1.5 text-[9px] text-[var(--mash-chrome-muted)]">
-					{flowBoard.orphans.length} card{flowBoard.orphans.length === 1 ? '' : 's'} not in a
-					sequence
-				</p>
-			{/if}
-		</div>
-	{/if}
 
 </div>

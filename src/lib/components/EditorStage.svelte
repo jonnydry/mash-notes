@@ -6,6 +6,7 @@
 	import { onDestroy } from 'svelte';
 	import type { Note } from '$lib/types';
 	import StickyEditor from '$lib/components/StickyEditor.svelte';
+	import { notePreview } from '$lib/format';
 	import {
 		detectFillOrSnapZone,
 		type EditorPane,
@@ -16,6 +17,8 @@
 	interface Props {
 		stage: EditorStageStore;
 		notesById: Map<string, Note>;
+		/** Notes currently on the desk — offered in the empty split half. */
+		canvasNotes?: Note[];
 		folders?: string[];
 		onTitleChange: (noteId: string, title: string) => void;
 		onBodyChange: (noteId: string, body: string) => void;
@@ -34,6 +37,7 @@
 	let {
 		stage,
 		notesById,
+		canvasNotes = [],
 		folders = [],
 		onTitleChange,
 		onBodyChange,
@@ -197,6 +201,21 @@
 			}
 		}
 	}
+
+	let openNoteIds = $derived(new Set(stage.panes.map((p) => p.noteId)));
+	let pickerNotes = $derived(
+		canvasNotes
+			.filter((n) => !openNoteIds.has(n.id))
+			.slice()
+			.sort((a, b) => {
+				if (a.pinned !== b.pinned) return b.pinned - a.pinned;
+				return b.modified - a.modified;
+			})
+	);
+
+	function pickForEmptyHalf(noteId: string) {
+		stage.openBeside(noteId);
+	}
 </script>
 
 {#if stage.open || stage.previewZone}
@@ -220,12 +239,50 @@
 			<div
 				class="mash-empty-half"
 				style={emptyHalfStyle(stage.emptySlot)}
-				aria-label="Drop another note here to split"
+				aria-label="Choose a note for this half"
 			>
-				<p class="mash-empty-half-label">
-					Drop a note here
-					<span>or select one and tap Open beside</span>
-				</p>
+				<div class="mash-empty-half-picker">
+					<p class="mash-empty-half-label">
+						Open a note here
+						<span>
+							{pickerNotes.length > 0
+								? 'Pick from notes on this desk, or drop one in'
+								: 'Drop a note here — or place more on the desk first'}
+						</span>
+					</p>
+					{#if pickerNotes.length > 0}
+						<ul
+							class="mash-empty-half-list"
+							role="listbox"
+							aria-label="Notes on this desk"
+							onwheel={(e) => e.stopPropagation()}
+						>
+							{#each pickerNotes as note (note.id)}
+								<li>
+									<button
+										type="button"
+										class="mash-empty-half-item"
+										role="option"
+										onclick={() => pickForEmptyHalf(note.id)}
+									>
+										<span class="mash-empty-half-item-title">
+											{note.title || 'Untitled'}
+											{#if note.pinned === 1}
+												<Pin class="h-3 w-3 shrink-0 text-[var(--mash-accent-bright)]" />
+											{/if}
+										</span>
+										<span class="mash-empty-half-item-preview">
+											{notePreview(note.body, 64)}
+										</span>
+										{#if note.folder}
+											<span class="mash-empty-half-item-meta">{note.folder}</span>
+										{/if}
+									</button>
+								</li>
+							{/each}
+						</ul>
+					{/if}
+				</div>
 			</div>
 		{/if}
 

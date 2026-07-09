@@ -37,17 +37,25 @@ export function createPeelNavState(): PeelNavState {
 
 export function peelTitleFor(
 	mode: PeelMode,
-	searchQuery: string,
+	_searchQuery: string,
 	filter: NavFilter
 ): string {
 	if (mode === 'folders') return 'Folders';
 	if (mode === 'tags') return 'Tags';
 	if (mode === 'linked') return 'Linked';
-	if (searchQuery.trim()) return 'Search results';
+	// Header search has its own dropdown; peel titles reflect browse filters only.
 	if (filter.type === 'pinned') return 'Pinned';
 	if (filter.type === 'folder' && filter.value) return filter.value;
 	if (filter.type === 'tag' && filter.value) return `#${filter.value}`;
 	return 'All notes';
+}
+
+/** Header search updates the query only — it must not open the peel. */
+export function handleGlobalSearchInput(
+	current: string,
+	next: string
+): { searchQuery: string; openPeel: boolean } {
+	return { searchQuery: next, openPeel: false };
 }
 
 export type PeelOpenResult = Pick<
@@ -125,7 +133,6 @@ export function dispatchDockAction(action: DockAction, h: DockActionHandlers): v
 			h.newNote();
 			break;
 		case 'search':
-			h.openPeel('notes');
 			h.focusSearch();
 			break;
 		case 'settings':
@@ -222,10 +229,9 @@ export function createPeelNav(opts: CreatePeelNavOpts) {
 	}
 
 	function handleGlobalSearch(e: Event) {
-		searchQuery = (e.target as HTMLInputElement).value;
-		if (searchQuery) {
-			openPeel('notes');
-		}
+		const next = (e.target as HTMLInputElement).value;
+		const patch = handleGlobalSearchInput(searchQuery, next);
+		searchQuery = patch.searchQuery;
 	}
 
 	function focusSearch() {

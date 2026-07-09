@@ -5,7 +5,13 @@
  * Multiple disjoint chains on one board are separate export sequences.
  */
 import type { CanvasEdge, CanvasItem } from './types';
-import { GRID, snapPoint, snapValue } from './canvas-geom';
+import {
+	GRID,
+	GRID_ORIGIN,
+	boundsOf,
+	snapPoint,
+	snapValue
+} from './canvas-geom';
 
 export type FlowSequence = {
 	id: string;
@@ -276,23 +282,134 @@ export function edgesInSequence(
 	return edges.filter((e) => ids.has(e.fromItemId) && ids.has(e.toItemId));
 }
 
+/** Edge ids that belong to invalid (branched/cyclic) sequences — for warn styling. */
+export function invalidSequenceEdgeIds(
+	sequences: FlowSequence[],
+	edges: CanvasEdge[]
+): Set<string> {
+	const out = new Set<string>();
+	for (const seq of sequences) {
+		if (!seq.invalid) continue;
+		for (const e of edgesInSequence(seq.pages, edges)) out.add(e.id);
+	}
+	return out;
+}
+
 /** Gap between sequenced cards — room for the arrow + unlink control. */
 export const FLOW_LAYOUT_GAP = GRID * 3; // 72
 
+/** Clearance between a sequence band and unrelated cards. */
+export const FLOW_CLEAR_GAP = GRID; // 24
+
+type FlowPageSize = { w?: number | null; h?: number | null };
+
+/** Bounding size of a packed L→R sequence row (including inter-page gaps). */
+export function flowSequenceFootprint(
+	pages: FlowPageSize[],
+	opts?: { gap?: number; defaultW?: number; defaultH?: number }
+): { w: number; h: number } {
+	if (pages.length === 0) return { w: 0, h: 0 };
+	const gap = opts?.gap ?? FLOW_LAYOUT_GAP;
+	const defaultW = opts?.defaultW ?? 220;
+	const defaultH = opts?.defaultH ?? 120;
+	let w = 0;
+	let h = 0;
+	for (let i = 0; i < pages.length; i++) {
+		const page = pages[i]!;
+		const pw = page.w && page.w > 0 ? page.w : defaultW;
+		const ph = page.h && page.h > 0 ? page.h : defaultH;
+		w += pw + (i > 0 ? gap : 0);
+		h = Math.max(h, ph);
+	}
+	return { w, h };
+}
+
+function bandOverlapsObstacle(
+	band: { x: number; y: number; w: number; h: number },
+	obstacle: { x: number; y: number; w: number; h: number },
+	gap: number
+): boolean {
+	return !(
+		band.x + band.w + gap <= obstacle.x ||
+		obstacle.x + obstacle.w + gap <= band.x ||
+		band.y + band.h + gap <= obstacle.y ||
+		obstacle.y + obstacle.h + gap <= band.y
+	);
+}
+
+/**
+ * Pick a snapped origin for a sequence row that doesn’t collide with
+ * unrelated cards — including cards sitting in the arrow corridor.
+ * Prefers the head’s current spot when that band is already clear.
+ */
+export function findClearFlowOrigin(
+	pages: FlowPageSize[],
+	obstacles: Array<{ x: number; y: number; w: number; h: number }>,
+	opts?: {
+		gap?: number;
+		clearGap?: number;
+		defaultW?: number;
+		defaultH?: number;
+		prefer?: { x: number; y: number };
+	}
+): { x: number; y: number } {
+	const footprint = flowSequenceFootprint(pages, opts);
+	const clearGap = opts?.clearGap ?? FLOW_CLEAR_GAP;
+	const prefer = snapPoint(
+		opts?.prefer?.x ?? GRID_ORIGIN,
+		opts?.prefer?.y ?? GRID_ORIGIN
+	);
+	if (footprint.w <= 0 || footprint.h <= 0) return prefer;
+
+	const isClear = (ox: number, oy: number) => {
+		const band = { x: ox, y: oy, w: footprint.w, h: footprint.h };
+		return !obstacles.some((o) => bandOverlapsObstacle(band, o, clearGap));
+	};
+
+	if (isClear(prefer.x, prefer.y)) return prefer;
+
+	const bounds = boundsOf(obstacles);
+	const belowPrefer = snapPoint(prefer.x, prefer.y + footprint.h + clearGap * 2);
+	const candidates: Array<{ x: number; y: number }> = [belowPrefer];
+	if (bounds) {
+		candidates.push(
+			snapPoint(prefer.x, bounds.maxY + clearGap * 2),
+			snapPoint(GRID_ORIGIN, bounds.maxY + clearGap * 2),
+			snapPoint(bounds.maxX + clearGap * 2, prefer.y)
+		);
+	}
+	for (const c of candidates) {
+		if (isClear(c.x, c.y)) return c;
+	}
+
+	// Scan downward from content bottom (or prefer) until a free band appears.
+	let y = snapValue(
+		(bounds?.maxY ?? prefer.y + footprint.h) + clearGap * 2
+	);
+	for (let i = 0; i < 48; i++) {
+		const origin = snapPoint(GRID_ORIGIN, y);
+		if (isClear(origin.x, origin.y)) return origin;
+		y = snapValue(y + GRID * 2);
+	}
+	return snapPoint(GRID_ORIGIN, y);
+}
+
 /**
  * Lay a valid page sequence into a left-to-right storyboard row.
- * Anchors on the first page’s snapped position; later pages pack by
- * each card’s real width + gap so tall/wide cards don’t overlap.
+ * Anchors on `opts.origin` or the first page’s snapped position; later
+ * pages pack by each card’s real width + gap so tall/wide cards don’t overlap.
  */
 export function layoutFlowSequence(
 	pages: CanvasItem[],
-	opts?: { gap?: number; defaultW?: number }
+	opts?: { gap?: number; defaultW?: number; origin?: { x: number; y: number } }
 ): Map<string, { x: number; y: number }> {
 	const out = new Map<string, { x: number; y: number }>();
 	if (pages.length === 0) return out;
 	const gap = opts?.gap ?? FLOW_LAYOUT_GAP;
 	const defaultW = opts?.defaultW ?? 220;
-	const origin = snapPoint(pages[0].x, pages[0].y);
+	const origin = opts?.origin
+		? snapPoint(opts.origin.x, opts.origin.y)
+		: snapPoint(pages[0].x, pages[0].y);
 	let x = origin.x;
 	for (const page of pages) {
 		out.set(page.id, { x, y: origin.y });

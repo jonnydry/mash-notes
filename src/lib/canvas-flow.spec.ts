@@ -8,8 +8,12 @@ import {
 	flowOutlineMarkdown,
 	flowPageBadges,
 	layoutFlowSequence,
+	findClearFlowOrigin,
+	flowSequenceFootprint,
+	FLOW_LAYOUT_GAP,
 	flowEdgePath,
-	edgesInSequence
+	edgesInSequence,
+	invalidSequenceEdgeIds
 } from './canvas-flow';
 import type { CanvasEdge, CanvasItem } from './types';
 
@@ -120,8 +124,41 @@ describe('canvas-flow page sequences', () => {
 		expect(next.get('b')).toEqual({ x: 480, y: 48 });
 	});
 
+	it('layoutFlowSequence accepts an explicit origin', () => {
+		const pages = [item('a', 50, 70), item('b', 10, 200)];
+		const next = layoutFlowSequence(pages, { origin: { x: 96, y: 240 } });
+		expect(next.get('a')).toEqual({ x: 96, y: 240 });
+		expect(next.get('b')).toEqual({ x: 384, y: 240 });
+	});
+
 	it('layoutFlowSequence is a no-op for an empty chain', () => {
 		expect(layoutFlowSequence([])).toEqual(new Map());
+	});
+
+	it('findClearFlowOrigin keeps the head when the sequence band is free', () => {
+		const pages = [item('a', 48, 48), item('b', 100, 48)];
+		const origin = findClearFlowOrigin(pages, [{ x: 48, y: 400, w: 220, h: 120 }], {
+			prefer: { x: 48, y: 48 }
+		});
+		expect(origin).toEqual({ x: 48, y: 48 });
+	});
+
+	it('findClearFlowOrigin moves the row when a card sits in the arrow corridor', () => {
+		const pages = [item('a', 48, 48), item('b', 400, 48)];
+		// Obstacle between the two pages (same y band, in the gap).
+		const mid = {
+			x: 280,
+			y: 48,
+			w: 220,
+			h: 120
+		};
+		const footprint = flowSequenceFootprint(pages);
+		expect(footprint.w).toBe(220 + FLOW_LAYOUT_GAP + 220);
+		const origin = findClearFlowOrigin(pages, [mid], {
+			prefer: { x: 48, y: 48 }
+		});
+		expect(origin.y).toBeGreaterThan(48);
+		expect(origin.x).toBe(48);
 	});
 
 	it('flowEdgePath runs left-to-right when target is to the right', () => {
@@ -138,5 +175,16 @@ describe('canvas-flow page sequences', () => {
 		const pages = [item('a', 0, 0), item('b', 100, 0)];
 		const edges = [edge('a', 'b'), edge('b', 'c'), edge('x', 'y')];
 		expect(edgesInSequence(pages, edges).map((e) => e.id)).toEqual(['a->b']);
+	});
+
+	it('invalidSequenceEdgeIds collects edges from invalid components only', () => {
+		const items = [item('a', 0, 0), item('b', 100, 0), item('c', 200, 0)];
+		// Branch: a→b and a→c is invalid
+		const edges = [edge('a', 'b'), edge('a', 'c')];
+		const { sequences } = listFlowSequences(items, edges);
+		expect(sequences.some((s) => s.invalid)).toBe(true);
+		const ids = invalidSequenceEdgeIds(sequences, edges);
+		expect(ids.has('a->b')).toBe(true);
+		expect(ids.has('a->c')).toBe(true);
 	});
 });

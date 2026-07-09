@@ -10,6 +10,7 @@ import {
 	peelTitleFor,
 	peelOpenPatch,
 	windowPeelNotes,
+	handleGlobalSearchInput,
 	PEEL_UI_CAP,
 	type DockActionHandlers
 } from './peel-nav.svelte';
@@ -79,7 +80,15 @@ describe('stores helpers', () => {
 
 	it('peelTitleFor and open patch', () => {
 		expect(peelTitleFor('linked', '', { type: null })).toBe('Linked');
+		expect(peelTitleFor('notes', 'query', { type: null })).toBe('All notes');
+		expect(peelTitleFor('notes', 'query', { type: 'pinned' })).toBe('Pinned');
 		expect(peelOpenPatch('folders').foldersFlyout).toBe(true);
+	});
+
+	it('handleGlobalSearchInput never opens the peel', () => {
+		expect(handleGlobalSearchInput('', 's')).toEqual({ searchQuery: 's', openPeel: false });
+		expect(handleGlobalSearchInput('s', 'sc')).toEqual({ searchQuery: 'sc', openPeel: false });
+		expect(handleGlobalSearchInput('sc', '')).toEqual({ searchQuery: '', openPeel: false });
 	});
 
 	it('windows peel notes', () => {
@@ -148,5 +157,32 @@ describe('stores helpers', () => {
 
 		dispatchDockAction('settings', h);
 		expect(settingsOpen).toBe(false);
+	});
+
+	it('dispatchDockAction search focuses without opening peel', () => {
+		let focused = false;
+		let peelOpened = false;
+		const h: DockActionHandlers = {
+			clearFilter: () => {},
+			setFilter: () => {},
+			openPeel: () => {
+				peelOpened = true;
+			},
+			closePeel: () => {},
+			getPeelOpen: () => false,
+			getPeelMode: () => 'notes',
+			setLinkedFocus: () => {},
+			resolveLinkedFocus: () => null,
+			newNote: () => {},
+			focusSearch: () => {
+				focused = true;
+			},
+			getSettingsOpen: () => false,
+			openSettings: () => {},
+			closeSettings: () => {}
+		};
+		dispatchDockAction('search', h);
+		expect(focused).toBe(true);
+		expect(peelOpened).toBe(false);
 	});
 });

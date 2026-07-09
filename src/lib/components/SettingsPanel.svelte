@@ -1,12 +1,14 @@
 <script lang="ts">
 	import { X } from 'lucide-svelte';
 	import { theme } from '$lib/stores/theme.svelte';
+	import { flatShortcutRows } from '$lib/keyboard-shortcuts';
 
 	interface Props {
 		snapEnabled: boolean;
 		onClose: () => void;
 		onSnapChange: (on: boolean) => void;
 		onOrganize: () => void;
+		onOpenShortcuts?: () => void;
 		onImportMarkdown: () => void;
 		onImportJson: () => void;
 		onExportJson: () => void;
@@ -19,6 +21,7 @@
 		onClose,
 		onSnapChange,
 		onOrganize,
+		onOpenShortcuts,
 		onImportMarkdown,
 		onImportJson,
 		onExportJson,
@@ -26,14 +29,7 @@
 		onExportSync
 	}: Props = $props();
 
-	const shortcuts = [
-		{ keys: '⌘K', label: 'Command palette' },
-		{ keys: '⌘N', label: 'New note' },
-		{ keys: '/', label: 'Focus search' },
-		{ keys: '⌘Z', label: 'Undo (typing in sticky, layout on board)' },
-		{ keys: 'Esc', label: 'Dismiss overlay / selection' },
-		{ keys: '?', label: 'Shortcut tip' }
-	];
+	const shortcuts = flatShortcutRows().slice(0, 6);
 </script>
 
 <aside class="mash-peel mash-settings" aria-label="Settings">
@@ -118,8 +114,8 @@
 				</div>
 			</div>
 			<p class="mash-settings-hint">
-				Snap only affects future drags. Hold Alt while dragging to temporarily invert. Use Organize
-				to tidy the whole desk onto the grid.
+				Snap only affects future drags — it does not clear overlaps. Hold Alt while dragging to
+				temporarily invert. Use Organize to tidy the whole desk onto the grid.
 			</p>
 			<div class="mash-settings-actions">
 				<button type="button" class="mash-settings-action" onclick={onOrganize}>
@@ -162,6 +158,20 @@
 					</li>
 				{/each}
 			</ul>
+			{#if onOpenShortcuts}
+				<div class="mash-settings-actions" style="margin-top: 10px;">
+					<button
+						type="button"
+						class="mash-settings-action"
+						onclick={() => {
+							onClose();
+							onOpenShortcuts();
+						}}
+					>
+						View all shortcuts…
+					</button>
+				</div>
+			{/if}
 		</section>
 
 		<section class="mash-settings-section mash-settings-section--last">

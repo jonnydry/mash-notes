@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
 	import { addNoteToCanvas, createNote, db, deleteNote, removeCanvasItem } from '$lib/db';
-	import { addNoteToSearch, removeNoteFromSearch } from '$lib/search';
+	import { addNoteToSearch, removeNoteFromSearch, searchNotes } from '$lib/search';
 	import type { Note } from '$lib/types';
 	import {
 		Search,
@@ -26,10 +26,12 @@
 	} from 'lucide-svelte';
 	import MashDock from '$lib/components/MashDock.svelte';
 	import PeelScanner from '$lib/components/PeelScanner.svelte';
+	import SearchResultsDropdown from '$lib/components/SearchResultsDropdown.svelte';
 	import SettingsPanel from '$lib/components/SettingsPanel.svelte';
 	import CanvasBoard from '$lib/components/CanvasBoard.svelte';
 	import EditorStage from '$lib/components/EditorStage.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+	import ShortcutsModal from '$lib/components/ShortcutsModal.svelte';
 	import { extractWikilinks } from '$lib/markdown';
 	import { combineNotes, exportNotesJson } from '$lib/mash';
 	import { clearCanvasViewport } from '$lib/viewport';
@@ -73,8 +75,12 @@
 	let paletteInput = $state<HTMLInputElement | null>(null);
 	let paletteHighlight = $state(0);
 	let settingsOpen = $state(false);
+	let shortcutsOpen = $state(false);
 	/** Sync from localStorage at init (ssr=false) so CanvasBoard never paints Free first. */
 	let snapEnabled = $state(loadSnapPref());
+	let searchDropdownOpen = $state(false);
+	let searchHighlight = $state(0);
+	let searchWrapEl = $state<HTMLDivElement | null>(null);
 
 	$effect(() => {
 		if (!showPalette) return;
@@ -203,6 +209,9 @@
 		removeNoteFromSearch,
 		removeNoteFromLibrary: (id) => {
 			library.notes = library.notes.filter((n) => n.id !== id);
+		},
+		openNoteInStage: (noteId, zone) => {
+			openInStage(noteId, zone ?? 'maximize');
 		}
 	});
 	canvasHolder.session = canvas;
@@ -231,10 +240,11 @@
 		editorStage.openBeside(id);
 	}
 
-	let filteredNotes = $derived(
-		filterNotes(library.notes, peel.currentFilter, peel.searchQuery)
-	);
+	let filteredNotes = $derived(filterNotes(library.notes, peel.currentFilter, ''));
 	let peelNotes = $derived(filterPeelNotes(filteredNotes, peel.peelFilterText));
+	let headerSearchResults = $derived(
+		peel.searchQuery.trim() ? searchNotes(peel.searchQuery) : []
+	);
 	let linkedFocusNote = $derived(
 		peel.linkedFocusId
 			? (library.notes.find((n) => n.id === peel.linkedFocusId) ?? null)
@@ -249,6 +259,61 @@
 		linkedFocusNote ? findBacklinks(library.notes, linkedFocusNote) : []
 	);
 	let peelNotesWindowed = $derived(windowPeelNotes(peelNotes));
+
+	$effect(() => {
+		peel.searchQuery;
+		searchHighlight = 0;
+		searchDropdownOpen = Boolean(peel.searchQuery.trim());
+	});
+
+	function closeSearchDropdown(clearQuery = false) {
+		searchDropdownOpen = false;
+		searchHighlight = 0;
+		if (clearQuery) peel.searchQuery = '';
+	}
+
+	function openHeaderSearchResult(id: string) {
+		void canvas.openStickyFromTray(id);
+		closeSearchDropdown(true);
+	}
+
+	function onGlobalSearchKeydown(e: KeyboardEvent) {
+		const q = peel.searchQuery.trim();
+		if (e.key === 'Escape') {
+			e.preventDefault();
+			e.stopPropagation();
+			closeSearchDropdown(true);
+			(e.currentTarget as HTMLInputElement).blur();
+			return;
+		}
+		if (!q) return;
+		if (e.key === 'ArrowDown') {
+			e.preventDefault();
+			searchDropdownOpen = true;
+			if (headerSearchResults.length === 0) return;
+			searchHighlight = (searchHighlight + 1) % headerSearchResults.length;
+			return;
+		}
+		if (e.key === 'ArrowUp') {
+			e.preventDefault();
+			searchDropdownOpen = true;
+			if (headerSearchResults.length === 0) return;
+			searchHighlight =
+				(searchHighlight - 1 + headerSearchResults.length) % headerSearchResults.length;
+			return;
+		}
+		if (e.key === 'Enter') {
+			e.preventDefault();
+			const hit = headerSearchResults[searchHighlight] ?? headerSearchResults[0];
+			if (hit) openHeaderSearchResult(hit.id);
+		}
+	}
+
+	function onSearchPointerDown(e: PointerEvent) {
+		const t = e.target as Node | null;
+		if (searchWrapEl && t && searchWrapEl.contains(t)) return;
+		if (searchDropdownOpen) closeSearchDropdown(false);
+	}
 
 	/**
 	 * Mash notes into a new note + canvas bubble.
@@ -312,7 +377,8 @@
 		for (const noteId of sourceIds) {
 			dismissNoteFromCanvas(canvas.activeCanvas.id, noteId);
 		}
-		canvas.clearCanvasUndo();
+		// Drop undo entries that referenced removed cards — keep unrelated history.
+		canvas.pruneCanvasUndo(removeIds);
 
 		const item = await addNoteToCanvas(canvas.activeCanvas.id, mashed.id, {
 			x: placeX,
@@ -323,11 +389,11 @@
 		await canvas.refreshCanvasItems();
 		library.selectionIds = [mashed.id];
 		library.selectedId = mashed.id;
-		canvas.expandedNoteId = mashed.id;
 		canvas.settlingIds = new Set([item.id]);
 		setTimeout(() => {
 			canvas.settlingIds = new Set();
 		}, 320);
+		openInStage(mashed.id, 'maximize');
 		flashToast('Mashed — use Unmash to restore sources');
 	}
 
@@ -456,18 +522,9 @@
 		const target = canvas.canvasItems.find((i) => i.id === targetItemId);
 		if (!source || !target) return;
 
-		// If the dragged card is part of a multi-selection that includes the target,
-		// mash the whole selection. Otherwise mash just the two overlapped cards.
-		const pairNoteIds = new Set([source.noteId, target.noteId]);
-		const selectionIncludesPair =
-			library.selectionSet.has(source.noteId) &&
-			library.selectionSet.has(target.noteId) &&
-			library.selectionIds.length >= 2;
-
-		const mashNoteIds = selectionIncludesPair
-			? [...new Set(library.selectionIds)]
-			: [...pairNoteIds];
-
+		// Drag-onto always mashes the overlapped pair only. Use the selection-bar
+		// Mash action (or ⌘M) to combine a larger multi-selection.
+		const mashNoteIds = [source.noteId, target.noteId];
 		const mashNotes = mashNoteIds
 			.map((id) => library.notesById.get(id))
 			.filter((n): n is Note => Boolean(n));
@@ -499,30 +556,27 @@
 		library.notes = [note, ...library.notes];
 		if (canvas.activeCanvas) {
 			const spawn =
-				canvas.canvasBoard?.getSpawnPoint(EXPANDED_CARD, canvas.canvasItems.length) ?? {
+				canvas.canvasBoard?.getSpawnPoint(COLLAPSED_CARD, canvas.canvasItems.length) ?? {
 					x: 80,
 					y: 80
 				};
 			const item = await addNoteToCanvas(canvas.activeCanvas.id, note.id, {
 				x: spawn.x,
 				y: spawn.y,
-				w: EXPANDED_CARD.w,
-				h: EXPANDED_CARD.h
+				w: COLLAPSED_CARD.w,
+				h: COLLAPSED_CARD.h
 			});
 			await canvas.refreshCanvasItems();
 			library.selectNote(note.id);
-			canvas.expandFocus = 'title';
-			canvas.expandedNoteId = note.id;
-			canvas.bumpNeighborsAround(item.id, EXPANDED_CARD);
 			canvas.settlingIds = new Set([item.id, ...canvas.settlingIds]);
 			setTimeout(() => {
 				canvas.settlingIds = new Set();
 			}, 320);
+			openInStage(note.id, 'maximize');
 			return;
 		}
 		library.selectNote(note.id);
-		canvas.expandFocus = 'title';
-		canvas.expandedNoteId = note.id;
+		openInStage(note.id, 'maximize');
 	}
 
 	async function runConfirmDialog() {
@@ -558,11 +612,23 @@
 				void combineSelection();
 			}
 		}
-		if (e.key === '?' && document.activeElement?.tagName === 'BODY') {
-			e.preventDefault();
-			flashToast(
-				'⌘K palette · ⌘N new · ⌘M mash · ⌘Z board=layout undo (in text=content) · / search · Esc dismiss'
-			);
+		if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'p') {
+			const tag = (e.target as HTMLElement)?.tagName;
+			if (tag !== 'INPUT' && tag !== 'TEXTAREA' && library.selectedId) {
+				e.preventDefault();
+				const note = library.selectedNote;
+				if (note) {
+					const np = note.pinned === 1 ? 0 : 1;
+					void library.handleStickyMetaChange(note.id, { pinned: np as 0 | 1 });
+				}
+			}
+		}
+		if (e.key === '?') {
+			const tag = (e.target as HTMLElement)?.tagName;
+			if (tag !== 'INPUT' && tag !== 'TEXTAREA' && !(e.target as HTMLElement)?.isContentEditable) {
+				e.preventDefault();
+				shortcutsOpen = true;
+			}
 		}
 		if (e.key === '/' && document.activeElement?.tagName === 'BODY') {
 			e.preventDefault();
@@ -573,12 +639,20 @@
 				confirmDialog = null;
 				return;
 			}
+			if (shortcutsOpen) {
+				shortcutsOpen = false;
+				return;
+			}
 			if (library.bulkMenu) {
 				library.bulkMenu = null;
 				return;
 			}
 			if (showPalette) {
 				showPalette = false;
+				return;
+			}
+			if (searchDropdownOpen || peel.searchQuery.trim()) {
+				closeSearchDropdown(true);
 				return;
 			}
 			if (editorStage.open) {
@@ -745,9 +819,7 @@
 			label: 'Keyboard shortcuts',
 			action: () => {
 				showPalette = false;
-				flashToast(
-					'⌘Z in text = content undo · ⌘Z on board = layout undo · ⌘K · ⌘N · / search'
-				);
+				shortcutsOpen = true;
 			},
 			shortcut: '?'
 		},
@@ -803,12 +875,14 @@
 	onMount(() => {
 		void library.loadNotes();
 		window.addEventListener('keydown', handleKeydown);
+		window.addEventListener('pointerdown', onSearchPointerDown, true);
 		window.addEventListener('pagehide', library.flushPendingSave);
 		document.addEventListener('visibilitychange', library.handleVisibilityChange);
 		// E2E / diagnostics: import a sync bundle without relying on hidden file inputs.
 		window.__mashImportSync = (text: string) => library.importSyncText(text);
 		return () => {
 			window.removeEventListener('keydown', handleKeydown);
+			window.removeEventListener('pointerdown', onSearchPointerDown, true);
 			window.removeEventListener('pagehide', library.flushPendingSave);
 			document.removeEventListener('visibilitychange', library.handleVisibilityChange);
 			delete window.__mashImportSync;
@@ -844,7 +918,7 @@
 		</div>
 
 		<div class="flex flex-1 items-center justify-center px-4">
-			<div class="relative w-full max-w-md">
+			<div class="relative w-full max-w-md" bind:this={searchWrapEl}>
 				<Search
 					class="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2"
 					style="color: var(--mash-ink-muted);"
@@ -855,8 +929,15 @@
 					placeholder="Search notes to grab…"
 					bind:value={peel.searchQuery}
 					oninput={peel.handleGlobalSearch}
+					onfocus={() => {
+						if (peel.searchQuery.trim()) searchDropdownOpen = true;
+					}}
+					onkeydown={onGlobalSearchKeydown}
 					class="mash-focus w-full rounded-lg border py-2 pr-14 pl-9 text-sm transition-colors"
 					style="border-color: var(--mash-tray-edge); background: var(--mash-tray); color: var(--mash-ink);"
+					aria-autocomplete="list"
+					aria-expanded={searchDropdownOpen && Boolean(peel.searchQuery.trim())}
+					aria-controls="mash-header-search-results"
 				/>
 				<kbd
 					class="pointer-events-none absolute top-1/2 right-2.5 hidden -translate-y-1/2 items-center gap-0.5 rounded border px-1.5 py-0.5 text-[10px] font-medium sm:flex"
@@ -864,6 +945,20 @@
 				>
 					/
 				</kbd>
+				<div id="mash-header-search-results">
+					<SearchResultsDropdown
+						open={searchDropdownOpen && Boolean(peel.searchQuery.trim())}
+						query={peel.searchQuery}
+						results={headerSearchResults}
+						notesById={library.notesById}
+						highlightIndex={searchHighlight}
+						draggingId={canvas.draggingTrayId}
+						onOpen={openHeaderSearchResult}
+						onHighlight={(i) => (searchHighlight = i)}
+						onDragStart={canvas.onTrayDragStart}
+						onDragEnd={canvas.onTrayDragEnd}
+					/>
+				</div>
 			</div>
 		</div>
 
@@ -945,15 +1040,18 @@
 					items={canvas.canvasItems}
 					notesById={library.notesById}
 					selectedIds={library.selectionSet}
+					primarySelectedId={library.selectedId}
 					expandedNoteId={canvas.expandedNoteId}
 					expandFocus={canvas.expandFocus}
 					settlingIds={canvas.settlingIds}
 					canvasId={canvas.activeCanvas?.id ?? null}
 					edges={canvas.canvasEdges}
-					onConnectFlow={(from, to) => void canvas.connectFlowEdge(from, to)}
+					onConnectFlow={(from, to) => canvas.connectFlowEdge(from, to)}
 					onDisconnectFlow={(id) => void canvas.disconnectFlowEdge(id)}
 					onUnstitchSequence={(i) => void canvas.unstitchSequence(i)}
-					onRelayoutFlow={() => void canvas.relayoutFlowSequences()}
+					onRelayoutFlow={() => canvas.relayoutFlowSequences()}
+					onClearSelection={() => library.clearSelection()}
+					onToast={flashToast}
 					emptyMascot={
 						peel.currentFilter.type === 'pinned'
 							? {
@@ -998,11 +1096,15 @@
 					canRedo={canvas.canCanvasRedo}
 					onUndo={() => void canvas.undoCanvasLayout()}
 					onRedo={() => void canvas.redoCanvasLayout()}
+					onOpenShortcuts={() => (shortcutsOpen = true)}
 					bind:snapEnabled
 				/>
 				<EditorStage
 					stage={editorStage}
 					notesById={library.notesById}
+					canvasNotes={canvas.canvasItems
+						.map((i) => library.notesById.get(i.noteId))
+						.filter((n): n is Note => Boolean(n))}
 					folders={library.uniqueFolders}
 					onTitleChange={library.handleStickyTitleChange}
 					onBodyChange={library.handleStickyBodyChange}
@@ -1033,6 +1135,10 @@
 					onClose={() => (settingsOpen = false)}
 					onSnapChange={setSnapEnabled}
 					onOrganize={() => canvas.canvasBoard?.organizeToSnap?.()}
+					onOpenShortcuts={() => {
+						settingsOpen = false;
+						shortcutsOpen = true;
+					}}
 					onImportMarkdown={() => markdownImportInputEl?.click()}
 					onImportJson={() => importInputEl?.click()}
 					onExportJson={() => exportNotesJson(library.notes, 'mash-notes-export.json')}
@@ -1182,14 +1288,14 @@
 						class="flex max-w-[min(92vw,28rem)] flex-wrap items-center justify-center gap-1 rounded-xl border p-2 shadow-xl"
 						style="border-color: var(--mash-panel-border); background: var(--mash-panel); backdrop-filter: blur(10px);"
 						role="toolbar"
-						aria-label="Align selected"
+						aria-label="Pack selected"
 					>
 						<button
 							type="button"
 							class="mash-align-btn"
 							onclick={() => canvas.canvasBoard?.applyAlign('left')}
-							title="Align left"
-							aria-label="Align left"
+							title="Pack into a left-aligned column"
+							aria-label="Pack into a left-aligned column"
 						>
 							<AlignLeft class="h-3.5 w-3.5" />
 						</button>
@@ -1197,8 +1303,8 @@
 							type="button"
 							class="mash-align-btn"
 							onclick={() => canvas.canvasBoard?.applyAlign('center')}
-							title="Align center"
-							aria-label="Align center"
+							title="Pack into a centered column"
+							aria-label="Pack into a centered column"
 						>
 							<AlignCenter class="h-3.5 w-3.5" />
 						</button>
@@ -1206,8 +1312,8 @@
 							type="button"
 							class="mash-align-btn"
 							onclick={() => canvas.canvasBoard?.applyAlign('right')}
-							title="Align right"
-							aria-label="Align right"
+							title="Pack into a right-aligned column"
+							aria-label="Pack into a right-aligned column"
 						>
 							<AlignRight class="h-3.5 w-3.5" />
 						</button>
@@ -1215,8 +1321,8 @@
 							type="button"
 							class="mash-align-btn"
 							onclick={() => canvas.canvasBoard?.applyAlign('top')}
-							title="Align top"
-							aria-label="Align top"
+							title="Pack into a top-aligned row"
+							aria-label="Pack into a top-aligned row"
 						>
 							<AlignStartVertical class="h-3.5 w-3.5" />
 						</button>
@@ -1224,8 +1330,8 @@
 							type="button"
 							class="mash-align-btn"
 							onclick={() => canvas.canvasBoard?.applyAlign('middle')}
-							title="Align middle"
-							aria-label="Align middle"
+							title="Pack into a middle-aligned row"
+							aria-label="Pack into a middle-aligned row"
 						>
 							<AlignCenterVertical class="h-3.5 w-3.5" />
 						</button>
@@ -1233,8 +1339,8 @@
 							type="button"
 							class="mash-align-btn"
 							onclick={() => canvas.canvasBoard?.applyAlign('bottom')}
-							title="Align bottom"
-							aria-label="Align bottom"
+							title="Pack into a bottom-aligned row"
+							aria-label="Pack into a bottom-aligned row"
 						>
 							<AlignEndVertical class="h-3.5 w-3.5" />
 						</button>
@@ -1351,10 +1457,10 @@
 							'align'
 								? 'border-[var(--mash-accent)] text-[var(--mash-accent-bright)]'
 								: ''}"
-							title="Align selected"
+							title="Pack selected into a column, row, stack, or grid"
 						>
 							<AlignLeft class="h-3.5 w-3.5" />
-							Align
+							Pack
 						</button>
 					{/if}
 					<button
@@ -1547,4 +1653,6 @@
 		onConfirm={() => void runConfirmDialog()}
 		onCancel={() => (confirmDialog = null)}
 	/>
+
+	<ShortcutsModal open={shortcutsOpen} onClose={() => (shortcutsOpen = false)} />
 </div>

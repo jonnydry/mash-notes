@@ -84,6 +84,43 @@ export class CanvasUndoStack {
 		this.stack = [];
 		this.redoStack = [];
 	}
+
+	/**
+	 * Drop undo/redo entries that are invalidated by removed cards.
+	 * Layout-only entries are pruned when they mention a removed id.
+	 * Edge mutations are pruned only when a removed id appears on an edge
+	 * (so dismissing an unrelated card keeps Link/Unlink history).
+	 */
+	pruneItemIds(itemIds: Iterable<string>): void {
+		const drop = new Set(itemIds);
+		if (drop.size === 0) return;
+		const keep = (entry: CanvasUndoEntry): CanvasUndoEntry | null => {
+			const hasEdgeChange =
+				(entry.edgesBefore?.length ?? 0) > 0 || (entry.edgesAfter?.length ?? 0) > 0;
+			if (hasEdgeChange) {
+				for (const e of entry.edgesBefore ?? []) {
+					if (drop.has(e.fromItemId) || drop.has(e.toItemId)) return null;
+				}
+				for (const e of entry.edgesAfter ?? []) {
+					if (drop.has(e.fromItemId) || drop.has(e.toItemId)) return null;
+				}
+				return {
+					...entry,
+					before: entry.before.filter((s) => !drop.has(s.itemId)),
+					after: entry.after.filter((s) => !drop.has(s.itemId))
+				};
+			}
+			for (const s of entry.before) {
+				if (drop.has(s.itemId)) return null;
+			}
+			for (const s of entry.after) {
+				if (drop.has(s.itemId)) return null;
+			}
+			return entry;
+		};
+		this.stack = this.stack.map(keep).filter((e): e is CanvasUndoEntry => e !== null);
+		this.redoStack = this.redoStack.map(keep).filter((e): e is CanvasUndoEntry => e !== null);
+	}
 }
 
 /** Spatial reading order for canvas shift-range selection. */

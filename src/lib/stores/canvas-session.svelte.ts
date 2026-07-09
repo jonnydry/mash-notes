@@ -37,9 +37,11 @@ import { isPinnedCanvasKey } from '$lib/stores/note-library.svelte';
 import {
 	canLinkAsNextPage,
 	edgesInSequence,
+	findClearFlowOrigin,
 	layoutFlowSequence,
 	listFlowSequences
 } from '$lib/canvas-flow';
+import type { SnapZone } from '$lib/stores/editor-stage.svelte';
 
 export const COLLAPSED_CARD = { w: 220, h: 120 };
 export const EXPANDED_CARD = { w: 360, h: 320 };
@@ -139,6 +141,8 @@ export type CreateCanvasSessionOpts = {
 	deleteBlankNote: (id: string) => Promise<void>;
 	removeNoteFromSearch: (id: string) => void;
 	removeNoteFromLibrary: (id: string) => void;
+	/** Open a note in the screen-space editor (preferred over sticky expand). */
+	openNoteInStage?: (noteId: string, zone?: SnapZone) => void;
 };
 
 export function createCanvasSession(opts: CreateCanvasSessionOpts) {
@@ -299,21 +303,35 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 				s.pages.some((p) => p.id === fromItemId) &&
 				s.pages.some((p) => p.id === toItemId)
 		);
-		if (!seq || seq.pages.length < 2) return;
-		await applyFlowLayout(seq.pages, { recordUndo: false });
+		if (!seq || seq.pages.length < 2) return [] as string[];
+		return applyFlowLayout(seq.pages, { recordUndo: false });
 	}
 
 	/**
-	 * Pack a sequence L→R, then push other cards clear so the chain doesn’t
-	 * land on top of unrelated notes.
+	 * Pack a sequence L→R into a clear band (so unrelated notes don’t sit
+	 * in the arrow corridor), then push any remaining overlaps clear.
+	 * Returns item ids that actually moved.
 	 */
 	async function applyFlowLayout(
 		pages: CanvasItem[],
 		layoutOpts?: { recordUndo?: boolean }
-	) {
-		if (pages.length === 0) return;
-		const laid = layoutFlowSequence(pages);
+	): Promise<string[]> {
+		if (pages.length === 0) return [];
 		const pageIds = new Set(pages.map((p) => p.id));
+		const sizedPages = pages.map((p) => {
+			const s = cardDisplaySize(p, expandedNoteId);
+			return { ...p, w: s.w, h: s.h };
+		});
+		const obstacles = canvasItems
+			.filter((i) => !pageIds.has(i.id))
+			.map((i) => {
+				const s = cardDisplaySize(i, expandedNoteId);
+				return { x: i.x, y: i.y, w: s.w, h: s.h };
+			});
+		const origin = findClearFlowOrigin(sizedPages, obstacles, {
+			prefer: { x: sizedPages[0]!.x, y: sizedPages[0]!.y }
+		});
+		const laid = layoutFlowSequence(sizedPages, { origin });
 		const rects = canvasItems.map((i) => {
 			const s = cardDisplaySize(i, expandedNoteId);
 			const pos = laid.get(i.id);
@@ -329,17 +347,18 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 			before.push({ itemId: item.id, x: item.x, y: item.y });
 			moves.push({ itemId: item.id, x: next.x, y: next.y });
 		}
-		if (moves.length === 0) return;
+		if (moves.length === 0) return [];
 		await handleCanvasMoveEnd(moves, before, {
 			recordUndo: layoutOpts?.recordUndo !== false
 		});
+		return moves.map((m) => m.itemId);
 	}
 
-	/** Re-pack every valid sequence in one undoable arrange. */
-	async function relayoutFlowSequences() {
+	/** Re-pack every valid sequence in one undoable arrange. Returns true if cards moved. */
+	async function relayoutFlowSequences(): Promise<boolean> {
 		const { sequences } = listFlowSequences(canvasItems, canvasEdges);
 		const valid = sequences.filter((s) => !s.invalid && s.pages.length >= 2);
-		if (valid.length === 0) return;
+		if (valid.length === 0) return false;
 
 		const working = new Map(
 			canvasItems.map((i) => {
@@ -349,18 +368,24 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		);
 
 		for (const seq of valid) {
+			const pageIds = new Set(seq.pages.map((p) => p.id));
 			const pages = seq.pages.map((p) => {
 				const cur = working.get(p.id)!;
 				return { ...p, x: cur.x, y: cur.y, w: cur.w, h: cur.h };
 			});
-			const laid = layoutFlowSequence(pages);
+			const obstacles = [...working.values()]
+				.filter((r) => !pageIds.has(r.id))
+				.map((r) => ({ x: r.x, y: r.y, w: r.w, h: r.h }));
+			const origin = findClearFlowOrigin(pages, obstacles, {
+				prefer: { x: pages[0]!.x, y: pages[0]!.y }
+			});
+			const laid = layoutFlowSequence(pages, { origin });
 			for (const [id, pos] of laid) {
 				const cur = working.get(id);
 				if (!cur) continue;
 				cur.x = pos.x;
 				cur.y = pos.y;
 			}
-			const pageIds = new Set(pages.map((p) => p.id));
 			const bumped = resolveOverlapsKeepingFixed([...working.values()], pageIds, BUMP_GAP);
 			for (const [id, pos] of bumped) {
 				const cur = working.get(id);
@@ -379,8 +404,9 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 			before.push({ itemId: item.id, x: item.x, y: item.y });
 			moves.push({ itemId: item.id, x: next.x, y: next.y });
 		}
-		if (moves.length === 0) return;
+		if (moves.length === 0) return false;
 		await handleCanvasMoveEnd(moves, before);
+		return true;
 	}
 
 	async function connectFlowEdge(fromItemId: string, toItemId: string): Promise<boolean> {
@@ -395,10 +421,10 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 					opts.flashToast('That link would loop');
 					break;
 				case 'out':
-					opts.flashToast('That card already has a next page');
+					opts.flashToast('Start from the last page (it already has a next)');
 					break;
 				case 'in':
-					opts.flashToast('That card already has a previous page');
+					opts.flashToast('That card is already in a sequence');
 					break;
 				default: {
 					const _exhaustive: never = check.reason;
@@ -409,14 +435,17 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 			return false;
 		}
 		const edgesBefore = canvasEdges.map((e) => ({ ...e }));
-		const layoutBefore = snapshotItems(canvasItems.map((i) => i.id));
+		const layoutBeforeAll = snapshotItems(canvasItems.map((i) => i.id));
 		try {
 			const edge = await addCanvasEdge(activeCanvas.id, fromItemId, toItemId);
 			if (!canvasEdges.some((e) => e.id === edge.id)) {
 				canvasEdges = [...canvasEdges, edge];
 			}
-			await snapSequenceForLink(fromItemId, toItemId);
-			const layoutAfter = snapshotItems(layoutBefore.map((s) => s.itemId));
+			const movedIds = await snapSequenceForLink(fromItemId, toItemId);
+			// Only snapshot cards that actually moved — full-board snapshots make
+			// prune wipe Link history when an unrelated card is dismissed.
+			const layoutBefore = layoutBeforeAll.filter((s) => movedIds.includes(s.itemId));
+			const layoutAfter = snapshotItems(movedIds);
 			pushCanvasUndo('Link', layoutBefore, layoutAfter, edgesBefore, canvasEdges.map((e) => ({ ...e })));
 			return true;
 		} catch (e) {
@@ -555,6 +584,12 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		canvasUndoTick++;
 	}
 
+	/** Drop undo entries that reference removed cards; keep unrelated history. */
+	function pruneCanvasUndo(itemIds: Iterable<string>) {
+		canvasUndo.pruneItemIds(itemIds);
+		canvasUndoTick++;
+	}
+
 	async function undoCanvasLayout() {
 		const entry = canvasUndo.undo();
 		canvasUndoTick++;
@@ -649,11 +684,9 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 			opts.setSelection([...noteIds], noteIds[0] ?? null);
 			return;
 		}
+		// Additive marquee always adds — never toggles off already-selected notes.
 		const next = new Set(opts.getSelectionIds());
-		for (const id of noteIds) {
-			if (next.has(id)) next.delete(id);
-			else next.add(id);
-		}
+		for (const id of noteIds) next.add(id);
 		const ids = [...next];
 		opts.setSelection(ids, ids[0] ?? null);
 	}
@@ -680,8 +713,8 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		canvasEdges = canvasEdges.filter(
 			(e) => e.fromItemId !== itemId && e.toItemId !== itemId
 		);
-		// Layout undo snapshots may reference the removed card — drop the stack.
-		clearCanvasUndo();
+		// Drop only undo entries that referenced this card — keep the rest.
+		pruneCanvasUndo([itemId]);
 
 		if (item && expandedNoteId === item.noteId) {
 			expandedNoteId = null;
@@ -803,21 +836,21 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		void updateCanvasItemPosition(item.id, { x: item.x, y: item.y, w, h });
 	}
 
-	/** Tray double-click: ensure note is on canvas, then expand as sticky. */
+	/** Tray / search / peel: ensure note is on canvas, then open in the stage editor. */
 	async function openStickyFromTray(noteId: string) {
 		if (!activeCanvas) return;
 		const existing = canvasItems.find((i) => i.noteId === noteId);
 		if (!existing) {
 			const spawn =
-				canvasBoard?.getSpawnPoint(EXPANDED_CARD, canvasItems.length) ?? {
+				canvasBoard?.getSpawnPoint(COLLAPSED_CARD, canvasItems.length) ?? {
 					x: 80,
 					y: 80
 				};
 			const item = await addNoteToCanvas(activeCanvas.id, noteId, {
 				x: spawn.x,
 				y: spawn.y,
-				w: EXPANDED_CARD.w,
-				h: EXPANDED_CARD.h
+				w: COLLAPSED_CARD.w,
+				h: COLLAPSED_CARD.h
 			});
 			await refreshCanvasItems();
 			settlingIds = new Set([item.id]);
@@ -827,7 +860,9 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		} else {
 			canvasBoard?.ensureNoteVisible(noteId);
 		}
-		expandSticky(noteId, 'body');
+		opts.selectNote(noteId, { keepSelection: true });
+		if (opts.openNoteInStage) opts.openNoteInStage(noteId, 'maximize');
+		else expandSticky(noteId, 'body');
 	}
 
 	function onTrayDragStart(e: DragEvent, noteId: string) {
@@ -978,6 +1013,7 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		applyLayoutSnapshots,
 		pushCanvasUndo,
 		clearCanvasUndo,
+		pruneCanvasUndo,
 		undoCanvasLayout,
 		redoCanvasLayout,
 		handleCanvasMove,
