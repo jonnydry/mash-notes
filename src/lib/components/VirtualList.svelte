@@ -12,14 +12,17 @@
 
 	let container: HTMLDivElement | undefined = $state();
 	let scrollTop = $state(0);
-	let containerHeight = $state(600);
+	let containerHeight = $state(0);
 
 	const totalHeight = $derived(items.length * itemHeight);
 
 	const startIndex = $derived(Math.max(0, Math.floor(scrollTop / itemHeight) - overscan));
 
 	const endIndex = $derived(
-		Math.min(items.length, Math.ceil((scrollTop + containerHeight) / itemHeight) + overscan)
+		Math.min(
+			items.length,
+			Math.ceil((scrollTop + Math.max(containerHeight, itemHeight)) / itemHeight) + overscan
+		)
 	);
 
 	const visibleItems = $derived(items.slice(startIndex, endIndex));
@@ -61,7 +64,11 @@
 	});
 </script>
 
-<div bind:this={container} class="overflow-y-auto" style="height: 100%;">
+<div
+	bind:this={container}
+	class="mash-virtual-list min-h-0 flex-1 overflow-y-auto overscroll-contain"
+	onwheel={(e) => e.stopPropagation()}
+>
 	<div style="height: {totalHeight}px; position: relative; width: 100%;">
 		<div style="transform: translateY({offsetY}px); position: absolute; top: 0; left: 0; right: 0;">
 			{#each visibleItems as item, i (item.id ?? i)}

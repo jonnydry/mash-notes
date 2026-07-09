@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { X, Moon, Sun } from 'lucide-svelte';
+	import { X } from 'lucide-svelte';
 	import { theme } from '$lib/stores/theme.svelte';
 
 	interface Props {
@@ -61,7 +61,15 @@
 						class:is-active={theme.mode === 'light'}
 						onclick={() => theme.setMode('light')}
 					>
-						<Sun class="h-3 w-3" strokeWidth={2} />
+						<img
+							src="/icons/mash-flame-day.png"
+							srcset="/icons/mash-flame-day.png 1x, /icons/mash-flame-day@2x.png 2x"
+							alt=""
+							width="20"
+							height="20"
+							class="mash-theme-flame mash-theme-flame--sm"
+							draggable="false"
+						/>
 						Day
 					</button>
 					<button
@@ -70,7 +78,15 @@
 						class:is-active={theme.mode === 'dark'}
 						onclick={() => theme.setMode('dark')}
 					>
-						<Moon class="h-3 w-3" strokeWidth={2} />
+						<img
+							src="/icons/mash-flame-night.png"
+							srcset="/icons/mash-flame-night.png 1x, /icons/mash-flame-night@2x.png 2x"
+							alt=""
+							width="20"
+							height="20"
+							class="mash-theme-flame mash-theme-flame--sm"
+							draggable="false"
+						/>
 						Night
 					</button>
 				</div>

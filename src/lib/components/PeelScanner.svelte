@@ -203,6 +203,7 @@
 
 		<div class="mash-peel-body">
 			{#if mode === 'folders'}
+				<div class="mash-peel-body-scroll" onwheel={(e) => e.stopPropagation()}>
 				{#if folderRows.length === 0}
 					<div class="mash-peel-empty">No folders yet</div>
 				{:else}
@@ -227,7 +228,9 @@
 						</div>
 					{/each}
 				{/if}
+				</div>
 			{:else if mode === 'tags'}
+				<div class="mash-peel-body-scroll" onwheel={(e) => e.stopPropagation()}>
 				{#if tags.length === 0}
 					<div class="mash-peel-empty">No tags yet</div>
 				{:else}
@@ -252,7 +255,9 @@
 						</div>
 					{/each}
 				{/if}
+				</div>
 			{:else if mode === 'linked'}
+				<div class="mash-peel-body-scroll" onwheel={(e) => e.stopPropagation()}>
 				{#if !linkedFocusTitle}
 					<div class="mash-peel-empty">Select a note to see links</div>
 				{:else}
@@ -291,6 +296,7 @@
 						{/each}
 					{/if}
 				{/if}
+				</div>
 			{:else if isLoading}
 				<div class="mash-peel-empty">Loading…</div>
 			{:else if notes.length === 0}

@@ -738,6 +738,7 @@ body {
 	display: flex;
 	flex-direction: column;
 	width: 280px;
+	height: min(78vh, 720px);
 	max-height: min(78vh, 720px);
 	border-radius: 18px;
 	border: 1px solid var(--mash-glass-border);
@@ -765,6 +766,7 @@ body {
 	gap: 4px;
 	padding: 12px 10px 8px 14px;
 	border-bottom: 1px solid var(--mash-tray-edge);
+	flex-shrink: 0;
 }
 .mash-peel-icon-btn {
 	display: flex;
@@ -785,11 +787,20 @@ body {
 .mash-peel-filter {
 	padding: 8px 10px;
 	border-bottom: 1px solid var(--mash-tray-edge);
+	flex-shrink: 0;
 }
 .mash-peel-body {
 	flex: 1;
-	min-height: 180px;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
 	overflow: hidden;
+}
+.mash-peel-body-scroll {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	overscroll-behavior: contain;
 }
 .mash-peel-footer {
 	padding: 8px 12px;
@@ -797,6 +808,7 @@ body {
 	font-size: 10px;
 	letter-spacing: 0.02em;
 	color: var(--mash-ink-muted);
+	flex-shrink: 0;
 }
 
 /* Settings tray — same chrome as peel, scrollable sections */
@@ -1012,22 +1024,38 @@ body {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	width: 34px;
-	height: 34px;
-	border-radius: 10px;
+	width: 46px;
+	height: 46px;
+	border-radius: 13px;
 	border: 1px solid var(--mash-tray-edge);
 	background: transparent;
 	color: var(--mash-ink-muted);
 	cursor: pointer;
+	overflow: hidden;
 	transition:
 		background 140ms ease,
-		color 140ms ease,
-		border-color 140ms ease;
+		border-color 140ms ease,
+		transform 160ms ease;
 }
 .mash-theme-toggle:hover {
 	background: var(--mash-hover-fill-soft);
-	color: var(--mash-ink);
 	border-color: color-mix(in srgb, var(--mash-ink-muted) 45%, transparent);
+}
+.mash-theme-toggle:hover .mash-theme-flame {
+	transform: scale(1.08) rotate(-3deg);
+}
+.mash-theme-flame {
+	display: block;
+	width: 40px;
+	height: 40px;
+	object-fit: contain;
+	pointer-events: none;
+	user-select: none;
+	transition: transform 160ms ease;
+}
+.mash-theme-flame--sm {
+	width: 20px;
+	height: 20px;
 }
 
 .mash-row-hover:hover {
@@ -1089,6 +1117,7 @@ body {
 	}
 	.mash-peel-slot .mash-peel {
 		width: 100%;
+		height: min(48vh, 380px);
 		max-height: min(48vh, 380px);
 	}
 
