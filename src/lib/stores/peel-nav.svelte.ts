@@ -88,6 +88,9 @@ export type DockActionHandlers = {
 	resolveLinkedFocus: () => string | null;
 	newNote: () => void;
 	focusSearch: () => void;
+	getSettingsOpen: () => boolean;
+	openSettings: () => void;
+	closeSettings: () => void;
 };
 
 export function dispatchDockAction(action: DockAction, h: DockActionHandlers): void {
@@ -125,6 +128,13 @@ export function dispatchDockAction(action: DockAction, h: DockActionHandlers): v
 			h.openPeel('notes');
 			h.focusSearch();
 			break;
+		case 'settings':
+			if (h.getSettingsOpen()) h.closeSettings();
+			else {
+				h.closePeel(true);
+				h.openSettings();
+			}
+			break;
 		default: {
 			const _exhaustive: never = action;
 			void _exhaustive;
@@ -145,6 +155,9 @@ export type CreatePeelNavOpts = {
 	getExpandedNoteId: () => string | null;
 	getSelectedId: () => string | null;
 	getFirstNoteId: () => string | null;
+	getSettingsOpen: () => boolean;
+	openSettings: () => void;
+	closeSettings: () => void;
 };
 
 export function createPeelNav(opts: CreatePeelNavOpts) {
@@ -164,6 +177,7 @@ export function createPeelNav(opts: CreatePeelNavOpts) {
 	const canvasTitle = $derived(canvasTitleFromFilter(currentFilter));
 
 	function openPeel(mode: PeelMode = 'notes') {
+		opts.closeSettings();
 		const patch = peelOpenPatch(mode);
 		peelMode = patch.peelMode;
 		peelOpen = patch.peelOpen;
@@ -236,7 +250,10 @@ export function createPeelNav(opts: CreatePeelNavOpts) {
 				linkedFocusId ??
 				opts.getFirstNoteId(),
 			newNote: opts.newNote,
-			focusSearch
+			focusSearch,
+			getSettingsOpen: opts.getSettingsOpen,
+			openSettings: opts.openSettings,
+			closeSettings: opts.closeSettings
 		});
 	}
 

@@ -9,7 +9,6 @@
 		boundsOf,
 		clampSize,
 		fitViewport,
-		loadSnapPref,
 		panToShowRect,
 		saveSnapPref,
 		snapPoint,
@@ -92,6 +91,8 @@
 		canRedo?: boolean;
 		onUndo?: () => void;
 		onRedo?: () => void;
+		/** Shared with Settings — bindable so dock prefs stay in sync. */
+		snapEnabled?: boolean;
 	}
 
 	let {
@@ -124,14 +125,14 @@
 		canUndo = false,
 		canRedo = false,
 		onUndo,
-		onRedo
+		onRedo,
+		snapEnabled = $bindable(false)
 	}: Props = $props();
 
 	let boardEl: HTMLDivElement | undefined = $state();
 	let panX = $state(0);
 	let panY = $state(0);
 	let scale = $state(1);
-	let snapEnabled = $state(false);
 	let altHeld = $state(false);
 	let spaceHeld = $state(false);
 	let pointerOverBoard = $state(false);
@@ -827,10 +828,6 @@
 		onMoveMany(moves);
 		onMoveEnd?.(moves, before);
 	}
-
-	$effect(() => {
-		snapEnabled = loadSnapPref();
-	});
 
 	$effect(() => {
 		if (!canvasId) {

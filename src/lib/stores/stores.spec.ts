@@ -5,7 +5,14 @@ import {
 	COLLAPSED_CARD,
 	EXPANDED_CARD
 } from './canvas-session.svelte';
-import { peelTitleFor, peelOpenPatch, windowPeelNotes, PEEL_UI_CAP } from './peel-nav.svelte';
+import {
+	dispatchDockAction,
+	peelTitleFor,
+	peelOpenPatch,
+	windowPeelNotes,
+	PEEL_UI_CAP,
+	type DockActionHandlers
+} from './peel-nav.svelte';
 import { filterPeelNotes, uniqueFoldersFrom, canvasFolderFromFilter } from './note-library.svelte';
 import {
 	THEME_STORAGE_KEY,
@@ -96,5 +103,38 @@ describe('stores helpers', () => {
 		expect(readStoredTheme()).toBe('light');
 		localStorage.setItem(THEME_STORAGE_KEY, 'nope');
 		expect(readStoredTheme()).toBe('dark');
+	});
+
+	it('dispatchDockAction toggles settings and closes peel', () => {
+		let settingsOpen = false;
+		let peelClosed = false;
+		const h: DockActionHandlers = {
+			clearFilter: () => {},
+			setFilter: () => {},
+			openPeel: () => {},
+			closePeel: () => {
+				peelClosed = true;
+			},
+			getPeelOpen: () => true,
+			getPeelMode: () => 'notes',
+			setLinkedFocus: () => {},
+			resolveLinkedFocus: () => null,
+			newNote: () => {},
+			focusSearch: () => {},
+			getSettingsOpen: () => settingsOpen,
+			openSettings: () => {
+				settingsOpen = true;
+			},
+			closeSettings: () => {
+				settingsOpen = false;
+			}
+		};
+
+		dispatchDockAction('settings', h);
+		expect(settingsOpen).toBe(true);
+		expect(peelClosed).toBe(true);
+
+		dispatchDockAction('settings', h);
+		expect(settingsOpen).toBe(false);
 	});
 });

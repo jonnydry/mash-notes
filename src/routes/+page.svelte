@@ -27,6 +27,7 @@
 	} from 'lucide-svelte';
 	import MashDock from '$lib/components/MashDock.svelte';
 	import PeelScanner from '$lib/components/PeelScanner.svelte';
+	import SettingsPanel from '$lib/components/SettingsPanel.svelte';
 	import CanvasBoard from '$lib/components/CanvasBoard.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { extractWikilinks } from '$lib/markdown';
@@ -39,6 +40,7 @@
 	} from '$lib/canvas-dismiss';
 	import { findBacklinks, findOutgoingNotes } from '$lib/links';
 	import { downloadSyncBundle } from '$lib/sync-file';
+	import { loadSnapPref, saveSnapPref } from '$lib/canvas-geom';
 	import {
 		COLLAPSED_CARD,
 		EXPANDED_CARD,
@@ -66,6 +68,8 @@
 	let paletteQuery = $state('');
 	let paletteInput = $state<HTMLInputElement | null>(null);
 	let paletteHighlight = $state(0);
+	let settingsOpen = $state(false);
+	let snapEnabled = $state(false);
 
 	$effect(() => {
 		if (!showPalette) return;
@@ -79,6 +83,7 @@
 	});
 
 	let importInputEl: HTMLInputElement | undefined = $state();
+	let markdownImportInputEl: HTMLInputElement | undefined = $state();
 	let syncInputEl: HTMLInputElement | undefined = $state();
 
 	function flashToast(msg: string, ms = 1600) {
@@ -149,8 +154,20 @@
 		newNote: () => void handleNewNote(),
 		getExpandedNoteId: () => canvasHolder.session?.expandedNoteId ?? null,
 		getSelectedId: () => library.selectedId,
-		getFirstNoteId: () => library.notes[0]?.id ?? null
+		getFirstNoteId: () => library.notes[0]?.id ?? null,
+		getSettingsOpen: () => settingsOpen,
+		openSettings: () => {
+			settingsOpen = true;
+		},
+		closeSettings: () => {
+			settingsOpen = false;
+		}
 	});
+
+	function setSnapEnabled(on: boolean) {
+		snapEnabled = on;
+		saveSnapPref(on);
+	}
 
 	const canvas = createCanvasSession({
 		flashToast,
@@ -526,6 +543,10 @@
 				canvas.collapseSticky();
 				return;
 			}
+			if (settingsOpen) {
+				settingsOpen = false;
+				return;
+			}
 			if (peel.peelOpen) {
 				peel.closePeel(true);
 				return;
@@ -538,6 +559,15 @@
 
 	const paletteActions = [
 		{ label: 'New note', action: handleNewNote, shortcut: '⌘N' },
+		{
+			label: 'Open Settings…',
+			action: () => {
+				showPalette = false;
+				peel.closePeel(true);
+				settingsOpen = true;
+			},
+			shortcut: ''
+		},
 		{
 			label: 'Mash selected notes',
 			action: () => {
@@ -632,6 +662,14 @@
 			shortcut: ''
 		},
 		{
+			label: 'Import markdown vault…',
+			action: () => {
+				showPalette = false;
+				markdownImportInputEl?.click();
+			},
+			shortcut: ''
+		},
+		{
 			label: 'Export all as JSON',
 			action: () => {
 				exportNotesJson(library.notes, 'mash-notes-export.json');
@@ -717,6 +755,7 @@
 	}
 
 	onMount(() => {
+		snapEnabled = loadSnapPref();
 		void library.loadNotes();
 		window.addEventListener('keydown', handleKeydown);
 		window.addEventListener('pagehide', library.flushPendingSave);
@@ -867,11 +906,15 @@
 					folders={library.uniqueFolders}
 					onDropNotes={canvas.handleDropNotes}
 					onMashCards={handleMashCards}
-					onBlankPointerDown={() => peel.closePeel()}
+					onBlankPointerDown={() => {
+						peel.closePeel();
+						settingsOpen = false;
+					}}
 					canUndo={canvas.canCanvasUndo}
 					canRedo={canvas.canCanvasRedo}
 					onUndo={canvas.undoCanvasLayout}
 					onRedo={canvas.redoCanvasLayout}
+					bind:snapEnabled
 				/>
 			</div>
 		</div>
@@ -886,10 +929,28 @@
 				foldersOpen={peel.foldersFlyout}
 				tagsOpen={peel.tagsFlyout}
 				linkedOpen={peel.linkedFlyout}
+				settingsOpen={settingsOpen}
 				dockSelect={peel.handleDockAction}
 			/>
 		</div>
-		{#if peel.peelOpen}
+		{#if settingsOpen}
+			<div class="mash-peel-slot pointer-events-auto absolute top-1/2 left-[4.75rem] z-30 -translate-y-1/2">
+				<SettingsPanel
+					{snapEnabled}
+					onClose={() => (settingsOpen = false)}
+					onSnapChange={setSnapEnabled}
+					onImportMarkdown={() => markdownImportInputEl?.click()}
+					onImportJson={() => importInputEl?.click()}
+					onExportJson={() => exportNotesJson(library.notes, 'mash-notes-export.json')}
+					onImportSync={() => syncInputEl?.click()}
+					onExportSync={() => {
+						void downloadSyncBundle(library.notes).then(() => {
+							flashToast('Exported sync bundle (notes + desk)');
+						});
+					}}
+				/>
+			</div>
+		{:else if peel.peelOpen}
 			<div class="mash-peel-slot pointer-events-auto absolute top-1/2 left-[4.75rem] z-30 -translate-y-1/2">
 				<PeelScanner
 					open={peel.peelOpen}
@@ -950,7 +1011,7 @@
 		{#if library.selectionIds.length > 0}
 			<div
 				class="mash-selection-bar absolute bottom-5 left-1/2 z-20 flex -translate-x-1/2 flex-col items-center gap-2"
-				class:mash-selection-bar--peel={peel.peelOpen}
+				class:mash-selection-bar--peel={peel.peelOpen || settingsOpen}
 			>
 				{#if library.bulkMenu === 'tag'}
 					<div
@@ -1320,6 +1381,16 @@
 		accept="application/json,.json"
 		class="hidden"
 		onchange={(e) => void library.handleImportFile(e)}
+	/>
+	<input
+		bind:this={markdownImportInputEl}
+		data-testid="markdown-import"
+		type="file"
+		accept=".md,text/markdown"
+		multiple
+		webkitdirectory
+		class="hidden"
+		onchange={(e) => void library.handleMarkdownImport(e)}
 	/>
 	<input
 		bind:this={syncInputEl}
