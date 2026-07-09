@@ -13,7 +13,14 @@ import {
 	PEEL_UI_CAP,
 	type DockActionHandlers
 } from './peel-nav.svelte';
-import { filterPeelNotes, uniqueFoldersFrom, canvasFolderFromFilter } from './note-library.svelte';
+import {
+	filterPeelNotes,
+	uniqueFoldersFrom,
+	canvasFolderFromFilter,
+	canvasKeyFromFilter,
+	canvasTitleFromFilter,
+	PINNED_CANVAS_KEY
+} from './note-library.svelte';
 import {
 	THEME_STORAGE_KEY,
 	isMashTheme,
@@ -88,6 +95,11 @@ describe('stores helpers', () => {
 		expect(filterPeelNotes(notes, 'alpha')).toHaveLength(1);
 		expect(uniqueFoldersFrom(notes)).toEqual(['Ideas/Work']);
 		expect(canvasFolderFromFilter({ type: 'folder', value: 'Ideas' })).toBe('Ideas');
+		expect(canvasFolderFromFilter({ type: 'pinned' })).toBe('');
+		expect(canvasKeyFromFilter({ type: 'pinned' })).toBe(PINNED_CANVAS_KEY);
+		expect(canvasKeyFromFilter({ type: 'folder', value: 'Ideas' })).toBe('Ideas');
+		expect(canvasTitleFromFilter({ type: 'pinned' })).toBe('Pinned');
+		expect(canvasTitleFromFilter({ type: null })).toBe('Desk');
 	});
 
 	it('theme helpers validate and read storage', () => {

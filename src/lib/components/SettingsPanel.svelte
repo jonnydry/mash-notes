@@ -73,7 +73,7 @@
 					</button>
 				</div>
 			</div>
-			<p class="mash-settings-hint">Stickies stay parchment; chrome follows the theme.</p>
+			<p class="mash-settings-hint">Stickies and chrome both follow day / night.</p>
 		</section>
 
 		<section class="mash-settings-section">

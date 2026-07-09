@@ -6,7 +6,8 @@
  */
 
 import Dexie, { type Table } from 'dexie';
-import type { Canvas, CanvasItem, Note } from './types';
+import type { Canvas, CanvasEdge, CanvasItem, Note } from './types';
+import { gridSlotPosition } from './canvas-geom';
 
 // =============================================================================
 // DATABASE
@@ -18,6 +19,7 @@ class MashDB extends Dexie {
 	notes!: Table<Note, string>;
 	canvases!: Table<Canvas, string>;
 	canvasItems!: Table<CanvasItem, string>;
+	canvasEdges!: Table<CanvasEdge, string>;
 
 	constructor() {
 		super(DB_NAME);
@@ -77,6 +79,12 @@ class MashDB extends Dexie {
 					await table.bulkDelete(toDelete);
 				}
 			});
+		this.version(5).stores({
+			notes: 'id, modified, folder, pinned, *tags',
+			canvases: 'id, &folder, modified',
+			canvasItems: 'id, canvasId, noteId, &[canvasId+noteId]',
+			canvasEdges: 'id, canvasId, fromItemId, toItemId, &[canvasId+fromItemId+toItemId]'
+		});
 	}
 }
 
@@ -108,6 +116,7 @@ export async function createNote(partial: {
 	tags?: string[];
 	links?: string[];
 	mashedFrom?: string[];
+	pinned?: 0 | 1;
 }): Promise<Note> {
 	const note: Note = {
 		id: newId(),
@@ -119,7 +128,7 @@ export async function createNote(partial: {
 		mashedFrom: partial.mashedFrom,
 		created: Date.now(),
 		modified: Date.now(),
-		pinned: 0
+		pinned: partial.pinned === 1 ? 1 : 0
 	};
 
 	await db.notes.add(note);
@@ -161,7 +170,11 @@ export async function updateNote(id: string, changes: Partial<Note>): Promise<No
  */
 export async function deleteNote(id: string): Promise<void> {
 	await db.notes.delete(id);
-	// Drop canvas placements for this note (note gone → card gone)
+	// Drop canvas placements + incident flow edges for this note
+	const items = await db.canvasItems.where('noteId').equals(id).toArray();
+	for (const item of items) {
+		await removeEdgesForItem(item.id);
+	}
 	await db.canvasItems.where('noteId').equals(id).delete();
 }
 
@@ -189,6 +202,7 @@ export async function getAllNotesForSearchIndex(): Promise<Note[]> {
 /**
  * Get or create the default canvas for a folder path.
  * Unique on `folder` — concurrent callers share one canvas.
+ * Pass `PINNED_CANVAS_KEY` for the dedicated Pinned desk.
  */
 export async function getOrCreateFolderCanvas(folder: string): Promise<Canvas> {
 	return db.transaction('rw', db.canvases, async () => {
@@ -196,10 +210,16 @@ export async function getOrCreateFolderCanvas(folder: string): Promise<Canvas> {
 		if (existing) return existing;
 
 		const now = Date.now();
+		const title =
+			folder === '__mash_pinned__'
+				? 'Pinned canvas'
+				: folder
+					? `${folder} canvas`
+					: 'Root canvas';
 		const canvas: Canvas = {
 			id: newId(),
 			folder,
-			title: folder ? `${folder} canvas` : 'Root canvas',
+			title,
 			created: now,
 			modified: now
 		};
@@ -231,12 +251,13 @@ export async function addNoteToCanvas(
 		if (existing) return existing;
 
 		const count = await db.canvasItems.where('canvasId').equals(canvasId).count();
+		const slot = gridSlotPosition(count);
 		const item: CanvasItem = {
 			id: newId(),
 			canvasId,
 			noteId,
-			x: pos?.x ?? 40 + (count % 4) * 240,
-			y: pos?.y ?? 40 + Math.floor(count / 4) * 160,
+			x: pos?.x ?? slot.x,
+			y: pos?.y ?? slot.y,
 			w: pos?.w ?? 220,
 			h: pos?.h ?? 120
 		};
@@ -271,6 +292,7 @@ export async function updateCanvasItemPosition(
 
 export async function removeCanvasItem(id: string): Promise<void> {
 	const item = await db.canvasItems.get(id);
+	await removeEdgesForItem(id);
 	await db.canvasItems.delete(id);
 	if (item) {
 		await db.canvases.update(item.canvasId, { modified: Date.now() });
@@ -282,8 +304,77 @@ export async function removeNotesFromCanvas(canvasId: string, noteIds: string[])
 	const idSet = new Set(noteIds);
 	const items = await db.canvasItems.where('canvasId').equals(canvasId).toArray();
 	const toDelete = items.filter((i) => idSet.has(i.noteId)).map((i) => i.id);
+	for (const itemId of toDelete) {
+		await removeEdgesForItem(itemId);
+	}
 	await db.canvasItems.bulkDelete(toDelete);
 	if (toDelete.length > 0) {
+		await db.canvases.update(canvasId, { modified: Date.now() });
+	}
+}
+
+// =============================================================================
+// CANVAS FLOW EDGES
+// =============================================================================
+
+export async function listCanvasEdges(canvasId: string): Promise<CanvasEdge[]> {
+	return db.canvasEdges.where('canvasId').equals(canvasId).toArray();
+}
+
+export async function addCanvasEdge(
+	canvasId: string,
+	fromItemId: string,
+	toItemId: string
+): Promise<CanvasEdge> {
+	if (fromItemId === toItemId) {
+		throw new Error('Cannot link a card to itself');
+	}
+	return db.transaction('rw', db.canvasEdges, db.canvases, async () => {
+		const existing = await db.canvasEdges
+			.where('[canvasId+fromItemId+toItemId]')
+			.equals([canvasId, fromItemId, toItemId])
+			.first();
+		if (existing) return existing;
+
+		const edge: CanvasEdge = {
+			id: newId(),
+			canvasId,
+			fromItemId,
+			toItemId,
+			created: Date.now()
+		};
+		try {
+			await db.canvasEdges.add(edge);
+			await db.canvases.update(canvasId, { modified: Date.now() });
+			return edge;
+		} catch {
+			const raced = await db.canvasEdges
+				.where('[canvasId+fromItemId+toItemId]')
+				.equals([canvasId, fromItemId, toItemId])
+				.first();
+			if (raced) return raced;
+			throw new Error('Failed to add canvas edge');
+		}
+	});
+}
+
+export async function removeCanvasEdge(id: string): Promise<void> {
+	const edge = await db.canvasEdges.get(id);
+	await db.canvasEdges.delete(id);
+	if (edge) {
+		await db.canvases.update(edge.canvasId, { modified: Date.now() });
+	}
+}
+
+/** Delete all flow edges that touch a canvas item (as source or target). */
+export async function removeEdgesForItem(itemId: string): Promise<void> {
+	const from = await db.canvasEdges.where('fromItemId').equals(itemId).toArray();
+	const to = await db.canvasEdges.where('toItemId').equals(itemId).toArray();
+	const ids = [...new Set([...from, ...to].map((e) => e.id))];
+	if (ids.length === 0) return;
+	const canvasId = from[0]?.canvasId ?? to[0]?.canvasId;
+	await db.canvasEdges.bulkDelete(ids);
+	if (canvasId) {
 		await db.canvases.update(canvasId, { modified: Date.now() });
 	}
 }

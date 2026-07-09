@@ -4,6 +4,24 @@
 
 export const GRID = 24;
 
+/** Auto-place / import: 4-wide grid on Snap multiples (not 40/160, which drift under Snap). */
+export const GRID_COLS = 4;
+export const GRID_ORIGIN = GRID * 2; // 48
+export const GRID_SLOT_W = GRID * 10; // 240 — fits 220-wide cards with a 20px gutter
+export const GRID_SLOT_H = GRID * 6; // 144 — 120-tall cards + 24px gutter
+
+/** Board position for the nth auto-placed card (0-based). Always Snap-aligned. */
+export function gridSlotPosition(
+	index: number,
+	cols = GRID_COLS
+): { x: number; y: number } {
+	const c = Math.max(1, cols);
+	return {
+		x: GRID_ORIGIN + (index % c) * GRID_SLOT_W,
+		y: GRID_ORIGIN + Math.floor(index / c) * GRID_SLOT_H
+	};
+}
+
 export type AlignMode =
 	| 'left'
 	| 'center'
@@ -79,7 +97,8 @@ export function boundsOf(rects: Array<{ x: number; y: number; w: number; h: numb
 	return { minX, minY, maxX, maxY, width: maxX - minX, height: maxY - minY };
 }
 
-const ALIGN_GAP = 16;
+/** Pack / arrange gap — same as Snap grid so Align keeps cards on-lattice. */
+const ALIGN_GAP = GRID;
 
 function packColumn(
 	rects: Rect[],
@@ -233,11 +252,11 @@ export function fitViewport(
 	return { panX, panY, scale };
 }
 
-const CASCADE_STEP_X = 28;
-const CASCADE_STEP_Y = 24;
+const CASCADE_STEP_X = GRID; // 24 — stay on Snap lattice when cascading
+const CASCADE_STEP_Y = GRID;
 const CASCADE_MOD = 8;
 const OVERLAP_RATIO = 0.55;
-const NUDGE_STEP = 36;
+const NUDGE_STEP = GRID * 2; // 48 — stay on Snap lattice when spiraling
 const NUDGE_MAX = 12;
 
 function rectOverlapRatio(
@@ -315,7 +334,7 @@ export function viewCenterPlacement(opts: {
 		}
 	}
 
-	return { x, y };
+	return { x: snapValue(x), y: snapValue(y) };
 }
 
 /**
@@ -357,10 +376,13 @@ export function panToShowRect(
 	return { panX, panY };
 }
 
-const BUMP_GAP = 16;
+const BUMP_GAP = GRID; // 24 — keep bumped cards on the Snap lattice
 const BUMP_MAX_PASSES = 16;
+/** Cards within this x/y delta are treated as the same column/row. */
+const BAND_ALIGN = 48;
 
 type BumpRect = { id: string; x: number; y: number; w: number; h: number };
+type BumpDir = 'right' | 'left' | 'down' | 'up';
 
 function rectsOverlapWithGap(a: BumpRect, b: BumpRect, gap: number): boolean {
 	return !(
@@ -371,38 +393,172 @@ function rectsOverlapWithGap(a: BumpRect, b: BumpRect, gap: number): boolean {
 	);
 }
 
-/**
- * Shortest axis-aligned push so `other` clears `fixed` with `gap`.
- * Prefers vertical on ties (column layouts).
- */
-function pushAwayDelta(
-	fixed: BumpRect,
-	other: BumpRect,
-	gap: number
-): { dx: number; dy: number } | null {
-	if (!rectsOverlapWithGap(fixed, other, gap)) return null;
+/** Same grid column = similar left edges (ignore tall expand centers). */
+function sameColumn(a: BumpRect, b: BumpRect): boolean {
+	return Math.abs(a.x - b.x) <= BAND_ALIGN;
+}
 
-	const pushRight = fixed.x + fixed.w + gap - other.x;
-	const pushLeft = other.x + other.w + gap - fixed.x;
-	const pushDown = fixed.y + fixed.h + gap - other.y;
-	const pushUp = other.y + other.h + gap - fixed.y;
-
-	const options = [
-		{ dx: pushRight, dy: 0, mag: pushRight, vert: 0 },
-		{ dx: -pushLeft, dy: 0, mag: pushLeft, vert: 0 },
-		{ dx: 0, dy: pushDown, mag: pushDown, vert: 1 },
-		{ dx: 0, dy: -pushUp, mag: pushUp, vert: 1 }
-	];
-	options.sort((a, b) => a.mag - b.mag || b.vert - a.vert);
-	const best = options[0];
-	if (!best || best.mag <= 0) return null;
-	return { dx: best.dx, dy: best.dy };
+/** Same grid row = similar top edges. */
+function sameRow(a: BumpRect, b: BumpRect): boolean {
+	return Math.abs(a.y - b.y) <= BAND_ALIGN;
 }
 
 /**
- * Keep `anchor` fixed and push overlapping neighbors clear (with gap).
- * Resolves chains so bumped cards don't land on each other.
- * Returns only cards that actually moved.
+ * Prefer row/column axes so a grid stays a grid (not shortest-path stagger).
+ */
+function preferredPushDir(fixed: BumpRect, other: BumpRect): BumpDir {
+	const ocx = other.x + other.w / 2;
+	const ocy = other.y + other.h / 2;
+	const fcx = fixed.x + fixed.w / 2;
+	const fcy = fixed.y + fixed.h / 2;
+	const dx = ocx - fcx;
+	const dy = ocy - fcy;
+
+	const col = sameColumn(fixed, other);
+	const row = sameRow(fixed, other);
+	if (col && !row) return dy >= 0 ? 'down' : 'up';
+	if (row && !col) return dx >= 0 ? 'right' : 'left';
+	// Diagonal / ambiguous: prefer the dominant center offset.
+	if (Math.abs(dy) >= Math.abs(dx)) return dy >= 0 ? 'down' : 'up';
+	return dx >= 0 ? 'right' : 'left';
+}
+
+function pushAmountInDir(
+	fixed: BumpRect,
+	other: BumpRect,
+	dir: BumpDir,
+	gap: number
+): number {
+	if (!rectsOverlapWithGap(fixed, other, gap)) return 0;
+	switch (dir) {
+		case 'right':
+			return Math.max(0, fixed.x + fixed.w + gap - other.x);
+		case 'left':
+			return Math.max(0, other.x + other.w + gap - fixed.x);
+		case 'down':
+			return Math.max(0, fixed.y + fixed.h + gap - other.y);
+		case 'up':
+			return Math.max(0, other.y + other.h + gap - fixed.y);
+		default: {
+			const _exhaustive: never = dir;
+			void _exhaustive;
+			return 0;
+		}
+	}
+}
+
+function bandKey(n: number): number {
+	return Math.round(n / BAND_ALIGN);
+}
+
+function applyAxisShift(
+	positions: Map<string, BumpRect>,
+	origins: Map<string, { x: number; y: number }>,
+	anchor: BumpRect,
+	axis: 'y' | 'x',
+	gap: number
+): boolean {
+	let needPos = 0;
+	let needNeg = 0;
+	const hitPos = new Set<string>();
+	const hitNeg = new Set<string>();
+
+	for (const rect of positions.values()) {
+		if (!rectsOverlapWithGap(anchor, rect, gap)) continue;
+		const dir = preferredPushDir(anchor, rect);
+		if (axis === 'y' && dir !== 'down' && dir !== 'up') continue;
+		if (axis === 'x' && dir !== 'right' && dir !== 'left') continue;
+		const amount = pushAmountInDir(anchor, rect, dir, gap);
+		if (amount <= 0) continue;
+		if (dir === 'down' || dir === 'right') {
+			needPos = Math.max(needPos, amount);
+			hitPos.add(rect.id);
+		} else {
+			needNeg = Math.max(needNeg, amount);
+			hitNeg.add(rect.id);
+		}
+	}
+
+	if (needPos === 0 && needNeg === 0) return false;
+
+	const bandsPos = new Set<number>();
+	const bandsNeg = new Set<number>();
+	for (const id of hitPos) {
+		const o = origins.get(id);
+		if (!o) continue;
+		bandsPos.add(bandKey(axis === 'y' ? o.y : o.x));
+	}
+	for (const id of hitNeg) {
+		const o = origins.get(id);
+		if (!o) continue;
+		bandsNeg.add(bandKey(axis === 'y' ? o.y : o.x));
+	}
+
+	// Pull in same-column (vertical) / same-row (horizontal) stack mates
+	// so chains under the expand stay on the grid.
+	for (const rect of positions.values()) {
+		const o = origins.get(rect.id)!;
+		const originRect = { ...rect, x: o.x, y: o.y };
+		if (axis === 'y' && sameColumn(anchor, originRect)) {
+			if (needPos > 0 && o.y + rect.h / 2 >= anchor.y + anchor.h / 2) {
+				bandsPos.add(bandKey(o.y));
+				hitPos.add(rect.id);
+			}
+			if (needNeg > 0 && o.y + rect.h / 2 < anchor.y + anchor.h / 2) {
+				bandsNeg.add(bandKey(o.y));
+				hitNeg.add(rect.id);
+			}
+		}
+		if (axis === 'x' && sameRow(anchor, originRect)) {
+			if (needPos > 0 && o.x + rect.w / 2 >= anchor.x + anchor.w / 2) {
+				bandsPos.add(bandKey(o.x));
+				hitPos.add(rect.id);
+			}
+			if (needNeg > 0 && o.x + rect.w / 2 < anchor.x + anchor.w / 2) {
+				bandsNeg.add(bandKey(o.x));
+				hitNeg.add(rect.id);
+			}
+		}
+	}
+
+	let changed = false;
+	for (const rect of positions.values()) {
+		const o = origins.get(rect.id)!;
+		if (axis === 'y') {
+			const yBand = bandKey(o.y);
+			if (needPos > 0 && bandsPos.has(yBand) && o.y + rect.h / 2 >= anchor.y) {
+				rect.y += needPos;
+				changed = true;
+			} else if (
+				needNeg > 0 &&
+				bandsNeg.has(yBand) &&
+				o.y + rect.h / 2 < anchor.y + anchor.h
+			) {
+				rect.y -= needNeg;
+				changed = true;
+			}
+		} else {
+			const xBand = bandKey(o.x);
+			if (needPos > 0 && bandsPos.has(xBand) && o.x + rect.w / 2 >= anchor.x) {
+				rect.x += needPos;
+				changed = true;
+			} else if (
+				needNeg > 0 &&
+				bandsNeg.has(xBand) &&
+				o.x + rect.w / 2 < anchor.x + anchor.w
+			) {
+				rect.x -= needNeg;
+				changed = true;
+			}
+		}
+	}
+	return changed;
+}
+
+/**
+ * Keep `anchor` fixed and make room by shifting whole row/column bands
+ * together — so a snapped grid stays a grid instead of staggering.
+ * Vertical bands first, then horizontal, so rows stay aligned.
  */
 export function bumpOverlappingRects(
 	anchor: BumpRect,
@@ -412,44 +568,55 @@ export function bumpOverlappingRects(
 	const moved = new Map<string, { x: number; y: number }>();
 	if (others.length === 0) return moved;
 
+	const origins = new Map<string, { x: number; y: number }>();
 	const positions = new Map<string, BumpRect>();
 	for (const o of others) {
 		if (o.id === anchor.id) continue;
+		origins.set(o.id, { x: o.x, y: o.y });
 		positions.set(o.id, { ...o });
 	}
 
-	const anchorCx = anchor.x + anchor.w / 2;
-	const anchorCy = anchor.y + anchor.h / 2;
+	// Row shifts first so a whole grid row moves together; then columns.
+	applyAxisShift(positions, origins, anchor, 'y', gap);
+	applyAxisShift(positions, origins, anchor, 'x', gap);
 
+	// Resolve leftover pairwise overlaps (dense packs) without undoing bands.
 	for (let pass = 0; pass < BUMP_MAX_PASSES; pass++) {
 		let changed = false;
+		const list = [...positions.values()];
 
-		for (const rect of positions.values()) {
-			const delta = pushAwayDelta(anchor, rect, gap);
-			if (!delta) continue;
-			rect.x += delta.dx;
-			rect.y += delta.dy;
-			moved.set(rect.id, { x: rect.x, y: rect.y });
+		for (const rect of list) {
+			if (!rectsOverlapWithGap(anchor, rect, gap)) continue;
+			const dir = preferredPushDir(anchor, rect);
+			const amount = pushAmountInDir(anchor, rect, dir, gap);
+			if (amount <= 0) continue;
+			if (dir === 'down') rect.y += amount;
+			else if (dir === 'up') rect.y -= amount;
+			else if (dir === 'right') rect.x += amount;
+			else rect.x -= amount;
 			changed = true;
 		}
 
-		const list = [...positions.values()];
 		for (let i = 0; i < list.length; i++) {
 			for (let j = i + 1; j < list.length; j++) {
-				const a = list[i];
-				const b = list[j];
+				const a = list[i]!;
+				const b = list[j]!;
 				if (!rectsOverlapWithGap(a, b, gap)) continue;
-				const da =
-					(a.x + a.w / 2 - anchorCx) ** 2 + (a.y + a.h / 2 - anchorCy) ** 2;
-				const db =
-					(b.x + b.w / 2 - anchorCx) ** 2 + (b.y + b.h / 2 - anchorCy) ** 2;
-				const fixed = da <= db ? a : b;
-				const mobile = da <= db ? b : a;
-				const delta = pushAwayDelta(fixed, mobile, gap);
-				if (!delta) continue;
-				mobile.x += delta.dx;
-				mobile.y += delta.dy;
-				moved.set(mobile.id, { x: mobile.x, y: mobile.y });
+				const aDist =
+					(a.x + a.w / 2 - (anchor.x + anchor.w / 2)) ** 2 +
+					(a.y + a.h / 2 - (anchor.y + anchor.h / 2)) ** 2;
+				const bDist =
+					(b.x + b.w / 2 - (anchor.x + anchor.w / 2)) ** 2 +
+					(b.y + b.h / 2 - (anchor.y + anchor.h / 2)) ** 2;
+				const fixed = aDist <= bDist ? a : b;
+				const mobile = aDist <= bDist ? b : a;
+				const dir = preferredPushDir(fixed, mobile);
+				const amount = pushAmountInDir(fixed, mobile, dir, gap);
+				if (amount <= 0) continue;
+				if (dir === 'down') mobile.y += amount;
+				else if (dir === 'up') mobile.y -= amount;
+				else if (dir === 'right') mobile.x += amount;
+				else mobile.x -= amount;
 				changed = true;
 			}
 		}
@@ -457,7 +624,36 @@ export function bumpOverlappingRects(
 		if (!changed) break;
 	}
 
+	for (const rect of positions.values()) {
+		const origin = origins.get(rect.id);
+		if (!origin) continue;
+		const snapped = snapAway(origin, rect);
+		if (snapped.x === origin.x && snapped.y === origin.y) continue;
+		moved.set(rect.id, snapped);
+	}
+
 	return moved;
+}
+
+/** Snap in the direction of travel so we never pull a bumped card back into overlap. */
+function snapAway(
+	origin: { x: number; y: number },
+	pos: { x: number; y: number },
+	grid = GRID
+): { x: number; y: number } {
+	const sx =
+		pos.x > origin.x
+			? Math.ceil(pos.x / grid) * grid
+			: pos.x < origin.x
+				? Math.floor(pos.x / grid) * grid
+				: snapValue(pos.x, grid);
+	const sy =
+		pos.y > origin.y
+			? Math.ceil(pos.y / grid) * grid
+			: pos.y < origin.y
+				? Math.floor(pos.y / grid) * grid
+				: snapValue(pos.y, grid);
+	return { x: sx, y: sy };
 }
 
 const SNAP_PREF_KEY = 'mash.canvasSnap';

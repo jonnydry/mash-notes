@@ -52,6 +52,18 @@ export interface CanvasItem {
 }
 
 /**
+ * Directed flow edge between two cards on a canvas (storyboard / page order).
+ * References canvas items, not notes — same note can sit in different flows.
+ */
+export interface CanvasEdge {
+	id: string;
+	canvasId: string;
+	fromItemId: string;
+	toItemId: string;
+	created: number;
+}
+
+/**
  * Partial updates for a Note, excluding system-generated fields.
  */
 export type NoteUpdate = Partial<Omit<Note, 'id' | 'created' | 'modified'>>;

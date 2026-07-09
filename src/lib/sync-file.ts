@@ -3,7 +3,7 @@
  * Bundle v2 includes notes + desk layout (canvases, placements, dismissals).
  * v1 bundles (notes only) still import.
  */
-import type { Canvas, CanvasItem, Note } from './types';
+import type { Canvas, CanvasEdge, CanvasItem, Note } from './types';
 import { mergeNotesLww, hasConflicts, type MergeResult, type SyncConflict } from './sync-model';
 import { normalizeImportedNote } from './import-notes';
 import { db, newId } from './db';
@@ -19,6 +19,8 @@ export const SYNC_BUNDLE_VERSION_V1 = 1 as const;
 export type DeskSnapshot = {
 	canvases: Canvas[];
 	items: CanvasItem[];
+	/** Directed flow edges between canvas items (optional on older bundles). */
+	edges?: CanvasEdge[];
 	/** canvasId → dismissed note ids */
 	dismissed: DismissedByCanvas;
 };
@@ -34,6 +36,8 @@ export type DeskApplySummary = {
 	canvasesUpserted: number;
 	itemsUpserted: number;
 	itemsSkipped: number;
+	edgesUpserted: number;
+	edgesSkipped: number;
 };
 
 export type SyncMergeSummary = {
@@ -89,6 +93,24 @@ function normalizeCanvasItem(raw: unknown, index: number): CanvasItem | string {
 	return item;
 }
 
+function normalizeCanvasEdge(raw: unknown, index: number): CanvasEdge | string {
+	if (!isRecord(raw)) return `Canvas edge ${index + 1} is not an object`;
+	const canvasId = asString(raw.canvasId).trim();
+	const fromItemId = asString(raw.fromItemId).trim();
+	const toItemId = asString(raw.toItemId).trim();
+	if (!canvasId || !fromItemId || !toItemId) {
+		return `Canvas edge ${index + 1} missing canvasId/from/to`;
+	}
+	if (fromItemId === toItemId) return `Canvas edge ${index + 1} is a self-loop`;
+	return {
+		id: asString(raw.id).trim() || newId(),
+		canvasId,
+		fromItemId,
+		toItemId,
+		created: asNumber(raw.created, Date.now())
+	};
+}
+
 function normalizeDismissed(raw: unknown): DismissedByCanvas {
 	if (!isRecord(raw)) return {};
 	const out: DismissedByCanvas = {};
@@ -101,13 +123,15 @@ function normalizeDismissed(raw: unknown): DismissedByCanvas {
 
 function normalizeDesk(raw: unknown): DeskSnapshot | string {
 	if (raw == null) {
-		return { canvases: [], items: [], dismissed: {} };
+		return { canvases: [], items: [], edges: [], dismissed: {} };
 	}
 	if (!isRecord(raw)) return 'Desk snapshot is not an object';
 	const canvasesRaw = Array.isArray(raw.canvases) ? raw.canvases : [];
 	const itemsRaw = Array.isArray(raw.items) ? raw.items : [];
+	const edgesRaw = Array.isArray(raw.edges) ? raw.edges : [];
 	if (canvasesRaw.length > 200) return 'Too many canvases in sync bundle';
 	if (itemsRaw.length > 20_000) return 'Too many canvas items in sync bundle';
+	if (edgesRaw.length > 50_000) return 'Too many canvas edges in sync bundle';
 
 	const canvases: Canvas[] = [];
 	for (let i = 0; i < canvasesRaw.length; i++) {
@@ -121,9 +145,16 @@ function normalizeDesk(raw: unknown): DeskSnapshot | string {
 		if (typeof item === 'string') return item;
 		items.push(item);
 	}
+	const edges: CanvasEdge[] = [];
+	for (let i = 0; i < edgesRaw.length; i++) {
+		const edge = normalizeCanvasEdge(edgesRaw[i], i);
+		if (typeof edge === 'string') return edge;
+		edges.push(edge);
+	}
 	return {
 		canvases,
 		items,
+		edges,
 		dismissed: normalizeDismissed(raw.dismissed)
 	};
 }
@@ -132,9 +163,11 @@ function normalizeDesk(raw: unknown): DeskSnapshot | string {
 export async function collectDeskSnapshot(): Promise<DeskSnapshot> {
 	const canvases = await db.canvases.toArray();
 	const items = await db.canvasItems.toArray();
+	const edges = await db.canvasEdges.toArray();
 	return {
 		canvases: canvases.map((c) => ({ ...c })),
 		items: items.map((i) => ({ ...i })),
+		edges: edges.map((e) => ({ ...e })),
 		dismissed: exportAllDismissed()
 	};
 }
@@ -258,9 +291,13 @@ export async function applyDeskSnapshot(
 	let canvasesUpserted = 0;
 	let itemsUpserted = 0;
 	let itemsSkipped = 0;
+	let edgesUpserted = 0;
+	let edgesSkipped = 0;
 
 	/** remote canvas id → local canvas id */
 	const idMap = new Map<string, string>();
+	/** remote canvas item id → local canvas item id */
+	const itemIdMap = new Map<string, string>();
 
 	for (const remote of desk.canvases) {
 		const local = localByFolder.get(remote.folder);
@@ -310,8 +347,9 @@ export async function applyDeskSnapshot(
 			.first();
 
 		if (!existing) {
+			const localItemId = newId();
 			await db.canvasItems.put({
-				id: newId(),
+				id: localItemId,
 				canvasId: localCanvasId,
 				noteId: remoteItem.noteId,
 				x: remoteItem.x,
@@ -319,10 +357,12 @@ export async function applyDeskSnapshot(
 				w: remoteItem.w,
 				h: remoteItem.h
 			});
+			itemIdMap.set(remoteItem.id, localItemId);
 			itemsUpserted += 1;
 			continue;
 		}
 
+		itemIdMap.set(remoteItem.id, existing.id);
 		if (remoteNewer) {
 			await db.canvasItems.update(existing.id, {
 				x: remoteItem.x,
@@ -336,6 +376,32 @@ export async function applyDeskSnapshot(
 		}
 	}
 
+	for (const remoteEdge of desk.edges ?? []) {
+		const localCanvasId = idMap.get(remoteEdge.canvasId);
+		const fromLocal = itemIdMap.get(remoteEdge.fromItemId);
+		const toLocal = itemIdMap.get(remoteEdge.toItemId);
+		if (!localCanvasId || !fromLocal || !toLocal || fromLocal === toLocal) {
+			edgesSkipped += 1;
+			continue;
+		}
+		const existing = await db.canvasEdges
+			.where('[canvasId+fromItemId+toItemId]')
+			.equals([localCanvasId, fromLocal, toLocal])
+			.first();
+		if (existing) {
+			edgesSkipped += 1;
+			continue;
+		}
+		await db.canvasEdges.put({
+			id: newId(),
+			canvasId: localCanvasId,
+			fromItemId: fromLocal,
+			toItemId: toLocal,
+			created: remoteEdge.created
+		});
+		edgesUpserted += 1;
+	}
+
 	const remapped: DismissedByCanvas = {};
 	for (const [remoteCanvasId, noteIds] of Object.entries(desk.dismissed)) {
 		const localId = idMap.get(remoteCanvasId);
@@ -344,7 +410,7 @@ export async function applyDeskSnapshot(
 	}
 	importDismissedMap(remapped);
 
-	return { canvasesUpserted, itemsUpserted, itemsSkipped };
+	return { canvasesUpserted, itemsUpserted, itemsSkipped, edgesUpserted, edgesSkipped };
 }
 
 export async function downloadSyncBundle(

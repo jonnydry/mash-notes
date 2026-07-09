@@ -3,14 +3,17 @@
  */
 import { untrack } from 'svelte';
 import {
+	addCanvasEdge,
 	addNoteToCanvas,
 	getCanvasItems,
 	getOrCreateFolderCanvas,
+	listCanvasEdges,
+	removeCanvasEdge,
 	removeCanvasItem,
 	removeNotesFromCanvas,
 	updateCanvasItemPosition
 } from '$lib/db';
-import type { Canvas, CanvasItem, Note } from '$lib/types';
+import type { Canvas, CanvasEdge, CanvasItem, Note } from '$lib/types';
 import { isBlankUntitledNote, notePreview } from '$lib/format';
 import {
 	dismissNoteFromCanvas,
@@ -23,11 +26,13 @@ import {
 	spatialNoteOrder,
 	type CanvasLayoutSnapshot
 } from '$lib/canvas-undo';
-import { bumpOverlappingRects, type AlignMode } from '$lib/canvas-geom';
+import { bumpOverlappingRects, gridSlotPosition, type AlignMode } from '$lib/canvas-geom';
+import { isPinnedCanvasKey } from '$lib/stores/note-library.svelte';
+import { canLinkAsNextPage } from '$lib/canvas-flow';
 
 export const COLLAPSED_CARD = { w: 220, h: 120 };
 export const EXPANDED_CARD = { w: 360, h: 320 };
-export const BUMP_GAP = 16;
+export const BUMP_GAP = 24;
 export const NOTE_MIME = 'application/x-mash-notes';
 
 export type CardSize = { w: number; h: number };
@@ -109,7 +114,10 @@ export type CreateCanvasSessionOpts = {
 	flashToast: (msg: string) => void;
 	getNotes: () => Note[];
 	getNotesById: () => Map<string, Note>;
-	getCanvasFolder: () => string;
+	/** Dexie canvas.folder key ('' desk, folder path, or PINNED_CANVAS_KEY). */
+	getCanvasKey: () => string;
+	/** Pin a note when dropped onto the Pinned canvas. */
+	ensureNotePinned?: (noteId: string) => void | Promise<void>;
 	getSelectionIds: () => string[];
 	getSelectionSet: () => Set<string>;
 	getSelectedId: () => string | null;
@@ -124,6 +132,7 @@ export type CreateCanvasSessionOpts = {
 export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 	let activeCanvas = $state<Canvas | null>(null);
 	let canvasItems = $state<CanvasItem[]>([]);
+	let canvasEdges = $state<CanvasEdge[]>([]);
 	let expandedNoteId = $state<string | null>(null);
 	let expandFocus = $state<'title' | 'body' | null>(null);
 	let bumpRestore: Map<string, { x: number; y: number }> | null = $state(null);
@@ -150,67 +159,78 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		return canvasUndo.canRedo;
 	});
 
-	const folderMembershipKey = $derived.by(() => {
-		const folder = opts.getCanvasFolder();
-		if (!folder) return '';
+	const membershipKey = $derived.by(() => {
+		const key = opts.getCanvasKey();
+		if (!key) return '';
+		if (isPinnedCanvasKey(key)) {
+			return opts
+				.getNotes()
+				.filter((n) => n.pinned === 1)
+				.map((n) => n.id)
+				.sort()
+				.join(',');
+		}
 		return opts
 			.getNotes()
-			.filter((n) => n.folder === folder || n.folder.startsWith(folder + '/'))
+			.filter((n) => n.folder === key || n.folder.startsWith(key + '/'))
 			.map((n) => n.id)
 			.sort()
 			.join(',');
 	});
 
-	/** Re-run canvas load when folder context or folder membership changes. */
+	/** Re-run canvas load when context or membership changes. */
 	$effect(() => {
-		const folder = opts.getCanvasFolder();
-		folderMembershipKey;
+		const key = opts.getCanvasKey();
+		membershipKey;
 		// untrack: canvasUndoTick++ both reads and writes — would infinite-loop the effect.
 		untrack(() => {
 			canvasUndo.clear();
 			canvasUndoTick++;
 			bumpRestore = null;
 		});
-		void loadContextCanvas(folder);
+		void loadContextCanvas(key);
 	});
 
-	async function loadContextCanvas(folder: string) {
+	async function loadContextCanvas(key: string) {
 		const seq = ++canvasLoadSeq;
 		try {
-			const canvas = await getOrCreateFolderCanvas(folder);
+			const canvas = await getOrCreateFolderCanvas(key);
 			if (seq !== canvasLoadSeq) return;
 			activeCanvas = canvas;
 			let items = await getCanvasItems(canvas.id);
 			if (seq !== canvasLoadSeq) return;
 
-			// Folder canvases mirror membership: add missing notes, prune leavers.
+			// Mirrored canvases: add missing members, prune leavers.
 			// Notes the user removed from the board stay dismissed until dropped back.
-			if (folder) {
-				const folderNotes = opts
-					.getNotes()
-					.filter((n) => n.folder === folder || n.folder.startsWith(folder + '/'));
-				const folderNoteIds = new Set(folderNotes.map((n) => n.id));
+			if (key) {
+				const memberNotes = isPinnedCanvasKey(key)
+					? opts.getNotes().filter((n) => n.pinned === 1)
+					: opts
+							.getNotes()
+							.filter((n) => n.folder === key || n.folder.startsWith(key + '/'));
+				const memberIds = new Set(memberNotes.map((n) => n.id));
 				const dismissed = getDismissedNoteIds(canvas.id);
 				const staleIds = items
-					.filter((i) => !folderNoteIds.has(i.noteId))
+					.filter((i) => !memberIds.has(i.noteId))
 					.map((i) => i.noteId);
 				if (staleIds.length > 0) {
 					await removeNotesFromCanvas(canvas.id, staleIds);
 					if (seq !== canvasLoadSeq) return;
-					items = items.filter((i) => folderNoteIds.has(i.noteId));
+					items = items.filter((i) => memberIds.has(i.noteId));
 				}
 
 				const onCanvas = new Set(items.map((i) => i.noteId));
-				const missing = folderNotes.filter(
+				const missing = memberNotes.filter(
 					(n) => !onCanvas.has(n.id) && !dismissed.has(n.id)
 				);
 				if (missing.length > 0) {
 					await Promise.all(
 						missing.map((note, i) => {
 							const idx = items.length + i;
+							const slot = gridSlotPosition(idx);
 							return addNoteToCanvas(canvas.id, note.id, {
-								x: 40 + (idx % 4) * 240,
-								y: 40 + Math.floor(idx / 4) * 160,
+								x: slot.x,
+								y: slot.y,
 								w: COLLAPSED_CARD.w,
 								h: COLLAPSED_CARD.h
 							});
@@ -237,6 +257,8 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 				}
 				return item;
 			});
+			canvasEdges = await listCanvasEdges(canvas.id);
+			if (seq !== canvasLoadSeq) return;
 			if (expandedNoteId && !items.some((i) => i.noteId === expandedNoteId)) {
 				expandedNoteId = null;
 				expandFocus = null;
@@ -247,20 +269,70 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 			console.error('Failed to load canvas', e);
 			activeCanvas = null;
 			canvasItems = [];
+			canvasEdges = [];
 		}
 	}
 
 	async function refreshCanvasItems() {
 		if (!activeCanvas) return;
 		canvasItems = await getCanvasItems(activeCanvas.id);
+		canvasEdges = await listCanvasEdges(activeCanvas.id);
+	}
+
+	async function connectFlowEdge(fromItemId: string, toItemId: string): Promise<boolean> {
+		if (!activeCanvas) return false;
+		const check = canLinkAsNextPage(canvasEdges, fromItemId, toItemId);
+		if (!check.ok) {
+			switch (check.reason) {
+				case 'self':
+					opts.flashToast('Pick two different cards');
+					break;
+				case 'cycle':
+					opts.flashToast('That link would loop');
+					break;
+				case 'out':
+					opts.flashToast('That card already has a next page');
+					break;
+				case 'in':
+					opts.flashToast('That card already has a previous page');
+					break;
+				default: {
+					const _exhaustive: never = check.reason;
+					void _exhaustive;
+					opts.flashToast('Could not link cards');
+				}
+			}
+			return false;
+		}
+		try {
+			const edge = await addCanvasEdge(activeCanvas.id, fromItemId, toItemId);
+			if (!canvasEdges.some((e) => e.id === edge.id)) {
+				canvasEdges = [...canvasEdges, edge];
+			}
+			return true;
+		} catch (e) {
+			console.error(e);
+			opts.flashToast('Could not link cards');
+			return false;
+		}
+	}
+
+	async function disconnectFlowEdge(edgeId: string) {
+		await removeCanvasEdge(edgeId);
+		canvasEdges = canvasEdges.filter((e) => e.id !== edgeId);
 	}
 
 	async function handleDropNotes(noteIds: string[], x: number, y: number) {
 		if (!activeCanvas || noteIds.length === 0) return;
 		undismissNotesFromCanvas(activeCanvas.id, noteIds);
+		if (isPinnedCanvasKey(opts.getCanvasKey()) && opts.ensureNotePinned) {
+			for (const id of noteIds) {
+				await opts.ensureNotePinned(id);
+			}
+		}
 		const placed: string[] = [];
 		for (let i = 0; i < noteIds.length; i++) {
-			const dropX = x + i * 28;
+			const dropX = x + i * 24;
 			const dropY = y + i * 24;
 			const existing = canvasItems.find((item) => item.noteId === noteIds[i]);
 			if (existing) {
@@ -285,7 +357,11 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		setTimeout(() => {
 			settlingIds = new Set();
 		}, 320);
-		opts.flashToast(`Dropped ${noteIds.length} on canvas`);
+		opts.flashToast(
+			isPinnedCanvasKey(opts.getCanvasKey())
+				? `Pinned ${noteIds.length} to board`
+				: `Dropped ${noteIds.length} on canvas`
+		);
 	}
 
 	function snapshotItems(itemIds: string[]): CanvasLayoutSnapshot[] {
@@ -437,6 +513,9 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		const note = item ? opts.getNotesById().get(item.noteId) : undefined;
 		await removeCanvasItem(itemId);
 		canvasItems = canvasItems.filter((i) => i.id !== itemId);
+		canvasEdges = canvasEdges.filter(
+			(e) => e.fromItemId !== itemId && e.toItemId !== itemId
+		);
 		// Layout undo snapshots may reference the removed card — drop the stack.
 		clearCanvasUndo();
 
@@ -458,7 +537,7 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 			return;
 		}
 
-		if (item && activeCanvas && opts.getCanvasFolder()) {
+		if (item && activeCanvas && opts.getCanvasKey()) {
 			dismissNoteFromCanvas(activeCanvas.id, item.noteId);
 		}
 	}
@@ -664,6 +743,12 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		set canvasItems(v: CanvasItem[]) {
 			canvasItems = v;
 		},
+		get canvasEdges() {
+			return canvasEdges;
+		},
+		set canvasEdges(v: CanvasEdge[]) {
+			canvasEdges = v;
+		},
 		get expandedNoteId() {
 			return expandedNoteId;
 		},
@@ -720,6 +805,8 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		},
 		loadContextCanvas,
 		refreshCanvasItems,
+		connectFlowEdge,
+		disconnectFlowEdge,
 		handleDropNotes,
 		snapshotItems,
 		applyLayoutSnapshots,

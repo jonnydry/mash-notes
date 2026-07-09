@@ -5,7 +5,7 @@ import { tick } from 'svelte';
 import type { DockAction } from '$lib/dock';
 import type { PeelMode } from '$lib/components/PeelScanner.svelte';
 import type { NavFilter } from '$lib/note-ui';
-import { canvasFolderFromFilter, canvasTitleFromFilter } from '$lib/stores/note-library.svelte';
+import { canvasFolderFromFilter, canvasKeyFromFilter, canvasTitleFromFilter } from '$lib/stores/note-library.svelte';
 
 export type PeelNavState = {
 	peelOpen: boolean;
@@ -174,6 +174,7 @@ export function createPeelNav(opts: CreatePeelNavOpts) {
 
 	const peelTitle = $derived(peelTitleFor(peelMode, searchQuery, currentFilter));
 	const canvasFolder = $derived(canvasFolderFromFilter(currentFilter));
+	const canvasKey = $derived(canvasKeyFromFilter(currentFilter));
 	const canvasTitle = $derived(canvasTitleFromFilter(currentFilter));
 
 	function openPeel(mode: PeelMode = 'notes') {
@@ -327,6 +328,9 @@ export function createPeelNav(opts: CreatePeelNavOpts) {
 		},
 		get canvasFolder() {
 			return canvasFolder;
+		},
+		get canvasKey() {
+			return canvasKey;
 		},
 		get canvasTitle() {
 			return canvasTitle;

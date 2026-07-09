@@ -90,11 +90,27 @@ export function uniqueTagsFrom(notes: Note[]): string[] {
 	return [...new Set(notes.flatMap((n) => n.tags))].sort();
 }
 
+/** Reserved canvas.folder key for the Pinned desk (not a real note folder). */
+export const PINNED_CANVAS_KEY = '__mash_pinned__';
+
+export function isPinnedCanvasKey(key: string): boolean {
+	return key === PINNED_CANVAS_KEY;
+}
+
+/** Dexie canvas key for the current nav filter (desk / folder / pinned). */
+export function canvasKeyFromFilter(filter: NavFilter): string {
+	if (filter.type === 'pinned') return PINNED_CANVAS_KEY;
+	if (filter.type === 'folder' && filter.value !== undefined) return filter.value;
+	return '';
+}
+
+/** Real note.folder for create/mash — never the reserved pinned canvas key. */
 export function canvasFolderFromFilter(filter: NavFilter): string {
 	return filter.type === 'folder' && filter.value !== undefined ? filter.value : '';
 }
 
 export function canvasTitleFromFilter(filter: NavFilter): string {
+	if (filter.type === 'pinned') return 'Pinned';
 	if (filter.type === 'folder' && filter.value) return filter.value;
 	return 'Desk';
 }
