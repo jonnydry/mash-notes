@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import {
 	cardDisplaySize,
 	computeExpandBumps,
@@ -7,7 +7,32 @@ import {
 } from './canvas-session.svelte';
 import { peelTitleFor, peelOpenPatch, windowPeelNotes, PEEL_UI_CAP } from './peel-nav.svelte';
 import { filterPeelNotes, uniqueFoldersFrom, canvasFolderFromFilter } from './note-library.svelte';
+import {
+	THEME_STORAGE_KEY,
+	isMashTheme,
+	readStoredTheme,
+	THEME_META_COLOR
+} from './theme.svelte';
 import type { Note } from '$lib/types';
+
+const memory = new Map<string, string>();
+Object.defineProperty(globalThis, 'localStorage', {
+	value: {
+		getItem: (k: string) => memory.get(k) ?? null,
+		setItem: (k: string, v: string) => {
+			memory.set(k, String(v));
+		},
+		removeItem: (k: string) => {
+			memory.delete(k);
+		},
+		clear: () => memory.clear()
+	},
+	configurable: true
+});
+
+beforeEach(() => {
+	memory.clear();
+});
 
 function note(partial: Partial<Note> & Pick<Note, 'id' | 'title'>): Note {
 	return {
@@ -56,5 +81,20 @@ describe('stores helpers', () => {
 		expect(filterPeelNotes(notes, 'alpha')).toHaveLength(1);
 		expect(uniqueFoldersFrom(notes)).toEqual(['Ideas/Work']);
 		expect(canvasFolderFromFilter({ type: 'folder', value: 'Ideas' })).toBe('Ideas');
+	});
+
+	it('theme helpers validate and read storage', () => {
+		expect(isMashTheme('light')).toBe(true);
+		expect(isMashTheme('dark')).toBe(true);
+		expect(isMashTheme('sepia')).toBe(false);
+		expect(THEME_META_COLOR.light).toBe('#efe6d8');
+		expect(THEME_META_COLOR.dark).toBe('#0e0c0a');
+
+		localStorage.removeItem(THEME_STORAGE_KEY);
+		expect(readStoredTheme()).toBe('dark');
+		localStorage.setItem(THEME_STORAGE_KEY, 'light');
+		expect(readStoredTheme()).toBe('light');
+		localStorage.setItem(THEME_STORAGE_KEY, 'nope');
+		expect(readStoredTheme()).toBe('dark');
 	});
 });

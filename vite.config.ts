@@ -14,8 +14,8 @@ export default defineConfig({
 				short_name: 'Mash',
 				description:
 					'Mash your ideas together in a reliable place. Cute, fast, minimal web notes. Open source, private, keyboard-first PWA.',
-				theme_color: '#1a1814',
-				background_color: '#1a1814',
+				theme_color: '#0e0c0a',
+				background_color: '#0e0c0a',
 				display: 'standalone',
 				icons: [
 					{ src: '/icons/mash-icon-192.png', sizes: '192x192', type: 'image/png' },

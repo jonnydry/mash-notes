@@ -1,28 +1,148 @@
 @import 'tailwindcss';
 
-/* ── Mash workbench tokens ──
-   Source (cool tray) → Surface (warm board) → Send (chive accent). */
+/* ── Mash kitchen tokens ──
+   Day / night chrome around mode-invariant parchment stickies.
+   Chive = action · Mint = life/glow · Paper = notes. */
 
-:root {
-	--mash-bg: #1a1814;
-	--mash-tray: #141210;
-	--mash-tray-edge: #2a2620;
-	--mash-board: #e8dfd0;
-	--mash-board-dot: rgba(90, 70, 40, 0.18);
+:root,
+[data-theme='dark'] {
+	color-scheme: dark;
+
+	/* Night kitchen — lighter header, darker canvas */
+	--mash-bg: #0e0c0a;
+	--mash-rail: #2a2620;
+	--mash-tray: #1a1714;
+	--mash-tray-edge: #3f3930;
+	--mash-board: #141210;
+	--mash-board-dot: rgba(180, 160, 130, 0.1);
+	--mash-board-wash: rgba(255, 248, 235, 0.04);
+
+	/* Stickies — parchment (mode-invariant) */
 	--mash-card: #f7f1e6;
 	--mash-card-ink: #2c2418;
 	--mash-card-muted: #6b5e4e;
+	--mash-card-edge: rgba(80, 60, 30, 0.12);
+	--mash-card-edge-strong: rgba(80, 60, 30, 0.28);
+	--mash-card-hover: rgba(80, 60, 30, 0.08);
+
+	/* Chrome ink */
 	--mash-ink: #f0ebe3;
 	--mash-ink-muted: #9a9084;
-	--mash-rail: #12100e;
-	--mash-accent: #4f7a3e;
-	--mash-accent-bright: #6a9a52;
+
+	/* Chive action (lifted for dark grounds) + sprout mint soft */
+	--mash-accent: #6a9a52;
+	--mash-accent-bright: #8fbf6e;
 	--mash-accent-ink: #f4f7f0;
+	--mash-accent-soft: #b4f0cc;
+	--mash-accent-glow: color-mix(in srgb, var(--mash-accent) 35%, transparent);
+	--mash-accent-wash: color-mix(in srgb, var(--mash-accent) 14%, transparent);
+	--mash-accent-ring: color-mix(in srgb, var(--mash-accent-bright) 55%, transparent);
+	--mash-accent-select: color-mix(in srgb, var(--mash-accent) 65%, transparent);
+
 	--mash-danger: #c45c4a;
+	--mash-danger-wash: color-mix(in srgb, var(--mash-danger) 15%, transparent);
+
+	/* Glass chrome (dock, peel, menus, dialogs) */
+	--mash-glass: rgba(20, 18, 14, 0.88);
+	--mash-glass-strong: rgba(22, 20, 16, 0.9);
+	--mash-glass-border: rgba(240, 235, 227, 0.12);
+	--mash-glass-highlight: rgba(255, 255, 255, 0.07);
+	--mash-panel: rgba(28, 24, 18, 0.95);
+	--mash-panel-strong: rgba(28, 24, 18, 0.96);
+	--mash-panel-border: rgba(240, 235, 227, 0.12);
+	--mash-hover-fill: rgba(255, 255, 255, 0.06);
+	--mash-hover-fill-soft: rgba(255, 255, 255, 0.04);
+	--mash-divider: rgba(255, 255, 255, 0.1);
+	--mash-backdrop: rgba(10, 8, 6, 0.62);
+	--mash-dock-ink: rgba(240, 235, 227, 0.72);
+	--mash-dock-ink-active: rgba(240, 235, 227, 0.95);
+	--mash-dock-shadow: 0 10px 36px rgba(0, 0, 0, 0.4);
+	--mash-panel-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+	--mash-pip-ring: rgba(20, 18, 14, 0.85);
+
+	/* Board chrome — glass tools on the desk (match kitchen, not stickies) */
+	--mash-chrome-chip: rgba(28, 24, 18, 0.92);
+	--mash-chrome-chip-soft: rgba(28, 24, 18, 0.78);
+	--mash-chrome-chip-border: rgba(240, 235, 227, 0.14);
+	--mash-chrome-ink: #f0ebe3;
+	--mash-chrome-muted: #a89f92;
+
+	/* Paper chips — menus that sit on parchment stickies */
+	--mash-paper-chip: rgba(247, 241, 230, 0.98);
+	--mash-paper-chip-border: rgba(80, 60, 30, 0.18);
+
+	--mash-logo-shadow: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.45));
+
 	--mash-font-ui: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
 	--mash-font-display: 'Fraunces', ui-serif, Georgia, serif;
 	--mash-shadow-card: 0 1px 2px rgba(40, 28, 12, 0.12), 0 8px 24px rgba(40, 28, 12, 0.14);
 	--mash-shadow-lift: 0 4px 8px rgba(40, 28, 12, 0.18), 0 16px 40px rgba(40, 28, 12, 0.22);
+}
+
+[data-theme='light'] {
+	color-scheme: light;
+
+	/* Day kitchen — cream chrome, deeper parchment desk */
+	--mash-bg: #efe6d8;
+	--mash-rail: #f7f1e6;
+	--mash-tray: #e8dfd0;
+	--mash-tray-edge: #d4c4ae;
+	--mash-board: #e4d8c4;
+	--mash-board-dot: rgba(90, 70, 40, 0.16);
+	--mash-board-wash: rgba(255, 248, 235, 0.55);
+
+	--mash-card: #faf6ee;
+	--mash-card-ink: #2c2418;
+	--mash-card-muted: #6b5e4e;
+	--mash-card-edge: rgba(80, 60, 30, 0.12);
+	--mash-card-edge-strong: rgba(80, 60, 30, 0.28);
+	--mash-card-hover: rgba(80, 60, 30, 0.08);
+
+	--mash-ink: #2c2418;
+	--mash-ink-muted: #6b5e4e;
+
+	--mash-accent: #4a7538;
+	--mash-accent-bright: #5f9148;
+	--mash-accent-ink: #f4f7f0;
+	--mash-accent-soft: #b4f0cc;
+	--mash-accent-glow: color-mix(in srgb, var(--mash-accent) 32%, transparent);
+	--mash-accent-wash: color-mix(in srgb, var(--mash-accent) 14%, transparent);
+	--mash-accent-ring: color-mix(in srgb, var(--mash-accent-bright) 50%, transparent);
+	--mash-accent-select: color-mix(in srgb, var(--mash-accent) 65%, transparent);
+
+	--mash-danger: #c45c4a;
+	--mash-danger-wash: color-mix(in srgb, var(--mash-danger) 15%, transparent);
+
+	--mash-glass: rgba(247, 241, 230, 0.88);
+	--mash-glass-strong: rgba(250, 246, 238, 0.92);
+	--mash-glass-border: rgba(80, 60, 30, 0.14);
+	--mash-glass-highlight: rgba(255, 255, 255, 0.55);
+	--mash-panel: rgba(250, 246, 238, 0.96);
+	--mash-panel-strong: rgba(250, 246, 238, 0.98);
+	--mash-panel-border: rgba(80, 60, 30, 0.14);
+	--mash-hover-fill: rgba(80, 60, 30, 0.08);
+	--mash-hover-fill-soft: rgba(80, 60, 30, 0.05);
+	--mash-divider: rgba(80, 60, 30, 0.12);
+	--mash-backdrop: rgba(40, 30, 18, 0.35);
+	--mash-dock-ink: rgba(44, 36, 24, 0.62);
+	--mash-dock-ink-active: rgba(44, 36, 24, 0.92);
+	--mash-dock-shadow: 0 10px 28px rgba(40, 28, 12, 0.14);
+	--mash-panel-shadow: 0 12px 32px rgba(40, 28, 12, 0.16);
+	--mash-pip-ring: rgba(247, 241, 230, 0.9);
+
+	--mash-chrome-chip: rgba(250, 246, 238, 0.94);
+	--mash-chrome-chip-soft: rgba(250, 246, 238, 0.78);
+	--mash-chrome-chip-border: rgba(80, 60, 30, 0.16);
+	--mash-chrome-ink: #2c2418;
+	--mash-chrome-muted: #6b5e4e;
+
+	--mash-paper-chip: rgba(250, 246, 238, 0.98);
+	--mash-paper-chip-border: rgba(80, 60, 30, 0.16);
+
+	--mash-logo-shadow: drop-shadow(0 2px 3px rgba(40, 28, 12, 0.18));
+
+	--mash-shadow-card: 0 1px 2px rgba(40, 28, 12, 0.1), 0 8px 22px rgba(40, 28, 12, 0.1);
+	--mash-shadow-lift: 0 4px 8px rgba(40, 28, 12, 0.14), 0 16px 36px rgba(40, 28, 12, 0.16);
 }
 
 html,
@@ -39,7 +159,7 @@ body {
 .mash-logo {
 	display: block;
 	flex-shrink: 0;
-	filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4));
+	filter: var(--mash-logo-shadow);
 }
 
 /* Primary mash / send action */
@@ -56,7 +176,7 @@ body {
 	background: var(--mash-accent-bright);
 	box-shadow:
 		inset 0 1px 0 rgba(255, 255, 255, 0.22),
-		0 4px 14px rgba(79, 122, 62, 0.35);
+		0 4px 14px var(--mash-accent-glow);
 }
 .mash-btn:active {
 	transform: translateY(1px);
@@ -72,13 +192,13 @@ body {
 		border-color 140ms ease;
 }
 .mash-btn-ghost:hover {
-	background: rgba(255, 255, 255, 0.04);
+	background: var(--mash-hover-fill-soft);
 	color: var(--mash-ink);
-	border-color: rgba(154, 144, 132, 0.45);
+	border-color: color-mix(in srgb, var(--mash-ink-muted) 45%, transparent);
 }
 
 .mash-chip {
-	background: rgba(255, 255, 255, 0.04);
+	background: var(--mash-hover-fill-soft);
 	border: 1px solid var(--mash-tray-edge);
 	color: var(--mash-ink-muted);
 }
@@ -87,28 +207,32 @@ body {
 	outline: none;
 	box-shadow:
 		0 0 0 2px var(--mash-bg),
-		0 0 0 4px rgba(106, 154, 82, 0.55);
+		0 0 0 4px var(--mash-accent-ring);
 }
 
-/* Warm parchment board */
+/* Desk / canvas */
 .mash-board-surface {
 	background-color: var(--mash-board);
 	background-image:
 		radial-gradient(circle at 1px 1px, var(--mash-board-dot) 1px, transparent 0),
-		linear-gradient(165deg, rgba(255, 248, 235, 0.55), transparent 55%);
+		linear-gradient(165deg, var(--mash-board-wash), transparent 55%);
 	background-size:
 		22px 22px,
 		100% 100%;
 }
 
 .mash-board-surface.is-drop-target {
-	box-shadow: inset 0 0 0 3px rgba(79, 122, 62, 0.55);
+	box-shadow: inset 0 0 0 3px var(--mash-accent-select);
 	animation: mash-drop-pulse 1.1s ease-in-out infinite;
 }
 .mash-board-surface.is-snap-on {
 	background-image:
-		radial-gradient(circle at 1px 1px, rgba(79, 122, 62, 0.28) 1.15px, transparent 0),
-		linear-gradient(165deg, rgba(255, 248, 235, 0.55), transparent 55%);
+		radial-gradient(
+			circle at 1px 1px,
+			color-mix(in srgb, var(--mash-accent) 28%, transparent) 1.15px,
+			transparent 0
+		),
+		linear-gradient(165deg, var(--mash-board-wash), transparent 55%);
 	background-size:
 		24px 24px,
 		100% 100%;
@@ -117,10 +241,10 @@ body {
 @keyframes mash-drop-pulse {
 	0%,
 	100% {
-		box-shadow: inset 0 0 0 3px rgba(79, 122, 62, 0.4);
+		box-shadow: inset 0 0 0 3px color-mix(in srgb, var(--mash-accent) 40%, transparent);
 	}
 	50% {
-		box-shadow: inset 0 0 0 5px rgba(106, 154, 82, 0.65);
+		box-shadow: inset 0 0 0 5px color-mix(in srgb, var(--mash-accent-bright) 65%, transparent);
 	}
 }
 
@@ -133,14 +257,21 @@ body {
 }
 
 .mash-empty-state-active .mash-empty-mascot {
-	filter: drop-shadow(0 12px 22px rgba(79, 122, 62, 0.28));
+	filter: drop-shadow(0 12px 22px color-mix(in srgb, var(--mash-accent) 28%, transparent));
+}
+
+.mash-empty-title {
+	color: var(--mash-ink);
+}
+.mash-empty-copy {
+	color: var(--mash-ink-muted);
 }
 
 .mash-note-card {
 	background: var(--mash-card);
 	color: var(--mash-card-ink);
 	box-shadow: var(--mash-shadow-card);
-	border: 1px solid rgba(80, 60, 30, 0.12);
+	border: 1px solid var(--mash-card-edge);
 	cursor: grab;
 	overflow: hidden;
 	transition:
@@ -155,10 +286,10 @@ body {
 	cursor: grabbing;
 }
 .mash-note-card.is-selected {
-	border-color: rgba(79, 122, 62, 0.65);
+	border-color: var(--mash-accent-select);
 	box-shadow:
 		var(--mash-shadow-card),
-		0 0 0 2px rgba(79, 122, 62, 0.25);
+		0 0 0 2px color-mix(in srgb, var(--mash-accent) 25%, transparent);
 }
 .mash-note-card.is-settling {
 	animation: mash-settle 280ms ease-out;
@@ -166,21 +297,21 @@ body {
 .mash-note-card.is-expanded {
 	z-index: 5;
 	box-shadow: var(--mash-shadow-lift);
-	border-color: rgba(79, 122, 62, 0.4);
+	border-color: color-mix(in srgb, var(--mash-accent) 40%, transparent);
 	overflow: hidden;
 	min-width: 280px;
 	min-height: 220px;
 }
 .mash-card-preview {
 	scrollbar-width: thin;
-	scrollbar-color: rgba(80, 60, 30, 0.28) transparent;
+	scrollbar-color: var(--mash-card-edge-strong) transparent;
 }
 .mash-card-preview::-webkit-scrollbar {
 	width: 6px;
 }
 .mash-card-preview::-webkit-scrollbar-thumb {
 	border-radius: 999px;
-	background: rgba(80, 60, 30, 0.28);
+	background: var(--mash-card-edge-strong);
 }
 .mash-resize-handle {
 	position: absolute;
@@ -194,15 +325,15 @@ body {
 		linear-gradient(
 			135deg,
 			transparent 45%,
-			rgba(80, 60, 30, 0.35) 46%,
-			rgba(80, 60, 30, 0.35) 54%,
+			color-mix(in srgb, var(--mash-card-muted) 55%, transparent) 46%,
+			color-mix(in srgb, var(--mash-card-muted) 55%, transparent) 54%,
 			transparent 55%
 		),
 		linear-gradient(
 			135deg,
 			transparent 62%,
-			rgba(80, 60, 30, 0.35) 63%,
-			rgba(80, 60, 30, 0.35) 71%,
+			color-mix(in srgb, var(--mash-card-muted) 55%, transparent) 63%,
+			color-mix(in srgb, var(--mash-card-muted) 55%, transparent) 71%,
 			transparent 72%
 		);
 	opacity: 0;
@@ -214,8 +345,8 @@ body {
 	opacity: 0.85;
 }
 .mash-marquee {
-	border: 1.5px solid rgba(79, 122, 62, 0.75);
-	background: rgba(79, 122, 62, 0.12);
+	border: 1.5px solid color-mix(in srgb, var(--mash-accent) 75%, transparent);
+	background: var(--mash-accent-wash);
 	border-radius: 4px;
 	pointer-events: none;
 	z-index: 30;
@@ -228,14 +359,14 @@ body {
 	min-height: 26px;
 	border-radius: 7px;
 	padding: 3px 7px;
-	color: var(--mash-card-muted);
+	color: var(--mash-ink-muted);
 	font-size: 10px;
 	font-weight: 600;
 	line-height: 1;
 }
 .mash-align-btn:hover:not(:disabled) {
-	background: rgba(79, 122, 62, 0.14);
-	color: var(--mash-card-ink);
+	background: var(--mash-accent-wash);
+	color: var(--mash-ink);
 }
 .mash-align-btn:disabled {
 	opacity: 0.35;
@@ -249,18 +380,44 @@ body {
 	border-radius: 6px;
 	font-size: 12px;
 	font-weight: 600;
-	color: var(--mash-card-muted);
+	color: var(--mash-chrome-muted);
 	line-height: 1;
 }
 .mash-pan-btn:hover {
-	background: rgba(79, 122, 62, 0.14);
-	color: var(--mash-card-ink);
+	background: var(--mash-accent-wash);
+	color: var(--mash-chrome-ink);
+}
+
+.mash-board-chip {
+	border: 1px solid var(--mash-chrome-chip-border);
+	background: var(--mash-chrome-chip);
+	color: var(--mash-chrome-muted);
+	backdrop-filter: blur(10px);
+	-webkit-backdrop-filter: blur(10px);
+}
+.mash-board-chip-soft {
+	border: 1px solid var(--mash-chrome-chip-border);
+	background: var(--mash-chrome-chip-soft);
+	color: var(--mash-chrome-muted);
+	backdrop-filter: blur(10px);
+	-webkit-backdrop-filter: blur(10px);
+}
+.mash-board-chip-btn {
+	color: var(--mash-chrome-muted);
+}
+.mash-board-chip-btn:hover {
+	color: var(--mash-chrome-ink);
+}
+.mash-board-chip-btn.is-active {
+	background: var(--mash-accent-wash);
+	color: var(--mash-chrome-ink);
+	font-weight: 600;
 }
 .mash-note-card.is-mash-target {
-	border-color: rgba(79, 122, 62, 0.85);
+	border-color: color-mix(in srgb, var(--mash-accent) 85%, transparent);
 	box-shadow:
 		var(--mash-shadow-lift),
-		0 0 0 3px rgba(106, 154, 82, 0.45);
+		0 0 0 3px color-mix(in srgb, var(--mash-accent-bright) 45%, transparent);
 	transform: scale(1.03);
 }
 .mash-note-card.is-mash-confirming {
@@ -268,10 +425,10 @@ body {
 	box-shadow: var(--mash-shadow-lift);
 }
 .mash-note-card.is-mash-result {
-	border-color: rgba(79, 122, 62, 0.35);
+	border-color: color-mix(in srgb, var(--mash-accent) 35%, transparent);
 	box-shadow:
 		var(--mash-shadow-card),
-		inset 0 0 0 1px rgba(79, 122, 62, 0.12);
+		inset 0 0 0 1px color-mix(in srgb, var(--mash-accent) 12%, transparent);
 }
 
 @keyframes mash-settle {
@@ -324,13 +481,13 @@ body {
 	gap: 6px;
 	padding: 12px 10px;
 	border-radius: 999px;
-	border: 1px solid rgba(240, 235, 227, 0.12);
-	background: rgba(20, 18, 14, 0.88);
+	border: 1px solid var(--mash-glass-border);
+	background: var(--mash-glass);
 	backdrop-filter: blur(18px) saturate(1.15);
 	-webkit-backdrop-filter: blur(18px) saturate(1.15);
 	box-shadow:
-		0 10px 36px rgba(0, 0, 0, 0.4),
-		inset 0 1px 0 rgba(255, 255, 255, 0.07);
+		var(--mash-dock-shadow),
+		inset 0 1px 0 var(--mash-glass-highlight);
 	overflow: visible;
 	animation: mash-side-dock-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
@@ -349,7 +506,7 @@ body {
 	width: 22px;
 	margin: 2px 0;
 	border-radius: 1px;
-	background: rgba(255, 255, 255, 0.1);
+	background: var(--mash-divider);
 	flex-shrink: 0;
 }
 .mash-side-dock-item {
@@ -363,7 +520,7 @@ body {
 	flex-shrink: 0;
 	border-radius: 15px;
 	/* Steady icon tone — feedback is scale, not color flash. */
-	color: rgba(240, 235, 227, 0.72);
+	color: var(--mash-dock-ink);
 	background: transparent;
 	border: none;
 	cursor: pointer;
@@ -382,20 +539,29 @@ body {
 	display: flex;
 	/* Soft silhouette when icons swell past the glass onto cream. */
 	filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35));
-	transition: filter 160ms ease, opacity 160ms ease;
+	transition:
+		filter 160ms ease,
+		opacity 160ms ease;
+}
+[data-theme='light'] .mash-side-dock-item .mash-side-dock-icon {
+	filter: drop-shadow(0 1px 1px rgba(40, 28, 12, 0.12));
 }
 .mash-side-dock-item.is-hot:not(.is-accent) .mash-side-dock-icon,
 .mash-side-dock-item:hover:not(.is-accent) .mash-side-dock-icon {
 	opacity: 1;
 	filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.45));
 }
+[data-theme='light'] .mash-side-dock-item.is-hot:not(.is-accent) .mash-side-dock-icon,
+[data-theme='light'] .mash-side-dock-item:hover:not(.is-accent) .mash-side-dock-icon {
+	filter: drop-shadow(0 2px 3px rgba(40, 28, 12, 0.18));
+}
 .mash-side-dock-item.is-active:not(.is-accent) {
-	color: rgba(240, 235, 227, 0.95);
+	color: var(--mash-dock-ink-active);
 }
 .mash-side-dock-item.is-accent {
 	color: var(--mash-accent-ink);
 	background: var(--mash-accent);
-	box-shadow: 0 4px 14px rgba(79, 122, 62, 0.35);
+	box-shadow: 0 4px 14px var(--mash-accent-glow);
 }
 .mash-side-dock-item.is-accent .mash-side-dock-icon {
 	filter: none;
@@ -418,9 +584,9 @@ body {
 	letter-spacing: 0.01em;
 	white-space: nowrap;
 	color: var(--mash-ink);
-	background: rgba(28, 24, 18, 0.94);
-	border: 1px solid rgba(240, 235, 227, 0.12);
-	box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+	background: var(--mash-panel);
+	border: 1px solid var(--mash-panel-border);
+	box-shadow: 0 6px 18px color-mix(in srgb, var(--mash-bg) 55%, transparent);
 	opacity: 0;
 	pointer-events: none;
 	transform: translateX(-4px) scale(calc(1 / var(--dock-scale)));
@@ -442,7 +608,7 @@ body {
 	height: 5px;
 	border-radius: 999px;
 	background: var(--mash-accent-bright);
-	box-shadow: 0 0 0 2px rgba(20, 18, 14, 0.85);
+	box-shadow: 0 0 0 2px var(--mash-pip-ring);
 	animation: mash-dock-pip 320ms ease-out;
 }
 @keyframes mash-dock-pip {
@@ -474,12 +640,12 @@ body {
 	width: 280px;
 	max-height: min(78vh, 720px);
 	border-radius: 18px;
-	border: 1px solid rgba(240, 235, 227, 0.1);
-	background: rgba(22, 20, 16, 0.9);
+	border: 1px solid var(--mash-glass-border);
+	background: var(--mash-glass-strong);
 	backdrop-filter: blur(18px) saturate(1.05);
 	box-shadow:
-		0 12px 40px rgba(0, 0, 0, 0.4),
-		inset 0 1px 0 rgba(255, 255, 255, 0.05);
+		var(--mash-panel-shadow),
+		inset 0 1px 0 var(--mash-glass-highlight);
 	animation: mash-peel-in 200ms ease-out;
 	overflow: hidden;
 }
@@ -514,7 +680,7 @@ body {
 }
 .mash-peel-icon-btn:hover {
 	color: var(--mash-ink);
-	background: rgba(255, 255, 255, 0.06);
+	background: var(--mash-hover-fill);
 }
 .mash-peel-filter {
 	padding: 8px 10px;
@@ -558,7 +724,7 @@ body {
 }
 .mash-peel-meta-row:hover {
 	color: var(--mash-ink);
-	background: rgba(255, 255, 255, 0.04);
+	background: var(--mash-hover-fill-soft);
 }
 
 .mash-peel-drag-handle {
@@ -580,7 +746,7 @@ body {
 .mash-tray-chip:hover .mash-peel-drag-handle,
 .mash-peel-drag-handle:focus-visible {
 	opacity: 1;
-	background: rgba(255, 255, 255, 0.06);
+	background: var(--mash-hover-fill);
 	color: var(--mash-ink);
 }
 .mash-peel-drag-handle:active {
@@ -595,16 +761,16 @@ body {
 	align-items: center;
 	justify-content: center;
 	padding: 24px;
-	background: rgba(10, 8, 6, 0.62);
+	background: var(--mash-backdrop);
 	backdrop-filter: blur(6px);
 }
 .mash-confirm-dialog {
 	width: min(100%, 360px);
 	border-radius: 16px;
-	border: 1px solid rgba(240, 235, 227, 0.12);
-	background: rgba(28, 24, 18, 0.96);
+	border: 1px solid var(--mash-panel-border);
+	background: var(--mash-panel-strong);
 	padding: 18px 18px 16px;
-	box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+	box-shadow: 0 16px 48px color-mix(in srgb, var(--mash-bg) 70%, transparent);
 	color: var(--mash-ink);
 }
 .mash-btn-danger {
@@ -615,6 +781,40 @@ body {
 .mash-btn-danger:hover {
 	filter: brightness(1.08);
 }
+
+.mash-theme-toggle {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 34px;
+	height: 34px;
+	border-radius: 10px;
+	border: 1px solid var(--mash-tray-edge);
+	background: transparent;
+	color: var(--mash-ink-muted);
+	cursor: pointer;
+	transition:
+		background 140ms ease,
+		color 140ms ease,
+		border-color 140ms ease;
+}
+.mash-theme-toggle:hover {
+	background: var(--mash-hover-fill-soft);
+	color: var(--mash-ink);
+	border-color: color-mix(in srgb, var(--mash-ink-muted) 45%, transparent);
+}
+
+.mash-row-hover:hover {
+	background: var(--mash-hover-fill-soft);
+}
+.mash-row-active {
+	background: var(--mash-hover-fill);
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mash-accent) 40%, transparent);
+}
+.mash-chip-hover:hover {
+	background: var(--mash-hover-fill);
+}
+
 @media (max-width: 720px) {
 	.mash-dock-slot {
 		top: auto;

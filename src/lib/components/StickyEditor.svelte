@@ -122,7 +122,7 @@
 </script>
 
 <div class="flex h-full min-h-0 w-full flex-col" data-no-drag>
-	<div class="flex shrink-0 items-center justify-between gap-0.5 border-b border-[rgba(80,60,30,0.08)] px-1.5 py-0.5">
+	<div class="flex shrink-0 items-center justify-between gap-0.5 border-b border-[var(--mash-card-edge)] px-1.5 py-0.5">
 		{#if mode === 'edit'}
 			<div class="flex items-center gap-0.5">
 				<button
@@ -236,7 +236,7 @@
 		font-family: var(--mash-font-ui, 'IBM Plex Sans', sans-serif);
 		caret-color: var(--mash-accent, #4f7a3e);
 		scrollbar-width: thin;
-		scrollbar-color: rgba(80, 60, 30, 0.28) transparent;
+		scrollbar-color: var(--mash-card-edge-strong) transparent;
 	}
 	.mash-sticky-body::placeholder {
 		color: var(--mash-card-muted, #6b5e4e);
@@ -255,11 +255,11 @@
 		cursor: pointer;
 	}
 	.mash-sticky-mode-btn:hover {
-		background: rgba(80, 60, 30, 0.08);
+		background: var(--mash-card-hover);
 		color: var(--mash-card-ink, #2c2418);
 	}
 	.mash-sticky-mode-btn.is-active {
-		background: rgba(79, 122, 62, 0.15);
+		background: var(--mash-accent-wash);
 		color: var(--mash-accent, #4f7a3e);
 	}
 	.mash-sticky-preview :global(h1),
@@ -292,13 +292,13 @@
 		font-size: 0.9em;
 		padding: 0.1em 0.35em;
 		border-radius: 4px;
-		background: rgba(80, 60, 30, 0.08);
+		background: var(--mash-card-hover);
 	}
 	.mash-sticky-preview :global(pre) {
 		overflow-x: auto;
 		padding: 0.6em 0.75em;
 		border-radius: 8px;
-		background: rgba(80, 60, 30, 0.08);
+		background: var(--mash-card-hover);
 		font-size: 0.85em;
 	}
 	.mash-sticky-preview :global(pre code) {
@@ -311,7 +311,7 @@
 	.mash-sticky-preview :global(blockquote) {
 		margin: 0.4em 0;
 		padding-left: 0.75em;
-		border-left: 3px solid rgba(80, 60, 30, 0.2);
+		border-left: 3px solid var(--mash-card-edge-strong);
 		opacity: 0.9;
 	}
 	.mash-sticky-preview :global(.mash-wikilink) {
