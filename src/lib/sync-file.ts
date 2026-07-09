@@ -358,7 +358,8 @@ export async function downloadSyncBundle(
 	a.href = url;
 	a.download = filename;
 	a.click();
-	URL.revokeObjectURL(url);
+	// Defer revoke — some browsers cancel the download if revoked synchronously.
+	setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 /** Human-readable conflict list for toasts / dialogs. */

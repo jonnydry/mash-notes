@@ -99,7 +99,7 @@ export function canvasTitleFromFilter(filter: NavFilter): string {
 }
 
 export type CreateNoteLibraryOpts = {
-	flashToast: (msg: string) => void;
+	flashToast: (msg: string, ms?: number) => void;
 	askConfirm: (opts: {
 		title: string;
 		message: string;
@@ -338,7 +338,7 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 			if (loaded.length === 0) {
 				const seed1 = await createNote({
 					title: 'Welcome to Mash',
-					body: 'Mash is where notes go to become useful.\n\nDrag notes from the tray onto the canvas. Select a few, then Combine, Copy, or Export.\n\nTry a [[Project ideas]] link in preview mode.',
+					body: 'Mash is where notes go to become useful.\n\nDrag notes from the peel onto the desk. Select a few, then Mash, Copy, or Export.\n\nTry a [[Project ideas]] link in preview mode — missing links ask before creating.',
 					tags: ['welcome']
 				});
 				addNoteToSearch(seed1);
@@ -399,13 +399,17 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 
 			let deskPart = '';
 			if (parsed.bundle.desk) {
-				const deskSummary = await applyDeskSnapshot(
-					parsed.bundle.desk,
-					new Set(mergedNotes.map((n) => n.id))
-				);
-				summary.desk = deskSummary;
-				deskPart = ` · desk ${deskSummary.itemsUpserted} placements`;
-				await opts.onDeskSynced?.();
+				try {
+					const deskSummary = await applyDeskSnapshot(
+						parsed.bundle.desk,
+						new Set(mergedNotes.map((n) => n.id))
+					);
+					summary.desk = deskSummary;
+					deskPart = ` · desk ${deskSummary.itemsUpserted} placements`;
+					await opts.onDeskSynced?.();
+				} catch {
+					deskPart = ' · desk apply failed';
+				}
 			}
 
 			const conflictFields = [
@@ -414,7 +418,8 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 			opts.flashToast(
 				`Sync: ${summary.added} added · ${summary.updated} updated` +
 					deskPart +
-					(conflictFields.length ? ` · ${conflictFields.length} conflicts` : '')
+					(conflictFields.length ? ` · ${conflictFields.length} conflicts` : ''),
+				3200
 			);
 
 			if (summary.conflicts.length > 0) {

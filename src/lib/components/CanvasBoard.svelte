@@ -1039,6 +1039,7 @@
 				{@const isPendingSource = pendingMash?.sourceId === item.id}
 				{@const isPendingPartner = pendingMash?.targetId === item.id}
 				{@const isMash = Boolean(note.mashedFrom?.length)}
+				{@const links = linkSummary([...notesById.values()], note)}
 				<div
 					data-canvas-card
 					role="group"
@@ -1274,18 +1275,24 @@
 									}}
 								/>
 							</label>
-							{#if true}
-								{@const links = linkSummary([...notesById.values()], note)}
+							{#if links.outgoingCount + links.backlinkCount > 0}
 								<button
 									type="button"
 									class="shrink-0 rounded-md px-1.5 py-0.5 text-[10px] tabular-nums text-[var(--mash-card-muted)] hover:bg-black/5 hover:text-[var(--mash-accent)]"
-									title="Open linked notes"
+									title="{links.outgoingCount} links · {links.backlinkCount} backlinks — open Linked"
+									aria-label="{links.outgoingCount} links, {links.backlinkCount} backlinks"
 									onclick={(e) => {
 										e.stopPropagation();
 										onOpenLinks?.(note.id);
 									}}
 								>
-									{links.outgoingCount} links · {links.backlinkCount} backlinks
+									{#if links.outgoingCount > 0 && links.backlinkCount > 0}
+										{links.outgoingCount} · {links.backlinkCount}
+									{:else if links.outgoingCount > 0}
+										{links.outgoingCount} link{links.outgoingCount === 1 ? '' : 's'}
+									{:else}
+										{links.backlinkCount} backlink{links.backlinkCount === 1 ? '' : 's'}
+									{/if}
 								</button>
 							{/if}
 						</div>
