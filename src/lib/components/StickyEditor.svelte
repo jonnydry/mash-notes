@@ -46,12 +46,8 @@
 	let bodyEl: HTMLTextAreaElement | undefined = $state();
 	let focusedNoteId: string | null = null;
 
-	let previewHtml = $derived(
-		mode === 'preview' ? renderMarkdown(body || '') : ''
-	);
-	let align = $derived(
-		textAlign === 'center' || textAlign === 'right' ? textAlign : 'left'
-	);
+	let previewHtml = $derived(mode === 'preview' ? renderMarkdown(body || '') : '');
+	let align = $derived(textAlign === 'center' || textAlign === 'right' ? textAlign : 'left');
 
 	$effect(() => {
 		if (autofocus && mode === 'edit' && noteId !== focusedNoteId) {
@@ -147,7 +143,9 @@
 </script>
 
 <div class="flex h-full min-h-0 w-full flex-col" data-no-drag>
-	<div class="flex shrink-0 items-center justify-between gap-0.5 border-b border-[var(--mash-card-edge)] px-1.5 py-0.5">
+	<div
+		class="flex shrink-0 items-center justify-between gap-0.5 border-b border-[var(--mash-card-edge)] px-1.5 py-0.5"
+	>
 		{#if mode === 'edit'}
 			<div class="flex items-center gap-0.5">
 				<button

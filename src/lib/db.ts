@@ -198,9 +198,7 @@ export async function deleteNote(id: string): Promise<void> {
 export async function getSyncTombstoneNotes(maxAgeMs: number): Promise<Note[]> {
 	const cutoff = Date.now() - maxAgeMs;
 	const all = await db.notes.toArray();
-	return all.filter(
-		(n) => typeof n.deletedAt === 'number' && n.deletedAt >= cutoff
-	);
+	return all.filter((n) => typeof n.deletedAt === 'number' && n.deletedAt >= cutoff);
 }
 
 /**
@@ -242,11 +240,7 @@ export async function getOrCreateFolderCanvas(folder: string): Promise<Canvas> {
 
 		const now = Date.now();
 		const title =
-			folder === '__mash_pinned__'
-				? 'Pinned canvas'
-				: folder
-					? `${folder} canvas`
-					: 'Root canvas';
+			folder === '__mash_pinned__' ? 'Pinned canvas' : folder ? `${folder} canvas` : 'Root canvas';
 		const canvas: Canvas = {
 			id: newId(),
 			folder,
@@ -398,10 +392,7 @@ export async function removeCanvasEdge(id: string): Promise<void> {
 }
 
 /** Replace all edges on a canvas (used by undo/redo of link actions). */
-export async function replaceCanvasEdges(
-	canvasId: string,
-	edges: CanvasEdge[]
-): Promise<void> {
+export async function replaceCanvasEdges(canvasId: string, edges: CanvasEdge[]): Promise<void> {
 	await db.transaction('rw', db.canvasEdges, db.canvases, async () => {
 		const existing = await db.canvasEdges.where('canvasId').equals(canvasId).toArray();
 		if (existing.length > 0) {

@@ -146,9 +146,7 @@ describe('sync-file', () => {
 	});
 
 	it('exports soft-deleted notes as tombstones', async () => {
-		await db.notes.put(
-			note({ id: 'gone', title: 'Gone', modified: 5, deletedAt: Date.now() })
-		);
+		await db.notes.put(note({ id: 'gone', title: 'Gone', modified: 5, deletedAt: Date.now() }));
 		const bundle = await buildSyncBundle([note({ id: 'a', title: 'A', modified: 10 })]);
 		expect(bundle.notes.map((n) => n.id)).toEqual(['a']);
 		expect(bundle.tombstones?.some((t) => t.id === 'gone')).toBe(true);
@@ -180,12 +178,8 @@ describe('sync-file', () => {
 			modified: 1
 		});
 		const desk = {
-			canvases: [
-				{ id: 'remote-root', folder: '', title: 'Desk', created: 1, modified: 10 }
-			],
-			items: [
-				{ id: 'ri1', canvasId: 'remote-root', noteId: 'n1', x: 100, y: 200, w: 220, h: 120 }
-			],
+			canvases: [{ id: 'remote-root', folder: '', title: 'Desk', created: 1, modified: 10 }],
+			items: [{ id: 'ri1', canvasId: 'remote-root', noteId: 'n1', x: 100, y: 200, w: 220, h: 120 }],
 			dismissed: { 'remote-root': ['n2'] }
 		};
 		const summary = await applyDeskSnapshot(desk, new Set(['n1', 'n2']));
@@ -206,9 +200,7 @@ describe('sync-file', () => {
 			modified: 1
 		});
 		const desk = {
-			canvases: [
-				{ id: 'remote-root', folder: '', title: 'Desk', created: 1, modified: 10 }
-			],
+			canvases: [{ id: 'remote-root', folder: '', title: 'Desk', created: 1, modified: 10 }],
 			items: [
 				{ id: 'ri1', canvasId: 'remote-root', noteId: 'n1', x: 0, y: 0 },
 				{ id: 'ri2', canvasId: 'remote-root', noteId: 'n2', x: 100, y: 0 }
@@ -237,12 +229,8 @@ describe('sync-file', () => {
 	it('persistMergedSync commits notes and desk together', async () => {
 		const notes = [note({ id: 'n1', title: 'One', modified: 5 })];
 		const desk = {
-			canvases: [
-				{ id: 'remote-root', folder: '', title: 'Desk', created: 1, modified: 10 }
-			],
-			items: [
-				{ id: 'ri1', canvasId: 'remote-root', noteId: 'n1', x: 40, y: 50 }
-			],
+			canvases: [{ id: 'remote-root', folder: '', title: 'Desk', created: 1, modified: 10 }],
+			items: [{ id: 'ri1', canvasId: 'remote-root', noteId: 'n1', x: 40, y: 50 }],
 			dismissed: { 'remote-root': ['gone'] }
 		};
 		const { desk: deskSummary } = await persistMergedSync(notes, desk, new Set(['n1']));
@@ -260,12 +248,8 @@ describe('sync-file', () => {
 			note({ id: 'new', title: 'Should roll back', modified: 2 })
 		];
 		const desk = {
-			canvases: [
-				{ id: 'remote-root', folder: '', title: 'Desk', created: 1, modified: 10 }
-			],
-			items: [
-				{ id: 'ri1', canvasId: 'remote-root', noteId: 'new', x: 0, y: 0 }
-			],
+			canvases: [{ id: 'remote-root', folder: '', title: 'Desk', created: 1, modified: 10 }],
+			items: [{ id: 'ri1', canvasId: 'remote-root', noteId: 'new', x: 0, y: 0 }],
 			dismissed: {}
 		};
 
@@ -288,9 +272,9 @@ describe('sync-file', () => {
 
 	it('rejects bad JSON and invalid notes', () => {
 		expect(parseSyncBundle('nope').ok).toBe(false);
-		expect(
-			parseSyncBundle(JSON.stringify({ version: 3, notes: ['not-an-object'] })).ok
-		).toBe(false);
+		expect(parseSyncBundle(JSON.stringify({ version: 3, notes: ['not-an-object'] })).ok).toBe(
+			false
+		);
 		expect(parseSyncBundle(JSON.stringify({ version: 2, notes: [null] })).ok).toBe(false);
 	});
 

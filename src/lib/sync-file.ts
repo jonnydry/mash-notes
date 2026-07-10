@@ -7,11 +7,7 @@ import type { Canvas, CanvasEdge, CanvasItem, Note } from './types';
 import { mergeNotesLww, hasConflicts, type MergeResult, type SyncConflict } from './sync-model';
 import { normalizeImportedNote } from './import-notes';
 import { db, getSyncTombstoneNotes, newId } from './db';
-import {
-	exportAllDismissed,
-	importDismissedMap,
-	type DismissedByCanvas
-} from './canvas-dismiss';
+import { exportAllDismissed, importDismissedMap, type DismissedByCanvas } from './canvas-dismiss';
 
 export const SYNC_BUNDLE_VERSION = 3 as const;
 export const SYNC_BUNDLE_VERSION_V2 = 2 as const;
@@ -566,32 +562,21 @@ export async function persistMergedSync(
 ): Promise<{ desk?: DeskApplySummary }> {
 	let deskSummary: DeskApplySummary | undefined;
 	let remappedDismissed: DismissedByCanvas = {};
-	const deletedIds = plainNotes
-		.filter((n) => n.deletedAt != null)
-		.map((n) => n.id);
+	const deletedIds = plainNotes.filter((n) => n.deletedAt != null).map((n) => n.id);
 
-	await db.transaction(
-		'rw',
-		db.notes,
-		db.canvases,
-		db.canvasItems,
-		db.canvasEdges,
-		async () => {
-			await db.notes.bulkPut(plainNotes);
-			for (const id of deletedIds) {
-				await stripCanvasForDeletedNote(id);
-			}
-			if (desk) {
-				const activeIds = new Set(
-					[...knownNoteIds].filter((id) => !deletedIds.includes(id))
-				);
-				const result = await applyDeskIdbSnapshot(desk, activeIds);
-				const { remappedDismissed: remapped, ...summary } = result;
-				deskSummary = summary;
-				remappedDismissed = remapped;
-			}
+	await db.transaction('rw', db.notes, db.canvases, db.canvasItems, db.canvasEdges, async () => {
+		await db.notes.bulkPut(plainNotes);
+		for (const id of deletedIds) {
+			await stripCanvasForDeletedNote(id);
 		}
-	);
+		if (desk) {
+			const activeIds = new Set([...knownNoteIds].filter((id) => !deletedIds.includes(id)));
+			const result = await applyDeskIdbSnapshot(desk, activeIds);
+			const { remappedDismissed: remapped, ...summary } = result;
+			deskSummary = summary;
+			remappedDismissed = remapped;
+		}
+	});
 
 	if (Object.keys(remappedDismissed).length > 0) {
 		importDismissedMap(remappedDismissed);
@@ -600,10 +585,7 @@ export async function persistMergedSync(
 	return { desk: deskSummary };
 }
 
-export async function downloadSyncBundle(
-	notes: Note[],
-	filename = 'mash-sync-bundle.json'
-) {
+export async function downloadSyncBundle(notes: Note[], filename = 'mash-sync-bundle.json') {
 	const bundle = await buildSyncBundle(notes);
 	const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
 	const url = URL.createObjectURL(blob);
@@ -622,7 +604,6 @@ export function formatConflictSummary(conflicts: SyncConflict[], limit = 6): str
 		const short = c.noteId.slice(0, 8);
 		return `· ${short}… ${c.field} → kept ${c.chosen}`;
 	});
-	const more =
-		conflicts.length > limit ? `\n· …and ${conflicts.length - limit} more` : '';
+	const more = conflicts.length > limit ? `\n· …and ${conflicts.length - limit} more` : '';
 	return lines.join('\n') + more;
 }

@@ -227,101 +227,115 @@
 		<div class="mash-peel-body">
 			{#if mode === 'folders'}
 				<div class="mash-peel-body-scroll" onwheel={(e) => e.stopPropagation()}>
-				{#if folderRows.length === 0}
-					<div class="mash-peel-empty">No folders yet</div>
-				{:else}
-					{#each folderRows as { node, depth }}
-						<div class="mash-peel-meta-row group" style="padding-left: {10 + depth * 12}px;">
-							<button
-								type="button"
-								class="flex min-w-0 flex-1 items-center gap-2 text-left"
-								onclick={() => onPickFolder?.(node.path)}
-							>
-								<Folder class="h-3.5 w-3.5 shrink-0 opacity-60" />
-								<span class="truncate">{node.name}</span>
-							</button>
-							<button
-								type="button"
-								class="mash-peel-icon-btn opacity-40 group-hover:opacity-100 focus-visible:opacity-100"
-								aria-label="Delete folder {node.path}"
-								onclick={() => onDeleteFolder?.(node.path)}
-							>
-								<Trash2 class="h-3.5 w-3.5" />
-							</button>
-						</div>
-					{/each}
-				{/if}
+					{#if folderRows.length === 0}
+						<div class="mash-peel-empty">No folders yet</div>
+					{:else}
+						{#each folderRows as { node, depth }}
+							<div class="mash-peel-meta-row group" style="padding-left: {10 + depth * 12}px;">
+								<button
+									type="button"
+									class="flex min-w-0 flex-1 items-center gap-2 text-left"
+									onclick={() => onPickFolder?.(node.path)}
+								>
+									<Folder class="h-3.5 w-3.5 shrink-0 opacity-60" />
+									<span class="truncate">{node.name}</span>
+								</button>
+								<button
+									type="button"
+									class="mash-peel-icon-btn opacity-40 group-hover:opacity-100 focus-visible:opacity-100"
+									aria-label="Delete folder {node.path}"
+									onclick={() => onDeleteFolder?.(node.path)}
+								>
+									<Trash2 class="h-3.5 w-3.5" />
+								</button>
+							</div>
+						{/each}
+					{/if}
 				</div>
 			{:else if mode === 'tags'}
 				<div class="mash-peel-body-scroll" onwheel={(e) => e.stopPropagation()}>
-				{#if tags.length === 0}
-					<div class="mash-peel-empty">No tags yet</div>
-				{:else}
-					{#each tags as tag}
-						<div class="mash-peel-meta-row group">
-							<button
-								type="button"
-								class="flex min-w-0 flex-1 items-center gap-2 text-left"
-								onclick={() => onPickTag?.(tag)}
-							>
-								<Hash class="h-3.5 w-3.5 shrink-0 opacity-60" />
-								<span class="truncate">{tag}</span>
-							</button>
-							<button
-								type="button"
-								class="mash-peel-icon-btn opacity-40 group-hover:opacity-100 focus-visible:opacity-100"
-								aria-label="Delete tag {tag}"
-								onclick={() => onDeleteTag?.(tag)}
-							>
-								<Trash2 class="h-3.5 w-3.5" />
-							</button>
-						</div>
-					{/each}
-				{/if}
+					{#if tags.length === 0}
+						<div class="mash-peel-empty">No tags yet</div>
+					{:else}
+						{#each tags as tag}
+							<div class="mash-peel-meta-row group">
+								<button
+									type="button"
+									class="flex min-w-0 flex-1 items-center gap-2 text-left"
+									onclick={() => onPickTag?.(tag)}
+								>
+									<Hash class="h-3.5 w-3.5 shrink-0 opacity-60" />
+									<span class="truncate">{tag}</span>
+								</button>
+								<button
+									type="button"
+									class="mash-peel-icon-btn opacity-40 group-hover:opacity-100 focus-visible:opacity-100"
+									aria-label="Delete tag {tag}"
+									onclick={() => onDeleteTag?.(tag)}
+								>
+									<Trash2 class="h-3.5 w-3.5" />
+								</button>
+							</div>
+						{/each}
+					{/if}
 				</div>
 			{:else if mode === 'linked'}
 				<div class="mash-peel-body-scroll" onwheel={(e) => e.stopPropagation()}>
-				{#if !linkedFocusTitle}
-					<div class="mash-peel-empty">Select a note to see links</div>
-				{:else}
-					<div class="px-2.5 py-1.5 text-[10px] font-medium tracking-wide uppercase" style="color: var(--mash-accent-bright);">
-						<span class="inline-flex items-center gap-1"><ArrowUpRight class="h-3 w-3" /> Outgoing</span>
-					</div>
-					{#if outgoingNotes.length === 0}
-						<div class="mash-peel-empty py-2">No outgoing links</div>
+					{#if !linkedFocusTitle}
+						<div class="mash-peel-empty">Select a note to see links</div>
 					{:else}
-						{#each outgoingNotes as note}
-							<button
-								type="button"
-								class="mash-peel-meta-row w-full text-left"
-								onclick={() => onNoteOpen(note.id)}
+						<div
+							class="px-2.5 py-1.5 text-[10px] font-medium tracking-wide uppercase"
+							style="color: var(--mash-accent-bright);"
+						>
+							<span class="inline-flex items-center gap-1"
+								><ArrowUpRight class="h-3 w-3" /> Outgoing</span
 							>
-								<Link2 class="h-3.5 w-3.5 shrink-0 opacity-60" />
-								<span class="truncate text-[12px]">{note.title}</span>
-							</button>
-						{/each}
-					{/if}
-					<div class="mt-2 px-2.5 py-1.5 text-[10px] font-medium tracking-wide uppercase" style="color: var(--mash-accent-bright);">
-						<span class="inline-flex items-center gap-1"><ArrowDownLeft class="h-3 w-3" /> Backlinks</span>
-					</div>
-					{#if backlinkNotes.length === 0}
-						<div class="mash-peel-empty py-2">No backlinks</div>
-					{:else}
-						{#each backlinkNotes as note}
-							<button
-								type="button"
-								class="mash-peel-meta-row w-full text-left"
-								onclick={() => onNoteOpen(note.id)}
+						</div>
+						{#if outgoingNotes.length === 0}
+							<div class="mash-peel-empty py-2">No outgoing links</div>
+						{:else}
+							{#each outgoingNotes as note}
+								<button
+									type="button"
+									class="mash-peel-meta-row w-full text-left"
+									onclick={() => onNoteOpen(note.id)}
+								>
+									<Link2 class="h-3.5 w-3.5 shrink-0 opacity-60" />
+									<span class="truncate text-[12px]">{note.title}</span>
+								</button>
+							{/each}
+						{/if}
+						<div
+							class="mt-2 px-2.5 py-1.5 text-[10px] font-medium tracking-wide uppercase"
+							style="color: var(--mash-accent-bright);"
+						>
+							<span class="inline-flex items-center gap-1"
+								><ArrowDownLeft class="h-3 w-3" /> Backlinks</span
 							>
-								<Link2 class="h-3.5 w-3.5 shrink-0 opacity-60" />
-								<span class="truncate text-[12px]">{note.title}</span>
-							</button>
-						{/each}
+						</div>
+						{#if backlinkNotes.length === 0}
+							<div class="mash-peel-empty py-2">No backlinks</div>
+						{:else}
+							{#each backlinkNotes as note}
+								<button
+									type="button"
+									class="mash-peel-meta-row w-full text-left"
+									onclick={() => onNoteOpen(note.id)}
+								>
+									<Link2 class="h-3.5 w-3.5 shrink-0 opacity-60" />
+									<span class="truncate text-[12px]">{note.title}</span>
+								</button>
+							{/each}
+						{/if}
 					{/if}
-				{/if}
 				</div>
 			{:else if mode === 'conflicts'}
-				<div class="mash-peel-body-scroll" onwheel={(e) => e.stopPropagation()} data-testid="sync-conflicts-peel">
+				<div
+					class="mash-peel-body-scroll"
+					onwheel={(e) => e.stopPropagation()}
+					data-testid="sync-conflicts-peel"
+				>
 					{#if conflictRows.length === 0}
 						<div class="mash-peel-empty">No pending conflicts</div>
 					{:else}
@@ -375,7 +389,11 @@
 				<div class="mash-peel-empty">
 					<p>Nothing to scan</p>
 					{#if onNewNote}
-						<button type="button" class="mash-btn mt-3 rounded-lg px-3 py-1.5 text-xs font-semibold" onclick={onNewNote}>
+						<button
+							type="button"
+							class="mash-btn mt-3 rounded-lg px-3 py-1.5 text-xs font-semibold"
+							onclick={onNewNote}
+						>
 							Start a note
 						</button>
 					{/if}
@@ -465,7 +483,9 @@
 		{:else if mode === 'linked'}
 			<div class="mash-peel-footer">Open a linked note on the canvas</div>
 		{:else if mode === 'conflicts'}
-			<div class="mash-peel-footer">Review after sync — Restore local undoes LWW for that field</div>
+			<div class="mash-peel-footer">
+				Review after sync — Restore local undoes LWW for that field
+			</div>
 		{/if}
 	</aside>
 {/if}

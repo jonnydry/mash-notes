@@ -8,15 +8,7 @@ import type { Note } from './types';
 
 export type SyncConflictField = keyof Pick<
 	Note,
-	| 'title'
-	| 'body'
-	| 'folder'
-	| 'tags'
-	| 'pinned'
-	| 'links'
-	| 'mashedFrom'
-	| 'textAlign'
-	| 'source'
+	'title' | 'body' | 'folder' | 'tags' | 'pinned' | 'links' | 'mashedFrom' | 'textAlign' | 'source'
 >;
 
 export type SyncConflict = {
@@ -41,11 +33,7 @@ function sameValue(a: unknown, b: unknown): boolean {
  * On same modified, prefer remote for body/title and union tags.
  * Records conflicts when both sides changed the same field from a shared base.
  */
-export function mergeNotesLww(
-	local: Note,
-	remote: Note,
-	base?: Note | null
-): MergeResult {
+export function mergeNotesLww(local: Note, remote: Note, base?: Note | null): MergeResult {
 	if (local.id !== remote.id) {
 		throw new Error('Cannot merge notes with different ids');
 	}

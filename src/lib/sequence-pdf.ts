@@ -164,12 +164,7 @@ function newContentPage(ctx: DrawCtx): { page: PDFPage; y: number } {
 	return { page, y };
 }
 
-function drawNoteMeta(
-	page: PDFPage,
-	ctx: DrawCtx,
-	label: string,
-	y: number
-): number {
+function drawNoteMeta(page: PDFPage, ctx: DrawCtx, label: string, y: number): number {
 	page.drawText(label, {
 		x: MARGIN,
 		y: y - META_SIZE,
@@ -315,9 +310,7 @@ export async function exportSequencePdf(
 	if (notes.length === 0) return false;
 	const title =
 		docTitle ??
-		(notes.length === 1
-			? notes[0].title.trim() || 'Untitled'
-			: `Sequence · ${notes.length} pages`);
+		(notes.length === 1 ? notes[0].title.trim() || 'Untitled' : `Sequence · ${notes.length} pages`);
 	const bytes = await buildSequencePdf(notes, title);
 	const name = filename ?? `${slugifyFilename(title, 'sequence')}.pdf`;
 	downloadBytes(bytes, name, 'application/pdf');

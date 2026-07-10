@@ -2295,7 +2295,11 @@
 					draggable="false"
 				/>
 				<p class="mash-display mash-empty-title mt-4 text-xl font-medium tracking-tight">
-					{isFileDragOver ? 'Drop files to import' : isExternalDragOver ? 'Drop to place' : emptyMascot.title}
+					{isFileDragOver
+						? 'Drop files to import'
+						: isExternalDragOver
+							? 'Drop to place'
+							: emptyMascot.title}
 				</p>
 				{#if isFileDragOver}
 					<p class="mash-empty-copy mt-1.5 max-w-[18rem] text-sm">
@@ -2313,7 +2317,9 @@
 			class="pointer-events-none absolute inset-0 z-10 flex items-center justify-center border-2 border-[var(--mash-accent)] bg-[var(--mash-accent-wash)] p-6"
 		>
 			{#if isFileDragOver}
-				<div class="mash-drop-file-prompt flex flex-col items-center rounded-2xl border px-6 py-5 text-center shadow-lg">
+				<div
+					class="mash-drop-file-prompt flex flex-col items-center rounded-2xl border px-6 py-5 text-center shadow-lg"
+				>
 					<FileUp size={28} strokeWidth={1.8} aria-hidden="true" />
 					<p class="mash-display mt-2 text-lg font-medium">Drop files to import</p>
 					<p class="mt-1 text-xs">.pdf, .md, .markdown, .txt, or Mash .json</p>

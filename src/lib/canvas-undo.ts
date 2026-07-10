@@ -60,8 +60,7 @@ export class CanvasUndoStack {
 
 	push(entry: CanvasUndoEntry): void {
 		const meaningful =
-			layoutChanged(entry.before, entry.after) ||
-			edgesChanged(entry.edgesBefore, entry.edgesAfter);
+			layoutChanged(entry.before, entry.after) || edgesChanged(entry.edgesBefore, entry.edgesAfter);
 		if (!meaningful) return;
 		this.stack.push(entry);
 		if (this.stack.length > MAX_ENTRIES) this.stack.shift();
@@ -124,9 +123,7 @@ export class CanvasUndoStack {
 }
 
 /** Spatial reading order for canvas shift-range selection. */
-export function spatialNoteOrder(
-	items: Array<{ noteId: string; x: number; y: number }>
-): string[] {
+export function spatialNoteOrder(items: Array<{ noteId: string; x: number; y: number }>): string[] {
 	return [...items]
 		.sort((a, b) => a.y - b.y || a.x - b.x || a.noteId.localeCompare(b.noteId))
 		.map((i) => i.noteId);

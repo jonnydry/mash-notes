@@ -1,9 +1,6 @@
 <script lang="ts">
 	import { X } from 'lucide-svelte';
-	import {
-		KEYBOARD_SHORTCUT_GROUPS,
-		type ShortcutGroup
-	} from '$lib/keyboard-shortcuts';
+	import { KEYBOARD_SHORTCUT_GROUPS, type ShortcutGroup } from '$lib/keyboard-shortcuts';
 
 	interface Props {
 		open: boolean;

@@ -50,11 +50,7 @@ export function slugifyFilename(name: string, fallback = 'mash-export'): string 
  * Trigger a browser file download for the given content.
  * No-op in non-browser environments (e.g. unit tests).
  */
-export function downloadTextFile(
-	content: string,
-	filename: string,
-	mimeType: string
-): void {
+export function downloadTextFile(content: string, filename: string, mimeType: string): void {
 	if (typeof document === 'undefined') return;
 
 	const blob = new Blob([content], { type: mimeType });
@@ -123,10 +119,7 @@ function printBodyHtml(body: string): string {
 		String(label ?? target).trim()
 	);
 	try {
-		return renderMarkdown(plain).replace(
-			/<button\b[^>]*>(.*?)<\/button>/gi,
-			'$1'
-		);
+		return renderMarkdown(plain).replace(/<button\b[^>]*>(.*?)<\/button>/gi, '$1');
 	} catch {
 		return `<pre>${escapeHtml(body)}</pre>`;
 	}
@@ -138,8 +131,7 @@ export function sequencePrintHtml(notes: Note[], docTitle = 'Page sequence'): st
 		.map((n, i) => {
 			const title = n.title.trim() || 'Untitled';
 			const body = n.body.trim() ? printBodyHtml(n.body) : '<p class="empty"> </p>';
-			const align =
-				n.textAlign === 'center' || n.textAlign === 'right' ? n.textAlign : 'left';
+			const align = n.textAlign === 'center' || n.textAlign === 'right' ? n.textAlign : 'left';
 			const breakAfter = i < notes.length - 1 ? ' page-break-after: always;' : '';
 			return `<section class="page" style="text-align: ${align};${breakAfter}">
   <p class="page-num">Page ${i + 1} of ${notes.length}</p>
@@ -221,9 +213,7 @@ export function printSequenceAsPdf(notes: Note[], docTitle?: string): boolean {
 	if (typeof window === 'undefined' || notes.length === 0) return false;
 	const title =
 		docTitle ??
-		(notes.length === 1
-			? notes[0].title.trim() || 'Untitled'
-			: `Sequence · ${notes.length} pages`);
+		(notes.length === 1 ? notes[0].title.trim() || 'Untitled' : `Sequence · ${notes.length} pages`);
 	let html: string;
 	try {
 		html = sequencePrintHtml(notes, title);

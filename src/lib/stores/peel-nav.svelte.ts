@@ -5,7 +5,12 @@ import { tick } from 'svelte';
 import type { DockAction } from '$lib/dock';
 import type { PeelMode } from '$lib/components/PeelScanner.svelte';
 import type { NavFilter } from '$lib/note-ui';
-import { canvasFolderFromFilter, canvasKeyFromFilter, canvasTitleFromFilter, PINNED_CANVAS_KEY } from '$lib/stores/note-library.svelte';
+import {
+	canvasFolderFromFilter,
+	canvasKeyFromFilter,
+	canvasTitleFromFilter,
+	PINNED_CANVAS_KEY
+} from '$lib/stores/note-library.svelte';
 
 export type PeelNavState = {
 	peelOpen: boolean;
@@ -35,11 +40,7 @@ export function createPeelNavState(): PeelNavState {
 	};
 }
 
-export function peelTitleFor(
-	mode: PeelMode,
-	_searchQuery: string,
-	filter: NavFilter
-): string {
+export function peelTitleFor(mode: PeelMode, _searchQuery: string, filter: NavFilter): string {
 	if (mode === 'folders') return 'Folders';
 	if (mode === 'tags') return 'Tags';
 	if (mode === 'linked') return 'Linked';
@@ -267,10 +268,7 @@ export function createPeelNav(opts: CreatePeelNavOpts) {
 				linkedFocusId = id;
 			},
 			resolveLinkedFocus: () =>
-				opts.getExpandedNoteId() ??
-				opts.getSelectedId() ??
-				linkedFocusId ??
-				opts.getFirstNoteId(),
+				opts.getExpandedNoteId() ?? opts.getSelectedId() ?? linkedFocusId ?? opts.getFirstNoteId(),
 			newNote: opts.newNote,
 			focusSearch,
 			getSettingsOpen: opts.getSettingsOpen,

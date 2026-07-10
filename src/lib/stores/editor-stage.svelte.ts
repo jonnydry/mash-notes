@@ -205,11 +205,7 @@ export function slotToZone(slot: PaneSlot): SnapZone {
  * Apply a snap: place `noteId` into `zone`, reshaping existing panes as needed.
  * Returns the next pane list (max 2 for v1).
  */
-export function applySnap(
-	panes: EditorPane[],
-	noteId: string,
-	zone: SnapZone
-): EditorPane[] {
+export function applySnap(panes: EditorPane[], noteId: string, zone: SnapZone): EditorPane[] {
 	const slot = zoneToSlot(zone);
 	const existing = panes.find((p) => p.noteId === noteId);
 
@@ -233,10 +229,7 @@ export function applySnap(
 }
 
 /** Open two notes as a horizontal split (selection → split edit). */
-export function applySplitPair(
-	leftNoteId: string,
-	rightNoteId: string
-): EditorPane[] {
+export function applySplitPair(leftNoteId: string, rightNoteId: string): EditorPane[] {
 	if (leftNoteId === rightNoteId) {
 		return [{ id: newPaneId(), noteId: leftNoteId, slot: 'full' }];
 	}

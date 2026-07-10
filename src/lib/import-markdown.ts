@@ -204,7 +204,8 @@ export function markdownFileToNote(file: MarkdownImportFile, now = Date.now()): 
 		(fm.title?.trim() || firstHeadingTitle(body) || pathTitle || 'Untitled').slice(0, MAX_TITLE) ||
 		'Untitled';
 	const tags = mergeTags(fm.tags, extractInlineTags(body));
-	const fileTime = file.lastModified && Number.isFinite(file.lastModified) ? file.lastModified : now;
+	const fileTime =
+		file.lastModified && Number.isFinite(file.lastModified) ? file.lastModified : now;
 	const created = fm.created ?? fileTime;
 	const modified = fm.modified ?? fileTime;
 	return {
@@ -257,8 +258,7 @@ export async function filesFromFileList(
 	const files = Array.from(list);
 	const out: MarkdownImportFile[] = [];
 	for (const file of files) {
-		let path =
-			('webkitRelativePath' in file && file.webkitRelativePath) || file.name;
+		let path = ('webkitRelativePath' in file && file.webkitRelativePath) || file.name;
 		if (opts?.allowPlainText && /\.(markdown|txt)$/i.test(path)) {
 			// Reuse the Markdown note parser while preserving the original basename.
 			path = path.replace(/\.(markdown|txt)$/i, '.md');

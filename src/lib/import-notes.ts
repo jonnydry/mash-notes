@@ -9,9 +9,7 @@ const MAX_TITLE = 200;
 const MAX_TAGS = 50;
 const MAX_TAG_LEN = 64;
 
-export type ImportResult =
-	| { ok: true; notes: Note[] }
-	| { ok: false; error: string };
+export type ImportResult = { ok: true; notes: Note[] } | { ok: false; error: string };
 
 function isRecord(v: unknown): v is Record<string, unknown> {
 	return typeof v === 'object' && v !== null && !Array.isArray(v);

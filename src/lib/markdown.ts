@@ -74,10 +74,7 @@ function protectWikilinks(src: string): {
 	return { text, links };
 }
 
-function restoreWikilinks(
-	html: string,
-	links: Array<{ target: string; label: string }>
-): string {
+function restoreWikilinks(html: string, links: Array<{ target: string; label: string }>): string {
 	return html.replace(/§§MASHLINK(\d+)§§/g, (_m, idx) => {
 		const link = links[Number(idx)];
 		if (!link) return '';

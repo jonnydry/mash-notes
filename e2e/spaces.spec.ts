@@ -56,9 +56,12 @@ test.describe('Screenplay', () => {
 		await dialog.getByRole('button', { name: 'Switch to SpaceAlpha' }).click();
 
 		await expect(dialog).toBeHidden({ timeout: 5_000 });
-		await expect(page.getByRole('button', { name: 'Show Screenplay' })).toContainText('Screenplay', {
-			timeout: 10_000
-		});
+		await expect(page.getByRole('button', { name: 'Show Screenplay' })).toContainText(
+			'Screenplay',
+			{
+				timeout: 10_000
+			}
+		);
 		await expect(page.getByRole('group', { name: 'Space Alpha Note' })).toBeVisible({
 			timeout: 10_000
 		});

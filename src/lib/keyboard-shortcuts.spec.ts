@@ -17,9 +17,7 @@ describe('keyboard-shortcuts catalog', () => {
 
 	it('flattens groups for Settings preview', () => {
 		const flat = flatShortcutRows();
-		expect(flat.length).toBe(
-			KEYBOARD_SHORTCUT_GROUPS.reduce((n, g) => n + g.rows.length, 0)
-		);
+		expect(flat.length).toBe(KEYBOARD_SHORTCUT_GROUPS.reduce((n, g) => n + g.rows.length, 0));
 		expect(flat.some((r) => r.keys === '?')).toBe(true);
 	});
 });

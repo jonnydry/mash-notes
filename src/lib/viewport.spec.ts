@@ -1,9 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import {
-	loadCanvasViewport,
-	saveCanvasViewport,
-	clearCanvasViewport
-} from './viewport';
+import { loadCanvasViewport, saveCanvasViewport, clearCanvasViewport } from './viewport';
 
 class MemoryStorage {
 	private store = new Map<string, string>();

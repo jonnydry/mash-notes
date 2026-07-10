@@ -35,17 +35,9 @@ import {
 	formatConflictSummary
 } from '$lib/sync-file';
 import type { SyncConflict } from '$lib/sync-model';
-import {
-	isStaleSyncBundle,
-	recordSyncImport,
-	shouldRemindSyncBackup
-} from '$lib/sync-hygiene';
+import { isStaleSyncBundle, recordSyncImport, shouldRemindSyncBackup } from '$lib/sync-hygiene';
 
-export function filterNotes(
-	notes: Note[],
-	currentFilter: NavFilter,
-	searchQuery: string
-): Note[] {
+export function filterNotes(notes: Note[], currentFilter: NavFilter, searchQuery: string): Note[] {
 	let list = [...notes];
 
 	list = list.filter((n) => {
@@ -62,8 +54,7 @@ export function filterNotes(
 	if (searchQuery.trim()) {
 		const results = searchNotes(searchQuery, {
 			folder: currentFilter.type === 'folder' ? currentFilter.value : undefined,
-			tags:
-				currentFilter.type === 'tag' && currentFilter.value ? [currentFilter.value] : undefined
+			tags: currentFilter.type === 'tag' && currentFilter.value ? [currentFilter.value] : undefined
 		});
 		const idSet = new Set(results.map((r) => r.id));
 		list = list.filter((n) => idSet.has(n.id));
@@ -464,11 +455,7 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 			}));
 			const knownNoteIds = new Set(plainNotes.map((n) => n.id));
 
-			const persisted = await persistMergedSync(
-				plainNotes,
-				parsed.bundle.desk,
-				knownNoteIds
-			);
+			const persisted = await persistMergedSync(plainNotes, parsed.bundle.desk, knownNoteIds);
 			if (persisted.desk) summary.desk = persisted.desk;
 
 			notes = plainNotes.filter((n) => n.deletedAt == null);
@@ -485,11 +472,8 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 
 			recordSyncImport(parsed.bundle.exportedAt);
 
-			const conflictFields = [
-				...new Set(summary.conflicts.map((c) => `${c.noteId}:${c.field}`))
-			];
-			const removedPart =
-				summary.removed > 0 ? ` · ${summary.removed} removed` : '';
+			const conflictFields = [...new Set(summary.conflicts.map((c) => `${c.noteId}:${c.field}`))];
+			const removedPart = summary.removed > 0 ? ` · ${summary.removed} removed` : '';
 			const message =
 				`Sync: ${summary.added} added · ${summary.updated} updated` +
 				removedPart +
@@ -726,8 +710,7 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 				await new Promise((r) => setTimeout(r, 0));
 			}
 
-			const skipHint =
-				result.skipped > 0 ? ` (skipped ${result.skipped} non-markdown)` : '';
+			const skipHint = result.skipped > 0 ? ` (skipped ${result.skipped} non-markdown)` : '';
 			const message = `Imported ${result.notes.length} markdown notes${skipHint}`;
 			if (!importOpts?.silent) opts.flashToast(message);
 			return { ok: true, message, notes: result.notes };
@@ -812,9 +795,7 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 	}
 
 	async function deleteFolder(folder: string) {
-		const matching = notes.filter(
-			(n) => n.folder === folder || n.folder.startsWith(folder + '/')
-		);
+		const matching = notes.filter((n) => n.folder === folder || n.folder.startsWith(folder + '/'));
 		opts.askConfirm({
 			title: 'Remove folder',
 			message:

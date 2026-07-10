@@ -58,10 +58,7 @@ export function recordSyncExport(at = Date.now()): SyncHygienePrefs {
 	return next;
 }
 
-export function recordSyncImport(
-	bundleExportedAt: number,
-	at = Date.now()
-): SyncHygienePrefs {
+export function recordSyncImport(bundleExportedAt: number, at = Date.now()): SyncHygienePrefs {
 	const next = {
 		...readSyncHygiene(),
 		lastImportAt: at,

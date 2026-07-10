@@ -33,9 +33,7 @@ describe('canvas-undo', () => {
 			label: 'Unstitch',
 			before: [],
 			after: [],
-			edgesBefore: [
-				{ id: 'e1', canvasId: 'c', fromItemId: 'a', toItemId: 'b', created: 1 }
-			],
+			edgesBefore: [{ id: 'e1', canvasId: 'c', fromItemId: 'a', toItemId: 'b', created: 1 }],
 			edgesAfter: []
 		});
 		expect(stack.canUndo).toBe(true);

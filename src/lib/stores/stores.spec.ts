@@ -22,12 +22,7 @@ import {
 	canvasTitleFromFilter,
 	PINNED_CANVAS_KEY
 } from './note-library.svelte';
-import {
-	THEME_STORAGE_KEY,
-	isMashTheme,
-	readStoredTheme,
-	THEME_META_COLOR
-} from './theme.svelte';
+import { THEME_STORAGE_KEY, isMashTheme, readStoredTheme, THEME_META_COLOR } from './theme.svelte';
 import type { Note } from '$lib/types';
 
 const memory = new Map<string, string>();

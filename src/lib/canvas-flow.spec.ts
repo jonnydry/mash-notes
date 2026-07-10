@@ -162,10 +162,7 @@ describe('canvas-flow page sequences', () => {
 	});
 
 	it('flowEdgePath runs left-to-right when target is to the right', () => {
-		const path = flowEdgePath(
-			{ x: 0, y: 0, w: 220, h: 120 },
-			{ x: 260, y: 0, w: 220, h: 120 }
-		);
+		const path = flowEdgePath({ x: 0, y: 0, w: 220, h: 120 }, { x: 260, y: 0, w: 220, h: 120 });
 		expect(path.d.startsWith('M 220 60')).toBe(true);
 		expect(path.d.includes('260 60')).toBe(true);
 		expect(path.midX).toBeGreaterThan(220);

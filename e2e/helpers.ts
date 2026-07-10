@@ -91,11 +91,7 @@ export async function selectNotesInPeel(page: Page, titles: string[]) {
 	const peel = page.getByRole('complementary', { name: 'Note scanner' });
 	await expect(peel).toBeVisible();
 	for (let i = 0; i < titles.length; i++) {
-		const btn = peel
-			.getByRole('option')
-			.filter({ hasText: titles[i] })
-			.getByRole('button')
-			.nth(1);
+		const btn = peel.getByRole('option').filter({ hasText: titles[i] }).getByRole('button').nth(1);
 		if (i === 0) await btn.click();
 		else await btn.click({ modifiers: [modKey()] });
 	}

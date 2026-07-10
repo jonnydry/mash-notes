@@ -312,8 +312,7 @@
 							class="mash-focus min-w-0 flex-1 bg-transparent text-sm font-semibold tracking-tight outline-none"
 							style="color: var(--mash-card-ink);"
 							onpointerdown={(e) => e.stopPropagation()}
-							oninput={(e) =>
-								onTitleChange(note.id, (e.currentTarget as HTMLInputElement).value)}
+							oninput={(e) => onTitleChange(note.id, (e.currentTarget as HTMLInputElement).value)}
 							onfocus={() => stage.focusNote(note.id)}
 						/>
 						<button
@@ -366,7 +365,9 @@
 					</header>
 
 					<div class="mash-editor-pane-meta">
-						<label class="flex min-w-0 flex-1 items-center gap-1 text-[10px] text-[var(--mash-card-muted)]">
+						<label
+							class="flex min-w-0 flex-1 items-center gap-1 text-[10px] text-[var(--mash-card-muted)]"
+						>
 							<Folder class="h-3 w-3 shrink-0" />
 							<input
 								type="text"
@@ -381,7 +382,9 @@
 									})}
 							/>
 						</label>
-						<label class="flex min-w-[40%] flex-1 items-center gap-1 text-[10px] text-[var(--mash-card-muted)]">
+						<label
+							class="flex min-w-[40%] flex-1 items-center gap-1 text-[10px] text-[var(--mash-card-muted)]"
+						>
 							<Tag class="h-3 w-3 shrink-0" />
 							<input
 								type="text"

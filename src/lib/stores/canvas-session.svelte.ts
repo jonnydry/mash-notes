@@ -50,10 +50,7 @@ export const NOTE_MIME = 'application/x-mash-notes';
 
 export type CardSize = { w: number; h: number };
 
-export function cardDisplaySize(
-	item: CanvasItem,
-	expandedNoteId: string | null
-): CardSize {
+export function cardDisplaySize(item: CanvasItem, expandedNoteId: string | null): CardSize {
 	if (expandedNoteId && item.noteId === expandedNoteId) {
 		return {
 			w: item.w && item.w >= EXPANDED_CARD.w ? item.w : EXPANDED_CARD.w,
@@ -117,7 +114,10 @@ function escapeHtml(s: string): string {
 }
 
 export type CanvasBoardApi = {
-	getSpawnPoint: (size: { w: number; h: number }, cascadeIndex?: number) => { x: number; y: number };
+	getSpawnPoint: (
+		size: { w: number; h: number },
+		cascadeIndex?: number
+	) => { x: number; y: number };
 	ensureNoteVisible: (noteId: string) => void;
 	applyAlign: (mode: AlignMode) => void;
 	organizeToSnap?: () => void;
@@ -221,14 +221,10 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 			if (key) {
 				const memberNotes = isPinnedCanvasKey(key)
 					? opts.getNotes().filter((n) => n.pinned === 1)
-					: opts
-							.getNotes()
-							.filter((n) => n.folder === key || n.folder.startsWith(key + '/'));
+					: opts.getNotes().filter((n) => n.folder === key || n.folder.startsWith(key + '/'));
 				const memberIds = new Set(memberNotes.map((n) => n.id));
 				const dismissed = getDismissedNoteIds(canvas.id);
-				const staleIds = items
-					.filter((i) => !memberIds.has(i.noteId))
-					.map((i) => i.noteId);
+				const staleIds = items.filter((i) => !memberIds.has(i.noteId)).map((i) => i.noteId);
 				if (staleIds.length > 0) {
 					await removeNotesFromCanvas(canvas.id, staleIds);
 					if (seq !== canvasLoadSeq) return;
@@ -236,9 +232,7 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 				}
 
 				const onCanvas = new Set(items.map((i) => i.noteId));
-				const missing = memberNotes.filter(
-					(n) => !onCanvas.has(n.id) && !dismissed.has(n.id)
-				);
+				const missing = memberNotes.filter((n) => !onCanvas.has(n.id) && !dismissed.has(n.id));
 				if (missing.length > 0) {
 					await Promise.all(
 						missing.map((note, i) => {
@@ -263,12 +257,7 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 			canvasItems = items.map((item) => {
 				const local = localById.get(item.id);
 				if (!local) return item;
-				if (
-					local.x !== item.x ||
-					local.y !== item.y ||
-					local.w !== item.w ||
-					local.h !== item.h
-				) {
+				if (local.x !== item.x || local.y !== item.y || local.w !== item.w || local.h !== item.h) {
 					return { ...item, x: local.x, y: local.y, w: local.w, h: local.h };
 				}
 				return item;
@@ -446,7 +435,13 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 			// prune wipe Link history when an unrelated card is dismissed.
 			const layoutBefore = layoutBeforeAll.filter((s) => movedIds.includes(s.itemId));
 			const layoutAfter = snapshotItems(movedIds);
-			pushCanvasUndo('Link', layoutBefore, layoutAfter, edgesBefore, canvasEdges.map((e) => ({ ...e })));
+			pushCanvasUndo(
+				'Link',
+				layoutBefore,
+				layoutAfter,
+				edgesBefore,
+				canvasEdges.map((e) => ({ ...e }))
+			);
 			return true;
 		} catch (e) {
 			console.error(e);
@@ -487,9 +482,7 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 			canvasEdges.map((e) => ({ ...e }))
 		);
 		opts.flashToast(
-			toRemove.length === 1
-				? 'Sequence unstitched'
-				: `Unstitched ${toRemove.length} links`
+			toRemove.length === 1 ? 'Sequence unstitched' : `Unstitched ${toRemove.length} links`
 		);
 		return toRemove.length;
 	}
@@ -553,9 +546,7 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 			return s ? { ...item, x: s.x, y: s.y, w: s.w, h: s.h } : item;
 		});
 		await Promise.all(
-			snaps.map((s) =>
-				updateCanvasItemPosition(s.itemId, { x: s.x, y: s.y, w: s.w, h: s.h })
-			)
+			snaps.map((s) => updateCanvasItemPosition(s.itemId, { x: s.x, y: s.y, w: s.w, h: s.h }))
 		);
 	}
 
@@ -647,9 +638,7 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		if (moveOpts?.recordUndo !== false) {
 			pushCanvasUndo(moves.length > 1 ? 'Arrange' : 'Move', beforeSnaps, afterSnaps);
 		}
-		await Promise.all(
-			moves.map((m) => updateCanvasItemPosition(m.itemId, { x: m.x, y: m.y }))
-		);
+		await Promise.all(moves.map((m) => updateCanvasItemPosition(m.itemId, { x: m.x, y: m.y })));
 	}
 
 	function handleCanvasResize(itemId: string, w: number, h: number) {
@@ -710,9 +699,7 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		const note = item ? opts.getNotesById().get(item.noteId) : undefined;
 		await removeCanvasItem(itemId);
 		canvasItems = canvasItems.filter((i) => i.id !== itemId);
-		canvasEdges = canvasEdges.filter(
-			(e) => e.fromItemId !== itemId && e.toItemId !== itemId
-		);
+		canvasEdges = canvasEdges.filter((e) => e.fromItemId !== itemId && e.toItemId !== itemId);
 		// Drop only undo entries that referenced this card — keep the rest.
 		pruneCanvasUndo([itemId]);
 
@@ -772,9 +759,7 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 			settlingIds = new Set();
 		}, 320);
 		await Promise.all(
-			[...moved.entries()].map(([id, pos]) =>
-				updateCanvasItemPosition(id, { x: pos.x, y: pos.y })
-			)
+			[...moved.entries()].map(([id, pos]) => updateCanvasItemPosition(id, { x: pos.x, y: pos.y }))
 		);
 	}
 
@@ -827,8 +812,7 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		const item = canvasItems.find((i) => i.noteId === noteId);
 		if (!item) return;
 		// Shrink oversized expanded cards back to a compact default; keep intentional small sizes.
-		const tooBig =
-			(item.w ?? 0) > COLLAPSED_CARD.w + 40 || (item.h ?? 0) > COLLAPSED_CARD.h + 40;
+		const tooBig = (item.w ?? 0) > COLLAPSED_CARD.w + 40 || (item.h ?? 0) > COLLAPSED_CARD.h + 40;
 		if (!tooBig) return;
 		const w = COLLAPSED_CARD.w;
 		const h = COLLAPSED_CARD.h;
@@ -841,11 +825,10 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		if (!activeCanvas) return;
 		const existing = canvasItems.find((i) => i.noteId === noteId);
 		if (!existing) {
-			const spawn =
-				canvasBoard?.getSpawnPoint(COLLAPSED_CARD, canvasItems.length) ?? {
-					x: 80,
-					y: 80
-				};
+			const spawn = canvasBoard?.getSpawnPoint(COLLAPSED_CARD, canvasItems.length) ?? {
+				x: 80,
+				y: 80
+			};
 			const item = await addNoteToCanvas(activeCanvas.id, noteId, {
 				x: spawn.x,
 				y: spawn.y,
@@ -868,8 +851,7 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 	function onTrayDragStart(e: DragEvent, noteId: string) {
 		const selectionSet = opts.getSelectionSet();
 		const selectionIds = opts.getSelectionIds();
-		const ids =
-			selectionSet.has(noteId) && selectionIds.length > 1 ? [...selectionIds] : [noteId];
+		const ids = selectionSet.has(noteId) && selectionIds.length > 1 ? [...selectionIds] : [noteId];
 		if (!selectionSet.has(noteId)) {
 			opts.setSelection([noteId], noteId);
 		} else {

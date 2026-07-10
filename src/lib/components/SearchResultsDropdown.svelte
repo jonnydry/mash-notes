@@ -63,11 +63,7 @@
 					>
 						<GripVertical class="h-3.5 w-3.5" />
 					</button>
-					<button
-						type="button"
-						class="min-w-0 flex-1 text-left"
-						onclick={() => onOpen(result.id)}
-					>
+					<button type="button" class="min-w-0 flex-1 text-left" onclick={() => onOpen(result.id)}>
 						<div class="flex items-center justify-between gap-2">
 							<span class="truncate text-sm font-medium" style="color: var(--mash-ink);">
 								{result.title}

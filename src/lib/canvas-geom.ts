@@ -11,10 +11,7 @@ export const GRID_SLOT_W = GRID * 10; // 240 — fits 220-wide cards with a 20px
 export const GRID_SLOT_H = GRID * 6; // 144 — 120-tall cards + 24px gutter
 
 /** Board position for the nth auto-placed card (0-based). Always Snap-aligned. */
-export function gridSlotPosition(
-	index: number,
-	cols = GRID_COLS
-): { x: number; y: number } {
+export function gridSlotPosition(index: number, cols = GRID_COLS): { x: number; y: number } {
 	const c = Math.max(1, cols);
 	return {
 		x: GRID_ORIGIN + (index % c) * GRID_SLOT_W,
@@ -45,11 +42,7 @@ export function snapPoint(x: number, y: number, grid = GRID): { x: number; y: nu
 	return { x: snapValue(x, grid), y: snapValue(y, grid) };
 }
 
-export function clamp(
-	n: number,
-	min: number,
-	max: number
-): number {
+export function clamp(n: number, min: number, max: number): number {
 	return Math.min(max, Math.max(min, n));
 }
 
@@ -353,16 +346,9 @@ export function panToShowRect(
 	const viewBottom = viewTop + viewport.viewH / scale;
 
 	const pad = padding / scale;
-	const visibleW = Math.max(
-		0,
-		Math.min(rect.x + rect.w, viewRight) - Math.max(rect.x, viewLeft)
-	);
-	const visibleH = Math.max(
-		0,
-		Math.min(rect.y + rect.h, viewBottom) - Math.max(rect.y, viewTop)
-	);
-	const visibleRatio =
-		rect.w * rect.h > 0 ? (visibleW * visibleH) / (rect.w * rect.h) : 0;
+	const visibleW = Math.max(0, Math.min(rect.x + rect.w, viewRight) - Math.max(rect.x, viewLeft));
+	const visibleH = Math.max(0, Math.min(rect.y + rect.h, viewBottom) - Math.max(rect.y, viewTop));
+	const visibleRatio = rect.w * rect.h > 0 ? (visibleW * visibleH) / (rect.w * rect.h) : 0;
 
 	if (visibleRatio >= 0.65) {
 		return { panX: viewport.panX, panY: viewport.panY };
@@ -423,12 +409,7 @@ function preferredPushDir(fixed: BumpRect, other: BumpRect): BumpDir {
 	return dx >= 0 ? 'right' : 'left';
 }
 
-function pushAmountInDir(
-	fixed: BumpRect,
-	other: BumpRect,
-	dir: BumpDir,
-	gap: number
-): number {
+function pushAmountInDir(fixed: BumpRect, other: BumpRect, dir: BumpDir, gap: number): number {
 	if (!rectsOverlapWithGap(fixed, other, gap)) return 0;
 	switch (dir) {
 		case 'right':
@@ -529,11 +510,7 @@ function applyAxisShift(
 			if (needPos > 0 && bandsPos.has(yBand) && o.y + rect.h / 2 >= anchor.y) {
 				rect.y += needPos;
 				changed = true;
-			} else if (
-				needNeg > 0 &&
-				bandsNeg.has(yBand) &&
-				o.y + rect.h / 2 < anchor.y + anchor.h
-			) {
+			} else if (needNeg > 0 && bandsNeg.has(yBand) && o.y + rect.h / 2 < anchor.y + anchor.h) {
 				rect.y -= needNeg;
 				changed = true;
 			}
@@ -542,11 +519,7 @@ function applyAxisShift(
 			if (needPos > 0 && bandsPos.has(xBand) && o.x + rect.w / 2 >= anchor.x) {
 				rect.x += needPos;
 				changed = true;
-			} else if (
-				needNeg > 0 &&
-				bandsNeg.has(xBand) &&
-				o.x + rect.w / 2 < anchor.x + anchor.w
-			) {
+			} else if (needNeg > 0 && bandsNeg.has(xBand) && o.x + rect.w / 2 < anchor.x + anchor.w) {
 				rect.x -= needNeg;
 				changed = true;
 			}

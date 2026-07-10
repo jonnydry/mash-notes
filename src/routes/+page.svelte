@@ -45,38 +45,23 @@
 	} from '$lib/canvas-dismiss';
 	import { findBacklinks, findOutgoingNotes } from '$lib/links';
 	import { downloadSyncBundle } from '$lib/sync-file';
-	import {
-		readSyncHygiene,
-		recordSyncExport,
-		shouldRemindSyncBackup
-	} from '$lib/sync-hygiene';
+	import { readSyncHygiene, recordSyncExport, shouldRemindSyncBackup } from '$lib/sync-hygiene';
 	import { loadSnapPref, saveSnapPref } from '$lib/canvas-geom';
 	import {
 		COLLAPSED_CARD,
 		EXPANDED_CARD,
 		createCanvasSession
 	} from '$lib/stores/canvas-session.svelte';
-	import {
-		createNoteLibrary,
-		filterNotes,
-		filterPeelNotes
-	} from '$lib/stores/note-library.svelte';
+	import { createNoteLibrary, filterNotes, filterPeelNotes } from '$lib/stores/note-library.svelte';
 	import { createPeelNav, windowPeelNotes } from '$lib/stores/peel-nav.svelte';
 	import { createOpenSpaces } from '$lib/stores/spaces.svelte';
 	import { theme } from '$lib/stores/theme.svelte';
 	import { syncConflicts } from '$lib/stores/sync-conflicts.svelte';
-	import {
-		createEditorStage,
-		type SnapZone
-	} from '$lib/stores/editor-stage.svelte';
+	import { createEditorStage, type SnapZone } from '$lib/stores/editor-stage.svelte';
 	import type { PeelConflictRow } from '$lib/components/PeelScanner.svelte';
 	import { shouldShowCanvasEmptyState } from '$lib/canvas-empty-state';
 	import { detectJsonImportKind, splitExternalImportFiles } from '$lib/external-file-drop';
-	import {
-		normalizePdfExcerpt,
-		pdfClippingTitle,
-		type PdfClipping
-	} from '$lib/pdf-clipping';
+	import { normalizePdfExcerpt, pdfClippingTitle, type PdfClipping } from '$lib/pdf-clipping';
 
 	let actionToast = $state('');
 	let toastTimer: ReturnType<typeof setTimeout> | null = null;
@@ -206,10 +191,7 @@
 		onSyncConflicts: (conflicts) => {
 			syncConflicts.setFromImport(conflicts);
 			const n = conflicts.length;
-			flashToast(
-				`${n} conflict${n === 1 ? '' : 's'} — review in Conflicts peel`,
-				3600
-			);
+			flashToast(`${n} conflict${n === 1 ? '' : 's'} — review in Conflicts peel`, 3600);
 			settingsOpen = false;
 			peel.openPeel('conflicts');
 		},
@@ -457,9 +439,7 @@
 			);
 		}
 		if (importedSyncCount > 0) {
-			parts.push(
-				`Imported ${importedSyncCount} sync bundle${importedSyncCount === 1 ? '' : 's'}`
-			);
+			parts.push(`Imported ${importedSyncCount} sync bundle${importedSyncCount === 1 ? '' : 's'}`);
 		}
 		if (skippedCount > 0) {
 			parts.push(`Skipped ${skippedCount} unsupported or invalid`);
@@ -514,9 +494,7 @@
 	/** Screenplay mode: any open folder/pinned board besides root Desk. */
 	let screenplayActive = $derived(spaces.openKeys.length > 1);
 	let screenplayChipTitle = $derived(screenplayActive ? 'Screenplay' : peel.canvasTitle);
-	let headerSearchResults = $derived(
-		peel.searchQuery.trim() ? searchNotes(peel.searchQuery) : []
-	);
+	let headerSearchResults = $derived(peel.searchQuery.trim() ? searchNotes(peel.searchQuery) : []);
 	let linkedFocusNote = $derived(
 		peel.linkedFocusId
 			? (library.notes.find((n) => n.id === peel.linkedFocusId) ?? null)
@@ -615,9 +593,7 @@
 		let placeX = xs ?? 80;
 		let placeY = ys ?? 80;
 		if (xs === undefined || ys === undefined) {
-			const onBoard = canvas.canvasItems.filter((i) =>
-				sourceNotes.some((n) => n.id === i.noteId)
-			);
+			const onBoard = canvas.canvasItems.filter((i) => sourceNotes.some((n) => n.id === i.noteId));
 			if (onBoard.length > 0) {
 				placeX = onBoard.reduce((s, i) => s + i.x, 0) / onBoard.length;
 				placeY = onBoard.reduce((s, i) => s + i.y, 0) / onBoard.length;
@@ -625,9 +601,7 @@
 		}
 
 		const sourceIds = sourceNotes.map((n) => n.id);
-		const mergedTags = [
-			...new Set(['mash', ...sourceNotes.flatMap((n) => n.tags)])
-		];
+		const mergedTags = [...new Set(['mash', ...sourceNotes.flatMap((n) => n.tags)])];
 		const mashed = await createNote({
 			title,
 			body,
@@ -701,9 +675,7 @@
 	/** Restore source notes onto the canvas and remove the mash bubble. */
 	async function unmashSelection() {
 		if (!canvas.activeCanvas) return;
-		const mashNotes = library.selectedNotes.filter(
-			(n) => n.mashedFrom && n.mashedFrom.length > 0
-		);
+		const mashNotes = library.selectedNotes.filter((n) => n.mashedFrom && n.mashedFrom.length > 0);
 		if (mashNotes.length === 0) {
 			flashToast('Select a mashed sticky to unmash');
 			return;
@@ -803,10 +775,8 @@
 		if (mashNotes.length < 2) return;
 
 		const mashItems = canvas.canvasItems.filter((i) => mashNoteIds.includes(i.noteId));
-		const midX =
-			mashItems.reduce((s, i) => s + i.x, 0) / Math.max(1, mashItems.length);
-		const midY =
-			mashItems.reduce((s, i) => s + i.y, 0) / Math.max(1, mashItems.length);
+		const midX = mashItems.reduce((s, i) => s + i.x, 0) / Math.max(1, mashItems.length);
+		const midY = mashItems.reduce((s, i) => s + i.y, 0) / Math.max(1, mashItems.length);
 
 		await mashNotesIntoBubble(mashNotes, {
 			x: midX,
@@ -827,11 +797,13 @@
 		addNoteToSearch(note);
 		library.notes = [note, ...library.notes];
 		if (canvas.activeCanvas) {
-			const spawn =
-				canvas.canvasBoard?.getSpawnPoint(COLLAPSED_CARD, canvas.canvasItems.length) ?? {
-					x: 80,
-					y: 80
-				};
+			const spawn = canvas.canvasBoard?.getSpawnPoint(
+				COLLAPSED_CARD,
+				canvas.canvasItems.length
+			) ?? {
+				x: 80,
+				y: 80
+			};
 			const item = await addNoteToCanvas(canvas.activeCanvas.id, note.id, {
 				x: spawn.x,
 				y: spawn.y,
@@ -1202,9 +1174,7 @@
 </script>
 
 <div
-	class="mash-app-shell mash-board-surface flex h-screen flex-col {snapEnabled
-		? 'is-snap-on'
-		: ''}"
+	class="mash-app-shell mash-board-surface flex h-screen flex-col {snapEnabled ? 'is-snap-on' : ''}"
 	style="color: var(--mash-ink);"
 >
 	<!-- Header -->
@@ -1283,7 +1253,9 @@
 				class:has-session={Boolean(pdfReaderFile) && !pdfReaderOpen}
 				onclick={() => (pdfReaderFile ? resumePdfReader() : pdfInputEl?.click())}
 				aria-label={pdfReaderFile ? 'Return to PDF reader' : 'Open PDF reader'}
-				title={pdfReaderFile ? `Return to ${pdfReaderFile.name}` : 'Open a PDF and capture excerpts'}
+				title={pdfReaderFile
+					? `Return to ${pdfReaderFile.name}`
+					: 'Open a PDF and capture excerpts'}
 			>
 				<BookOpen class="h-[18px] w-[18px]" strokeWidth={1.9} />
 			</button>
@@ -1292,7 +1264,9 @@
 				class="mash-theme-toggle mash-focus"
 				onclick={() => theme.toggle()}
 				aria-label={theme.mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-				title={theme.mode === 'dark' ? 'Night kitchen — switch to day' : 'Day kitchen — switch to night'}
+				title={theme.mode === 'dark'
+					? 'Night kitchen — switch to day'
+					: 'Day kitchen — switch to night'}
 			>
 				{#if theme.mode === 'dark'}
 					<img
@@ -1316,10 +1290,7 @@
 					/>
 				{/if}
 			</button>
-			<div
-				class="hidden items-center gap-1 text-xs lg:flex"
-				style="color: var(--mash-ink-muted);"
-			>
+			<div class="hidden items-center gap-1 text-xs lg:flex" style="color: var(--mash-ink-muted);">
 				<kbd
 					class="flex items-center gap-0.5 rounded border px-1.5 py-0.5 text-[10px] font-medium"
 					style="border-color: var(--mash-tray-edge);"
@@ -1352,32 +1323,34 @@
 			{#if !pdfReaderOpen}
 				<div
 					class="mash-canvas-title-chip is-spaces-trigger absolute top-3 left-[4.75rem] z-10 rounded-full border px-3 py-1 text-[10px] backdrop-blur-sm"
-				class:pointer-events-none={spacesOverviewOpen}
-				style="border-color: var(--mash-chrome-chip-border); background: var(--mash-chrome-chip-soft); color: var(--mash-chrome-muted);"
-				role="button"
-				tabindex="0"
-				aria-label="Show Screenplay"
-				aria-haspopup="dialog"
-				aria-expanded={spacesOverviewOpen}
-				data-screenplay-chip
-				onclick={() => showSpacesOverview()}
-				onkeydown={(e) => {
-					if (e.key === 'Enter' || e.key === ' ') {
-						e.preventDefault();
-						showSpacesOverview();
-					}
-				}}
-			>
-				<span class="mash-display font-medium" style="color: var(--mash-chrome-ink);">{screenplayChipTitle}</span>
-				<span class="mx-1.5 opacity-40">·</span>
-				{canvas.canvasItems.length} on canvas
-				{#if spaces.openKeys.length > 1}
-					<span class="mash-spaces-dots" aria-hidden="true">
-						{#each spaces.openKeys as key (key === '' ? '__desk__' : key)}
-							<span class="mash-spaces-dot" class:is-active={key === peel.canvasKey}></span>
-						{/each}
-					</span>
-				{/if}
+					class:pointer-events-none={spacesOverviewOpen}
+					style="border-color: var(--mash-chrome-chip-border); background: var(--mash-chrome-chip-soft); color: var(--mash-chrome-muted);"
+					role="button"
+					tabindex="0"
+					aria-label="Show Screenplay"
+					aria-haspopup="dialog"
+					aria-expanded={spacesOverviewOpen}
+					data-screenplay-chip
+					onclick={() => showSpacesOverview()}
+					onkeydown={(e) => {
+						if (e.key === 'Enter' || e.key === ' ') {
+							e.preventDefault();
+							showSpacesOverview();
+						}
+					}}
+				>
+					<span class="mash-display font-medium" style="color: var(--mash-chrome-ink);"
+						>{screenplayChipTitle}</span
+					>
+					<span class="mx-1.5 opacity-40">·</span>
+					{canvas.canvasItems.length} on canvas
+					{#if spaces.openKeys.length > 1}
+						<span class="mash-spaces-dots" aria-hidden="true">
+							{#each spaces.openKeys as key (key === '' ? '__desk__' : key)}
+								<span class="mash-spaces-dot" class:is-active={key === peel.canvasKey}></span>
+							{/each}
+						</span>
+					{/if}
 				</div>
 			{/if}
 
@@ -1411,19 +1384,16 @@
 					onRelayoutFlow={() => canvas.relayoutFlowSequences()}
 					onClearSelection={() => library.clearSelection()}
 					onToast={flashToast}
-					emptyMascot={
-						peel.currentFilter.type === 'pinned'
-							? {
-									src: '/icons/mash-pinned-mascot.png',
-									srcset:
-										'/icons/mash-pinned-mascot.png 1x, /icons/mash-pinned-mascot@2x.png 2x',
-									width: 160,
-									height: 160,
-									title: 'Pin notes here',
-									copy: 'Drop favorites onto this board — or pin from any sticky.'
-								}
-							: undefined
-					}
+					emptyMascot={peel.currentFilter.type === 'pinned'
+						? {
+								src: '/icons/mash-pinned-mascot.png',
+								srcset: '/icons/mash-pinned-mascot.png 1x, /icons/mash-pinned-mascot@2x.png 2x',
+								width: 160,
+								height: 160,
+								title: 'Pin notes here',
+								copy: 'Drop favorites onto this board — or pin from any sticky.'
+							}
+						: undefined}
 					showEmptyState={showCanvasEmptyState}
 					onSelect={canvas.handleCanvasSelect}
 					onSelectNotes={canvas.handleCanvasSelectNotes}
@@ -1502,12 +1472,14 @@
 				foldersOpen={peel.foldersFlyout}
 				tagsOpen={peel.tagsFlyout}
 				linkedOpen={peel.linkedFlyout}
-				settingsOpen={settingsOpen}
+				{settingsOpen}
 				dockSelect={peel.handleDockAction}
 			/>
 		</div>
 		{#if settingsOpen}
-			<div class="mash-peel-slot pointer-events-auto absolute top-1/2 left-[4.75rem] z-30 -translate-y-1/2">
+			<div
+				class="mash-peel-slot pointer-events-auto absolute top-1/2 left-[4.75rem] z-30 -translate-y-1/2"
+			>
 				<SettingsPanel
 					{snapEnabled}
 					lastExportAt={syncHygiene.lastExportAt}
@@ -1534,7 +1506,9 @@
 				/>
 			</div>
 		{:else if peel.peelOpen}
-			<div class="mash-peel-slot pointer-events-auto absolute top-1/2 left-[4.75rem] z-30 -translate-y-1/2">
+			<div
+				class="mash-peel-slot pointer-events-auto absolute top-1/2 left-[4.75rem] z-30 -translate-y-1/2"
+			>
 				<PeelScanner
 					open={peel.peelOpen}
 					pinned={peel.peelPinned}
@@ -1574,7 +1548,7 @@
 						library.selectedId = library.selectionIds[0] ?? null;
 					}}
 					onTouchPlaceStart={canvas.startTouchPlace}
-					conflictRows={conflictRows}
+					{conflictRows}
 					onConflictKeepRemote={(id) => {
 						syncConflicts.dismiss(id);
 						if (syncConflicts.count === 0) peel.closePeel(true);
@@ -1606,7 +1580,8 @@
 			{@const ghostNote = library.notesById.get(canvas.touchPlaceGhost.noteId)}
 			<div
 				class="pointer-events-none fixed z-50 w-[180px] rounded-xl border px-3 py-2 shadow-xl"
-				style="left: {canvas.touchPlaceGhost.clientX - 40}px; top: {canvas.touchPlaceGhost.clientY - 20}px; border-color: var(--mash-paper-chip-border); background: var(--mash-paper-chip);"
+				style="left: {canvas.touchPlaceGhost.clientX - 40}px; top: {canvas.touchPlaceGhost.clientY -
+					20}px; border-color: var(--mash-paper-chip-border); background: var(--mash-paper-chip);"
 			>
 				<div class="text-xs font-semibold" style="color: var(--mash-card-ink);">
 					{ghostNote?.title ?? 'Note'}
@@ -1625,7 +1600,10 @@
 						class="w-64 rounded-xl border p-3 shadow-xl"
 						style="border-color: var(--mash-panel-border); background: var(--mash-panel); backdrop-filter: blur(10px);"
 					>
-						<div class="mb-2 text-[10px] font-medium tracking-wide uppercase" style="color: var(--mash-accent-bright);">
+						<div
+							class="mb-2 text-[10px] font-medium tracking-wide uppercase"
+							style="color: var(--mash-accent-bright);"
+						>
 							Tag {library.selectionIds.length} note{library.selectionIds.length === 1 ? '' : 's'}
 						</div>
 						<input
@@ -1656,7 +1634,10 @@
 						class="w-64 rounded-xl border p-3 shadow-xl"
 						style="border-color: var(--mash-panel-border); background: var(--mash-panel); backdrop-filter: blur(10px);"
 					>
-						<div class="mb-2 text-[10px] font-medium tracking-wide uppercase" style="color: var(--mash-accent-bright);">
+						<div
+							class="mb-2 text-[10px] font-medium tracking-wide uppercase"
+							style="color: var(--mash-accent-bright);"
+						>
 							Move {library.selectionIds.length} to folder
 						</div>
 						<input
@@ -1873,7 +1854,8 @@
 					<button
 						type="button"
 						onclick={() => (library.bulkMenu = library.bulkMenu === 'tag' ? null : 'tag')}
-						class="mash-btn-ghost flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs {library.bulkMenu === 'tag'
+						class="mash-btn-ghost flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs {library.bulkMenu ===
+						'tag'
 							? 'border-[var(--mash-accent)] text-[var(--mash-accent-bright)]'
 							: ''}"
 						title="Tag selected"

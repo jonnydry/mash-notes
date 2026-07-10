@@ -64,7 +64,11 @@
 			<h2 id="mash-confirm-title" class="mash-display text-base font-semibold tracking-tight">
 				{title}
 			</h2>
-			<p id="mash-confirm-msg" class="mt-2 text-sm leading-relaxed" style="color: var(--mash-ink-muted);">
+			<p
+				id="mash-confirm-msg"
+				class="mt-2 text-sm leading-relaxed"
+				style="color: var(--mash-ink-muted);"
+			>
 				{message}
 			</p>
 			<div class="mt-4 flex items-center justify-end gap-2">

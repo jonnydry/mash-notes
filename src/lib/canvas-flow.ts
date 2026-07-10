@@ -5,13 +5,7 @@
  * Multiple disjoint chains on one board are separate export sequences.
  */
 import type { CanvasEdge, CanvasItem } from './types';
-import {
-	GRID,
-	GRID_ORIGIN,
-	boundsOf,
-	snapPoint,
-	snapValue
-} from './canvas-geom';
+import { GRID, GRID_ORIGIN, boundsOf, snapPoint, snapValue } from './canvas-geom';
 
 export type FlowSequence = {
 	id: string;
@@ -36,10 +30,7 @@ function spatialCompare(a: CanvasItem, b: CanvasItem): number {
 function validEdges(items: CanvasItem[], edges: CanvasEdge[]): CanvasEdge[] {
 	const itemIds = new Set(items.map((i) => i.id));
 	return edges.filter(
-		(e) =>
-			e.fromItemId !== e.toItemId &&
-			itemIds.has(e.fromItemId) &&
-			itemIds.has(e.toItemId)
+		(e) => e.fromItemId !== e.toItemId && itemIds.has(e.fromItemId) && itemIds.has(e.toItemId)
 	);
 }
 
@@ -103,10 +94,7 @@ export function canLinkAsNextPage(
  * Split the board into independent page sequences (connected components
  * walked as linear chains). Branched/merged components are marked invalid.
  */
-export function listFlowSequences(
-	items: CanvasItem[],
-	edges: CanvasEdge[]
-): FlowBoardResult {
+export function listFlowSequences(items: CanvasItem[], edges: CanvasEdge[]): FlowBoardResult {
 	const byId = new Map(items.map((i) => [i.id, i]));
 	const ve = validEdges(items, edges);
 
@@ -273,10 +261,7 @@ export function flowPageBadges(
 }
 
 /** Edges whose both ends sit in the given page set (the links that stitch a sequence). */
-export function edgesInSequence(
-	pages: CanvasItem[],
-	edges: CanvasEdge[]
-): CanvasEdge[] {
+export function edgesInSequence(pages: CanvasItem[], edges: CanvasEdge[]): CanvasEdge[] {
 	const ids = new Set(pages.map((p) => p.id));
 	if (ids.size === 0) return [];
 	return edges.filter((e) => ids.has(e.fromItemId) && ids.has(e.toItemId));
@@ -355,10 +340,7 @@ export function findClearFlowOrigin(
 ): { x: number; y: number } {
 	const footprint = flowSequenceFootprint(pages, opts);
 	const clearGap = opts?.clearGap ?? FLOW_CLEAR_GAP;
-	const prefer = snapPoint(
-		opts?.prefer?.x ?? GRID_ORIGIN,
-		opts?.prefer?.y ?? GRID_ORIGIN
-	);
+	const prefer = snapPoint(opts?.prefer?.x ?? GRID_ORIGIN, opts?.prefer?.y ?? GRID_ORIGIN);
 	if (footprint.w <= 0 || footprint.h <= 0) return prefer;
 
 	const isClear = (ox: number, oy: number) => {
@@ -383,9 +365,7 @@ export function findClearFlowOrigin(
 	}
 
 	// Scan downward from content bottom (or prefer) until a free band appears.
-	let y = snapValue(
-		(bounds?.maxY ?? prefer.y + footprint.h) + clearGap * 2
-	);
+	let y = snapValue((bounds?.maxY ?? prefer.y + footprint.h) + clearGap * 2);
 	for (let i = 0; i < 48; i++) {
 		const origin = snapPoint(GRID_ORIGIN, y);
 		if (isClear(origin.x, origin.y)) return origin;
