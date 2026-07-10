@@ -647,6 +647,18 @@ body {
 	}
 }
 
+@media (prefers-reduced-motion: reduce) {
+	.mash-note-card,
+	.mash-resize-handle,
+	.mash-flow-end-menu-trigger {
+		transition: none;
+	}
+	.mash-note-card.is-settling,
+	.mash-board-surface.is-drop-target {
+		animation: none;
+	}
+}
+
 .mash-tray-chip {
 	transition:
 		transform 120ms ease,

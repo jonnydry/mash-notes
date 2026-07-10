@@ -46,6 +46,7 @@ export const KEYBOARD_SHORTCUT_GROUPS: ShortcutGroup[] = [
 			{ keys: '⌘⇧Z', label: 'Redo layout' },
 			{ keys: 'Space + drag', label: 'Pan the desk' },
 			{ keys: '⌘ / Ctrl + scroll', label: 'Zoom toward cursor' },
+			{ keys: '⌘+ / ⌘−', label: 'Zoom from the center' },
 			{ keys: '⌘1', label: 'Fit all cards' },
 			{ keys: '⌘0', label: 'Reset pan & zoom' },
 			{ keys: 'Arrow keys', label: 'Nudge selection' },
@@ -69,6 +70,8 @@ export const KEYBOARD_SHORTCUT_GROUPS: ShortcutGroup[] = [
 	}
 ];
 
-export function flatShortcutRows(groups: ShortcutGroup[] = KEYBOARD_SHORTCUT_GROUPS): ShortcutRow[] {
+export function flatShortcutRows(
+	groups: ShortcutGroup[] = KEYBOARD_SHORTCUT_GROUPS
+): ShortcutRow[] {
 	return groups.flatMap((g) => g.rows);
 }

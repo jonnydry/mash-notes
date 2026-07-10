@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { CanvasEdge, CanvasItem, Note } from '$lib/types';
+	import { SvelteSet } from 'svelte/reactivity';
 	import { notePreview } from '$lib/format';
 	import { loadCanvasViewport, saveCanvasViewport, clearCanvasViewport } from '$lib/viewport';
 	import {
@@ -19,7 +20,7 @@
 	} from '$lib/canvas-geom';
 	import { Pin, Folder, Tag, Minimize2, Maximize2, X } from 'lucide-svelte';
 	import StickyEditor from '$lib/components/StickyEditor.svelte';
-	import { linkSummary } from '$lib/links';
+	import { buildLinkSummaryMap } from '$lib/links';
 	import {
 		flowEdgePath,
 		flowOutlineMarkdown,
@@ -42,6 +43,10 @@
 	const EXPANDED_W = 360;
 	const EXPANDED_H = 320;
 	const MASH_OVERLAP = 0.28;
+	const POINTER_DRAG_THRESHOLD = 4;
+	const MIN_SCALE = 0.4;
+	const MAX_SCALE = 2;
+	const ZOOM_BUTTON_FACTOR = 1.1;
 	const MASH_CONFIRM_SEEN_KEY = 'mash.dragMashConfirmSeen';
 	const COLLAPSED_BOUNDS = { minW: 160, minH: 96, maxW: 360, maxH: 240 };
 	const EXPANDED_BOUNDS = { minW: 280, minH: 220, maxW: 640, maxH: 720 };
@@ -75,10 +80,7 @@
 		canvasId?: string | null;
 		/** Directed flow edges between cards on this board. */
 		edges?: CanvasEdge[];
-		onConnectFlow?: (
-			fromItemId: string,
-			toItemId: string
-		) => boolean | Promise<boolean>;
+		onConnectFlow?: (fromItemId: string, toItemId: string) => boolean | Promise<boolean>;
 		onDisconnectFlow?: (edgeId: string) => void | Promise<void>;
 		/** Clear all links in a sequence (by index in listFlowSequences). */
 		onUnstitchSequence?: (seqIndex: number) => void | Promise<void>;
@@ -107,12 +109,7 @@
 			opts?: { recordUndo?: boolean }
 		) => void;
 		onResize: (itemId: string, w: number, h: number) => void;
-		onResizeEnd?: (
-			itemId: string,
-			w: number,
-			h: number,
-			before?: { w: number; h: number }
-		) => void;
+		onResizeEnd?: (itemId: string, w: number, h: number, before?: { w: number; h: number }) => void;
 		onRemove: (itemId: string) => void;
 		onExpand: (noteId: string) => void;
 		onCollapse: () => void;
@@ -212,6 +209,8 @@
 	}: Props = $props();
 
 	let boardEl: HTMLDivElement | undefined = $state();
+	let boardWidth = $state(0);
+	let boardHeight = $state(0);
 	let panX = $state(0);
 	let panY = $state(0);
 	let scale = $state(1);
@@ -234,6 +233,12 @@
 
 	let dragItemId: string | null = $state(null);
 	let dragGroup = $state<Array<{ id: string; originX: number; originY: number }>>([]);
+	let dragSelectionIntent: {
+		noteId: string;
+		additive: boolean;
+		initiallySelected: boolean;
+	} | null = null;
+	let dragStageRect: { left: number; top: number; width: number; height: number } | null = null;
 	let mashTargetId: string | null = $state(null);
 	let pendingMash: { sourceId: string; targetId: string } | null = $state(null);
 	let dragOrigin = { x: 0, y: 0, itemX: 0, itemY: 0 };
@@ -248,8 +253,19 @@
 	let marqueeAdditive = false;
 
 	let snapEffective = $derived(altHeld ? !snapEnabled : snapEnabled);
+	let linkSummaries = $derived(buildLinkSummaryMap([...notesById.values()]));
+	let pendingMashCopy = $derived.by(() => {
+		if (!pendingMash) return null;
+		const sourceItem = items.find((item) => item.id === pendingMash?.sourceId);
+		const targetItem = items.find((item) => item.id === pendingMash?.targetId);
+		const source = sourceItem ? notesById.get(sourceItem.noteId) : null;
+		const target = targetItem ? notesById.get(targetItem.noteId) : null;
+		if (!source || !target) return null;
+		return { sourceTitle: source.title || 'Untitled', targetTitle: target.title || 'Untitled' };
+	});
 	let flowMode = $state(false);
 	let flowFromItemId = $state<string | null>(null);
+	let flowConnecting = $state(false);
 	/** Sequence whose end-card menu stays open (invalid repair / click). */
 	let pinnedFlowMenuSeqId = $state<string | null>(null);
 	let hoveredFlowMenuSeqId = $state<string | null>(null);
@@ -286,23 +302,23 @@
 	let invalidExportToastShown = $state(false);
 	let lastAutoExpandedInvalidKey = $state('');
 	let flowEndMenus = $derived.by(() => {
-		return flowBoard.sequences.map((seq, si) => {
-			const last = seq.pages[seq.pages.length - 1];
-			if (!last) return null;
-			const size = cardSize(last, last.noteId);
-			return {
-				seq,
-				si,
-				itemId: last.id,
-				// Sit just past the last card’s right edge (trigger stays hittable).
-				x: last.x + size.w + 4,
-				y: last.y + Math.max(0, (size.h - 28) / 2)
-			};
-		}).filter((m): m is NonNullable<typeof m> => Boolean(m));
+		return flowBoard.sequences
+			.map((seq, si) => {
+				const last = seq.pages[seq.pages.length - 1];
+				if (!last) return null;
+				const size = cardSize(last, last.noteId);
+				return {
+					seq,
+					si,
+					itemId: last.id,
+					// Sit just past the last card’s right edge (trigger stays hittable).
+					x: last.x + size.w + 4,
+					y: last.y + Math.max(0, (size.h - 28) / 2)
+				};
+			})
+			.filter((m): m is NonNullable<typeof m> => Boolean(m));
 	});
-	let flowEndItemToSeqId = $derived(
-		new Map(flowEndMenus.map((m) => [m.itemId, m.seq.id]))
-	);
+	let flowEndItemToSeqId = $derived(new Map(flowEndMenus.map((m) => [m.itemId, m.seq.id])));
 	$effect(() => {
 		const invalidKeys = flowBoard.sequences
 			.map((s, i) => (s.invalid ? `${i}:${s.id}` : null))
@@ -347,6 +363,7 @@
 	function exitFlowMode() {
 		flowMode = false;
 		flowFromItemId = null;
+		flowConnecting = false;
 	}
 
 	/** Prefer an explicit index; otherwise the first valid sequence. */
@@ -465,11 +482,7 @@
 		return snapEffective ? snapPoint(x, y) : { x, y };
 	}
 
-	function maybeSnapSize(
-		w: number,
-		h: number,
-		expanded: boolean
-	): { w: number; h: number } {
+	function maybeSnapSize(w: number, h: number, expanded: boolean): { w: number; h: number } {
 		const bounds = expanded ? EXPANDED_BOUNDS : COLLAPSED_BOUNDS;
 		if (snapEffective) return snapSize(w, h, GRID, bounds);
 		return clampSize(w, h, bounds);
@@ -490,8 +503,7 @@
 		const stageEl = boardEl.parentElement?.querySelector('.mash-editor-stage');
 		if (stageEl) return stageEl.getBoundingClientRect();
 		const board = boardEl.getBoundingClientRect();
-		const mobile =
-			typeof window !== 'undefined' && window.matchMedia('(max-width: 720px)').matches;
+		const mobile = typeof window !== 'undefined' && window.matchMedia('(max-width: 720px)').matches;
 		return stageContentRect(board, { mobile });
 	}
 
@@ -582,18 +594,34 @@
 			return;
 		}
 		if (resizeItemId) {
+			const screenDx = e.clientX - resizeOrigin.x;
+			const screenDy = e.clientY - resizeOrigin.y;
+			if (!didDrag && Math.hypot(screenDx, screenDy) < POINTER_DRAG_THRESHOLD) return;
 			didDrag = true;
-			const dx = (e.clientX - resizeOrigin.x) / scale;
-			const dy = (e.clientY - resizeOrigin.y) / scale;
+			const dx = screenDx / scale;
+			const dy = screenDy / scale;
 			const bounds = resizeOrigin.expanded ? EXPANDED_BOUNDS : COLLAPSED_BOUNDS;
 			const next = clampSize(resizeOrigin.w + dx, resizeOrigin.h + dy, bounds);
 			onResize(resizeItemId, next.w, next.h);
 			return;
 		}
 		if (dragItemId) {
-			didDrag = true;
-			const dx = (e.clientX - dragOrigin.x) / scale;
-			const dy = (e.clientY - dragOrigin.y) / scale;
+			const screenDx = e.clientX - dragOrigin.x;
+			const screenDy = e.clientY - dragOrigin.y;
+			if (!didDrag && Math.hypot(screenDx, screenDy) < POINTER_DRAG_THRESHOLD) return;
+			if (!didDrag) {
+				didDrag = true;
+				// Selection follows direct manipulation as soon as this becomes a
+				// real drag. A plain click still resolves on pointer-up.
+				if (dragSelectionIntent && !dragSelectionIntent.initiallySelected) {
+					onSelect(dragSelectionIntent.noteId, {
+						additive: dragSelectionIntent.additive,
+						range: false
+					});
+				}
+			}
+			const dx = screenDx / scale;
+			const dy = screenDy / scale;
 			// Continuous while dragging; snap applied on release. Coalesce to 1 frame.
 			if (dragGroup.length > 1) {
 				queueMoves(
@@ -615,7 +643,7 @@
 					mashTargetId = findMashTarget(moving, nx, ny);
 				}
 				if (boardEl && onOpenInStage && !mashTargetId) {
-					const rect = stageSnapRect();
+					const rect = dragStageRect;
 					const zone = rect
 						? detectFillOrSnapZone(e.clientX, e.clientY, rect, stagePanes, {
 								h: stageSplitH,
@@ -641,7 +669,7 @@
 		const w = x2 - x1;
 		const h = y2 - y1;
 		marquee = null;
-		if (w < 4 && h < 4) {
+		if (w * scale < POINTER_DRAG_THRESHOLD && h * scale < POINTER_DRAG_THRESHOLD) {
 			if (!marqueeAdditive) onSelectNotes([], { additive: false });
 			return;
 		}
@@ -649,8 +677,7 @@
 		for (const item of items) {
 			const size = cardSize(item, item.noteId);
 			// Rect intersection (not center-only) so partially boxed cards count.
-			const overlaps =
-				item.x < x2 && item.x + size.w > x1 && item.y < y2 && item.y + size.h > y1;
+			const overlaps = item.x < x2 && item.x + size.w > x1 && item.y < y2 && item.y + size.h > y1;
 			if (overlaps) hit.push(item.noteId);
 		}
 		onSelectNotes(hit, { additive: marqueeAdditive });
@@ -676,6 +703,8 @@
 		dragItemId = null;
 		mashTargetId = null;
 		dragGroup = [];
+		dragSelectionIntent = null;
+		dragStageRect = null;
 		if (!sourceId || !didDrag) {
 			onStageSnapPreview?.(null);
 			return;
@@ -850,9 +879,56 @@
 		if (dragItemId) finishDrag();
 	}
 
+	/** Pointer cancellation should never commit a half-finished gesture. */
+	function cancelBoardGesture(e: PointerEvent) {
+		isPanning = false;
+		marquee = null;
+		if (moveRaf) {
+			cancelAnimationFrame(moveRaf);
+			moveRaf = 0;
+		}
+		pendingMoves = null;
+		if (resizeItemId) {
+			onResize(resizeItemId, resizeOrigin.w, resizeOrigin.h);
+			resizeItemId = null;
+		}
+		if (dragItemId && dragGroup.length > 0) {
+			onMoveMany(dragGroup.map((g) => ({ itemId: g.id, x: g.originX, y: g.originY })));
+		}
+		dragItemId = null;
+		dragGroup = [];
+		dragSelectionIntent = null;
+		dragStageRect = null;
+		mashTargetId = null;
+		pendingEdgeZone = null;
+		didDrag = false;
+		onStageSnapPreview?.(null);
+		try {
+			boardEl?.releasePointerCapture(e.pointerId);
+		} catch {
+			/* ignore */
+		}
+	}
+
 	function panBy(dx: number, dy: number) {
 		panX += dx;
 		panY += dy;
+	}
+
+	function zoomAround(localX: number, localY: number, requestedScale: number) {
+		const before = scale;
+		const next = Math.min(MAX_SCALE, Math.max(MIN_SCALE, requestedScale));
+		if (Math.abs(next - before) < 0.0005) return;
+		panX = localX - ((localX - panX) * next) / before;
+		panY = localY - ((localY - panY) * next) / before;
+		scale = next;
+	}
+
+	function zoomFromCenter(factor: number) {
+		if (!boardEl) return;
+		const x = (boardWidth || boardEl.clientWidth) / 2;
+		const y = (boardHeight || boardEl.clientHeight) / 2;
+		zoomAround(x, y, scale * factor);
 	}
 
 	function findCardScrollTarget(target: EventTarget | null): HTMLElement | null {
@@ -891,18 +967,13 @@
 			const rect = boardEl.getBoundingClientRect();
 			const mx = e.clientX - rect.left;
 			const my = e.clientY - rect.top;
-			const before = scale;
 			// Normalize wheel units, then apply a soft exponential step.
 			// Trackpad pinch sends many small pixel deltas; mouse wheels send larger line/page ticks.
 			const raw =
 				e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * rect.height : e.deltaY;
 			const ZOOM_SENSITIVITY = 0.0018;
 			const factor = Math.exp(-raw * ZOOM_SENSITIVITY);
-			const next = Math.min(2, Math.max(0.4, scale * factor));
-			if (Math.abs(next - before) < 0.0005) return;
-			panX = mx - ((mx - panX) * next) / before;
-			panY = my - ((my - panY) * next) / before;
-			scale = next;
+			zoomAround(mx, my, scale * factor);
 			return;
 		}
 
@@ -937,16 +1008,22 @@
 		if (flowMode) {
 			e.stopPropagation();
 			e.preventDefault();
+			if (flowConnecting) return;
 			if (!flowFromItemId) {
 				flowFromItemId = item.id;
 			} else if (flowFromItemId === item.id) {
 				flowFromItemId = null;
 			} else {
 				const from = flowFromItemId;
+				flowConnecting = true;
 				void (async () => {
-					const ok = await onConnectFlow?.(from, item.id);
-					// Keep chaining from the new last page; on failure keep the source.
-					if (ok === true) flowFromItemId = item.id;
+					try {
+						const ok = await onConnectFlow?.(from, item.id);
+						// Keep chaining from the new last page; on failure keep the source.
+						if (flowMode && ok === true) flowFromItemId = item.id;
+					} finally {
+						flowConnecting = false;
+					}
 				})();
 			}
 			return;
@@ -963,13 +1040,25 @@
 		mashTargetId = null;
 
 		const noteSelected = selectedIds.has(item.noteId);
+		const additive = e.metaKey || e.ctrlKey;
+		dragSelectionIntent = {
+			noteId: item.noteId,
+			additive,
+			initiallySelected: noteSelected
+		};
 		if (noteSelected && selectedIds.size > 1) {
 			dragGroup = items
 				.filter((i) => selectedIds.has(i.noteId))
 				.map((i) => ({ id: i.id, originX: i.x, originY: i.y }));
+		} else if (!noteSelected && additive && selectedIds.size > 0) {
+			// Command/Ctrl-drag adds the grabbed card and moves the resulting group.
+			dragGroup = items
+				.filter((i) => selectedIds.has(i.noteId) || i.noteId === item.noteId)
+				.map((i) => ({ id: i.id, originX: i.x, originY: i.y }));
 		} else {
 			dragGroup = [{ id: item.id, originX: item.x, originY: item.y }];
 		}
+		dragStageRect = dragGroup.length <= 1 ? stageSnapRect() : null;
 
 		dragOrigin = { x: e.clientX, y: e.clientY, itemX: item.x, itemY: item.y };
 		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -1004,6 +1093,9 @@
 		e.preventDefault();
 		didDrag = false;
 		pendingMash = null;
+		if (!selectedIds.has(item.noteId)) {
+			onSelect(item.noteId, { additive: false, range: false });
+		}
 		const size = cardSize(item, item.noteId);
 		resizeItemId = item.id;
 		resizeOrigin = {
@@ -1026,7 +1118,10 @@
 	}
 
 	function handleDragOver(e: DragEvent) {
-		if (!e.dataTransfer?.types.includes(NOTE_MIME) && !e.dataTransfer?.types.includes('text/plain')) {
+		if (
+			!e.dataTransfer?.types.includes(NOTE_MIME) &&
+			!e.dataTransfer?.types.includes('text/plain')
+		) {
 			return;
 		}
 		e.preventDefault();
@@ -1043,8 +1138,7 @@
 	function handleDrop(e: DragEvent) {
 		e.preventDefault();
 		isExternalDragOver = false;
-		const raw =
-			e.dataTransfer?.getData(NOTE_MIME) || e.dataTransfer?.getData('text/plain') || '';
+		const raw = e.dataTransfer?.getData(NOTE_MIME) || e.dataTransfer?.getData('text/plain') || '';
 		let noteIds: string[] = [];
 		try {
 			const parsed = JSON.parse(raw);
@@ -1268,7 +1362,10 @@
 		});
 		if (changed.length === 0) return;
 		onMoveMany(changed);
-		onMoveEnd?.(changed, before.filter((b) => changed.some((c) => c.itemId === b.itemId)));
+		onMoveEnd?.(
+			changed,
+			before.filter((b) => changed.some((c) => c.itemId === b.itemId))
+		);
 	}
 
 	function nudgeSelection(dx: number, dy: number) {
@@ -1286,6 +1383,21 @@
 	}
 
 	$effect(() => {
+		const el = boardEl;
+		if (!el) return;
+		const updateSize = () => {
+			const rect = el.getBoundingClientRect();
+			boardWidth = rect.width;
+			boardHeight = rect.height;
+		};
+		updateSize();
+		if (typeof ResizeObserver === 'undefined') return;
+		const observer = new ResizeObserver(updateSize);
+		observer.observe(el);
+		return () => observer.disconnect();
+	});
+
+	$effect(() => {
 		if (!canvasId) {
 			if (appliedCanvasId) flushViewportSave(appliedCanvasId);
 			appliedCanvasId = null;
@@ -1301,9 +1413,7 @@
 	});
 
 	$effect(() => {
-		panX;
-		panY;
-		scale;
+		if (!Number.isFinite(panX + panY + scale)) return;
 		if (!canvasId || appliedCanvasId !== canvasId) return;
 		scheduleViewportSave();
 	});
@@ -1336,7 +1446,9 @@
 			const root = boardEl?.querySelector<HTMLElement>('[data-mash-confirm]');
 			if (!root) return;
 			const focusable = [
-				...root.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')
+				...root.querySelectorAll<HTMLElement>(
+					'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+				)
 			].filter((el) => !el.hasAttribute('disabled'));
 			if (focusable.length === 0) return;
 			const first = focusable[0];
@@ -1401,16 +1513,23 @@
 				resetView();
 				return;
 			}
+			if ((e.metaKey || e.ctrlKey) && (e.key === '=' || e.key === '+') && pointerOverBoard) {
+				e.preventDefault();
+				zoomFromCenter(ZOOM_BUTTON_FACTOR);
+				return;
+			}
+			if ((e.metaKey || e.ctrlKey) && e.key === '-' && pointerOverBoard) {
+				e.preventDefault();
+				zoomFromCenter(1 / ZOOM_BUTTON_FACTOR);
+				return;
+			}
 			if (selectedIds.size === 0) return;
 			if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey && !e.altKey) {
 				const active = e.target as HTMLElement | null;
 				if (active?.isContentEditable) return;
 				const onCard = active?.closest?.('[data-canvas-card]');
 				const noteId =
-					onCard?.getAttribute('data-note-id') ??
-					primaryFocusNoteId ??
-					[...selectedIds][0] ??
-					null;
+					onCard?.getAttribute('data-note-id') ?? primaryFocusNoteId ?? [...selectedIds][0] ?? null;
 				if (!noteId || flowMode) return;
 				e.preventDefault();
 				if (onOpenInStage) onOpenInStage(noteId, 'maximize');
@@ -1467,23 +1586,19 @@
 
 	/** Cull cards far outside the viewport (keep a generous pad for smooth pan). */
 	let visibleItemIds = $derived.by(() => {
-		if (!boardEl || items.length < 40) {
-			return new Set(items.map((i) => i.id));
+		if (!boardEl || boardWidth <= 0 || boardHeight <= 0 || items.length < 40) {
+			return new SvelteSet(items.map((i) => i.id));
 		}
-		const view = boardEl.getBoundingClientRect();
 		const pad = 280;
 		const left = (-panX - pad) / scale;
 		const top = (-panY - pad) / scale;
-		const right = (-panX + view.width + pad) / scale;
-		const bottom = (-panY + view.height + pad) / scale;
-		const ids = new Set<string>();
+		const right = (-panX + boardWidth + pad) / scale;
+		const bottom = (-panY + boardHeight + pad) / scale;
+		const ids = new SvelteSet<string>();
 		for (const item of items) {
 			const size = cardSize(item, item.noteId);
 			const keep =
-				item.x < right &&
-				item.x + size.w > left &&
-				item.y < bottom &&
-				item.y + size.h > top;
+				item.x < right && item.x + size.w > left && item.y < bottom && item.y + size.h > top;
 			if (keep) ids.add(item.id);
 		}
 		// Always keep interactive / selected cards mounted.
@@ -1516,7 +1631,7 @@
 	onpointerdown={onBoardPointerDown}
 	onpointermove={onBoardPointerMove}
 	onpointerup={onBoardPointerUp}
-	onpointercancel={onBoardPointerUp}
+	onpointercancel={cancelBoardGesture}
 	onpointerenter={() => {
 		pointerOverBoard = true;
 	}}
@@ -1547,7 +1662,7 @@
 				{@const isPendingSource = pendingMash?.sourceId === item.id}
 				{@const isPendingPartner = pendingMash?.targetId === item.id}
 				{@const isMash = Boolean(note.mashedFrom?.length)}
-				{@const links = linkSummary([...notesById.values()], note)}
+				{@const links = linkSummaries.get(note.id)!}
 				{@const pageBadge = flowBadges.get(item.id)}
 				{@const isPrimaryFocus = primaryFocusNoteId === note.id}
 				{@const endSeqId = flowEndItemToSeqId.get(item.id)}
@@ -1561,15 +1676,13 @@
 					data-expanded={expanded ? 'true' : undefined}
 					class="mash-note-card absolute flex flex-col rounded-xl {selected
 						? 'is-selected'
-						: ''} {settling ? 'is-settling' : ''} {expanded
-						? 'is-expanded'
-						: ''} {isDragging ? 'is-dragging-card' : ''} {isMashTarget || isPendingPartner
-						? 'is-mash-target'
-						: ''} {isPendingSource ? 'is-mash-confirming' : ''} {isMash
-						? 'is-mash-result'
-						: ''} {flowFromItemId === item.id ? 'is-flow-source' : ''} {flowMode
-						? 'is-flow-mode'
-						: ''}"
+						: ''} {settling ? 'is-settling' : ''} {expanded ? 'is-expanded' : ''} {isDragging
+						? 'is-dragging-card'
+						: ''} {isMashTarget || isPendingPartner ? 'is-mash-target' : ''} {isPendingSource
+						? 'is-mash-confirming'
+						: ''} {isMash ? 'is-mash-result' : ''} {flowFromItemId === item.id
+						? 'is-flow-source'
+						: ''} {flowMode ? 'is-flow-mode' : ''}"
 					style="left: {item.x}px; top: {item.y}px; width: {size.w}px; height: {size.h}px;"
 					onpointerdown={(e) => startCardDrag(e, item)}
 					onpointerup={(e) => endCardDrag(e, item)}
@@ -1639,7 +1752,14 @@
 								class="mash-display text-center text-sm font-medium"
 								style="color: var(--mash-ink);"
 							>
-								Mash these notes?
+								{pendingMashCopy
+									? `Mash “${pendingMashCopy.sourceTitle}” with “${pendingMashCopy.targetTitle}”?`
+									: 'Mash these notes?'}
+							</p>
+							<p
+								class="max-w-[16rem] text-center text-[10px] leading-snug text-[var(--mash-ink-muted)]"
+							>
+								One combined sticky replaces both cards. Unmash restores the originals.
 							</p>
 							<div class="flex items-center gap-2">
 								<button
@@ -1679,12 +1799,12 @@
 								class="mash-focus min-w-0 flex-1 bg-transparent text-sm font-semibold tracking-tight outline-none"
 								style="color: var(--mash-card-ink);"
 								onpointerdown={(e) => e.stopPropagation()}
-								oninput={(e) =>
-									onTitleChange(note.id, (e.currentTarget as HTMLInputElement).value)}
+								oninput={(e) => onTitleChange(note.id, (e.currentTarget as HTMLInputElement).value)}
 							/>
 							<button
 								type="button"
-								class="shrink-0 rounded p-1 text-[var(--mash-card-muted)] hover:bg-[var(--mash-card-hover)] {note.pinned === 1
+								class="shrink-0 rounded p-1 text-[var(--mash-card-muted)] hover:bg-[var(--mash-card-hover)] {note.pinned ===
+								1
 									? 'text-[var(--mash-accent)]'
 									: ''}"
 								onclick={(e) => {
@@ -1738,7 +1858,9 @@
 							aria-label="Note metadata"
 							onpointerdown={(e) => e.stopPropagation()}
 						>
-							<div class="relative flex min-w-0 flex-1 items-center gap-1 text-[10px] text-[var(--mash-card-muted)]">
+							<div
+								class="relative flex min-w-0 flex-1 items-center gap-1 text-[10px] text-[var(--mash-card-muted)]"
+							>
 								<Folder class="h-3 w-3 shrink-0" />
 								<input
 									type="text"
@@ -1800,7 +1922,7 @@
 													</button>
 												</li>
 											{/if}
-											{#each hits as folder}
+											{#each hits as folder (folder)}
 												<li role="option" aria-selected="false">
 													<button
 														type="button"
@@ -1818,7 +1940,9 @@
 									{/if}
 								{/if}
 							</div>
-							<label class="flex min-w-[40%] flex-1 items-center gap-1 text-[10px] text-[var(--mash-card-muted)]">
+							<label
+								class="flex min-w-[40%] flex-1 items-center gap-1 text-[10px] text-[var(--mash-card-muted)]"
+							>
 								<Tag class="h-3 w-3 shrink-0" />
 								<input
 									type="text"
@@ -1839,7 +1963,7 @@
 							{#if links.outgoingCount + links.backlinkCount > 0}
 								<button
 									type="button"
-									class="shrink-0 rounded-md px-1.5 py-0.5 text-[10px] tabular-nums text-[var(--mash-card-muted)] hover:bg-[var(--mash-card-hover)] hover:text-[var(--mash-accent)]"
+									class="shrink-0 rounded-md px-1.5 py-0.5 text-[10px] text-[var(--mash-card-muted)] tabular-nums hover:bg-[var(--mash-card-hover)] hover:text-[var(--mash-accent)]"
 									title="{links.outgoingCount} links · {links.backlinkCount} backlinks — open Linked"
 									aria-label="{links.outgoingCount} links, {links.backlinkCount} backlinks"
 									onclick={(e) => {
@@ -1872,7 +1996,9 @@
 						<div
 							class="mash-card-title-row flex items-start justify-between gap-1 border-b border-[var(--mash-card-edge)] px-2.5 py-1.5"
 						>
-							<span class="flex min-w-0 items-center gap-1 truncate text-xs font-semibold tracking-tight">
+							<span
+								class="flex min-w-0 items-center gap-1 truncate text-xs font-semibold tracking-tight"
+							>
 								{#if note.pinned === 1}
 									<Pin class="h-3 w-3 shrink-0 text-[var(--mash-accent)]" />
 								{/if}
@@ -1898,7 +2024,6 @@
 							style="text-align: {note.textAlign === 'center' || note.textAlign === 'right'
 								? note.textAlign
 								: 'left'};"
-							onwheel={(e) => e.stopPropagation()}
 						>
 							{notePreview(note.body, 220)}
 						</div>
@@ -1955,9 +2080,7 @@
 					<path
 						d={path.d}
 						fill="none"
-						stroke={invalidEdgeIds.has(path.id)
-							? 'var(--mash-danger)'
-							: 'var(--mash-accent)'}
+						stroke={invalidEdgeIds.has(path.id) ? 'var(--mash-danger)' : 'var(--mash-accent)'}
 						stroke-width={invalidEdgeIds.has(path.id) ? '2.75' : '2'}
 						stroke-linecap="round"
 						marker-end={invalidEdgeIds.has(path.id)
@@ -1980,9 +2103,7 @@
 					title={invalidEdgeIds.has(path.id)
 						? 'Broken sequence link — remove to repair'
 						: 'Remove flow link'}
-					aria-label={invalidEdgeIds.has(path.id)
-						? 'Remove broken flow link'
-						: 'Remove flow link'}
+					aria-label={invalidEdgeIds.has(path.id) ? 'Remove broken flow link' : 'Remove flow link'}
 					onclick={(e) => {
 						e.stopPropagation();
 						void onDisconnectFlow?.(path.id);
@@ -1994,8 +2115,7 @@
 		{/if}
 
 		{#each flowEndMenus as menu (menu.seq.id)}
-			{@const open =
-				pinnedFlowMenuSeqId === menu.seq.id || hoveredFlowMenuSeqId === menu.seq.id}
+			{@const open = pinnedFlowMenuSeqId === menu.seq.id || hoveredFlowMenuSeqId === menu.seq.id}
 			<div
 				data-canvas-chrome
 				data-flow-end-menu
@@ -2017,15 +2137,12 @@
 				<button
 					type="button"
 					class="mash-flow-end-menu-trigger"
-					title={menu.seq.invalid
-						? 'Broken sequence — open options'
-						: 'Sequence options'}
+					title={menu.seq.invalid ? 'Broken sequence — open options' : 'Sequence options'}
 					aria-expanded={open}
 					aria-haspopup="true"
 					onclick={(e) => {
 						e.stopPropagation();
-						pinnedFlowMenuSeqId =
-							pinnedFlowMenuSeqId === menu.seq.id ? null : menu.seq.id;
+						pinnedFlowMenuSeqId = pinnedFlowMenuSeqId === menu.seq.id ? null : menu.seq.id;
 					}}
 				>
 					{flowBoard.sequences.length > 1 ? `S${menu.si + 1}` : 'Seq'}
@@ -2150,9 +2267,7 @@
 		data-canvas-chrome
 		class="mash-canvas-chrome-top pointer-events-none absolute top-3 right-3 z-10 flex flex-wrap items-center justify-end gap-1.5"
 	>
-		<div
-			class="mash-board-chip pointer-events-auto flex items-center rounded-md p-0.5 text-[10px]"
-		>
+		<div class="mash-board-chip pointer-events-auto flex items-center rounded-md p-0.5 text-[10px]">
 			<button
 				type="button"
 				class="mash-board-chip-btn rounded px-2 py-1 {!snapEnabled ? 'is-active' : ''}"
@@ -2224,19 +2339,22 @@
 				}
 			}}
 			title={flowMode
-				? 'Done — exit sequence mode'
+				? flowConnecting
+					? 'Linking pages…'
+					: 'Done — exit sequence mode'
 				: 'Link pages in order: click last page, then next (keeps chaining)'}
 			aria-pressed={flowMode}
+			aria-busy={flowConnecting}
 		>
 			{flowMode
-				? flowFromItemId
-					? 'Pick next page…'
-					: 'Done'
+				? flowConnecting
+					? 'Linking…'
+					: flowFromItemId
+						? 'Pick next page…'
+						: 'Done'
 				: 'Sequence'}
 		</button>
-		<span
-			class="mash-board-chip-soft rounded-md px-2 py-1 text-[10px]"
-		>
+		<span class="mash-board-chip-soft rounded-md px-2 py-1 text-[10px]">
 			{Math.round(scale * 100)}%{altHeld ? ' · Alt' : ''}
 		</span>
 		<button
@@ -2318,9 +2436,7 @@
 		data-canvas-chrome
 		class="mash-canvas-chrome-pan pointer-events-auto absolute right-3 bottom-3 z-10 flex flex-col items-center gap-1"
 	>
-		<div
-			class="mash-board-chip grid grid-cols-3 gap-0.5 rounded-lg p-1 shadow"
-		>
+		<div class="mash-board-chip grid grid-cols-3 gap-0.5 rounded-lg p-1 shadow">
 			<span class="col-start-2">
 				<button
 					type="button"
@@ -2382,29 +2498,21 @@
 				</button>
 			</span>
 		</div>
-		<div
-			class="mash-board-chip flex items-center gap-0.5 rounded-lg p-1 shadow"
-		>
+		<div class="mash-board-chip flex items-center gap-0.5 rounded-lg p-1 shadow">
 			<button
 				type="button"
 				class="mash-pan-btn"
 				aria-label="Zoom out"
 				onclick={(e) => {
 					e.stopPropagation();
-					if (!boardEl) return;
-					const rect = boardEl.getBoundingClientRect();
-					const mx = rect.width / 2;
-					const my = rect.height / 2;
-					const before = scale;
-					const next = Math.max(0.4, scale * 0.9);
-					panX = mx - ((mx - panX) * next) / before;
-					panY = my - ((my - panY) * next) / before;
-					scale = next;
+					zoomFromCenter(1 / ZOOM_BUTTON_FACTOR);
 				}}
 			>
 				−
 			</button>
-			<span class="min-w-[2.5rem] text-center text-[10px] tabular-nums text-[var(--mash-chrome-muted)]">
+			<span
+				class="min-w-[2.5rem] text-center text-[10px] text-[var(--mash-chrome-muted)] tabular-nums"
+			>
 				{Math.round(scale * 100)}%
 			</span>
 			<button
@@ -2413,27 +2521,21 @@
 				aria-label="Zoom in"
 				onclick={(e) => {
 					e.stopPropagation();
-					if (!boardEl) return;
-					const rect = boardEl.getBoundingClientRect();
-					const mx = rect.width / 2;
-					const my = rect.height / 2;
-					const before = scale;
-					const next = Math.min(2, scale * 1.1);
-					panX = mx - ((mx - panX) * next) / before;
-					panY = my - ((my - panY) * next) / before;
-					scale = next;
+					zoomFromCenter(ZOOM_BUTTON_FACTOR);
 				}}
 			>
 				+
 			</button>
 		</div>
-		<p class="mash-chrome-hint max-w-[10rem] text-center text-[9px] leading-tight text-[var(--mash-chrome-muted)]">
+		<p
+			class="mash-chrome-hint max-w-[10rem] text-center text-[9px] leading-tight text-[var(--mash-chrome-muted)]"
+		>
 			{#if flowMode}
-				Click last page → next · keeps chaining · Unstitch clears links · Export PDF downloads a file
+				Click last page → next · keeps chaining · Unstitch clears links · Export PDF downloads a
+				file
 			{:else}
 				Drag to select · Edge = half editor · Drop into empty half to split · ⌘/Ctrl+scroll zoom
 			{/if}
 		</p>
 	</div>
-
 </div>

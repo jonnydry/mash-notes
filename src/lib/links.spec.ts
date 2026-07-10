@@ -3,7 +3,8 @@ import {
 	findBacklinks,
 	findOutgoingNotes,
 	findNoteByTitle,
-	linkSummary
+	linkSummary,
+	buildLinkSummaryMap
 } from './links';
 import type { Note } from './types';
 
@@ -40,7 +41,11 @@ describe('links', () => {
 	});
 
 	it('resolves outgoing notes', () => {
-		expect(findOutgoingNotes(all, alpha).map((n) => n.id).sort()).toEqual(['b', 'c']);
+		expect(
+			findOutgoingNotes(all, alpha)
+				.map((n) => n.id)
+				.sort()
+		).toEqual(['b', 'c']);
 	});
 
 	it('finds backlinks', () => {
@@ -69,5 +74,24 @@ describe('links', () => {
 		expect(s.outgoingCount).toBe(1);
 		expect(s.unresolved).toEqual(['Missing']);
 		expect(s.backlinkCount).toBe(0);
+	});
+
+	it('builds board summaries with the same link semantics in one pass', () => {
+		const duplicate = note({
+			id: 'd',
+			title: 'Duplicate links',
+			body: '[[Beta]] then [[Beta]] and [[Missing]]'
+		});
+		const notes = [...all, duplicate];
+		const summaries = buildLinkSummaryMap(notes);
+
+		expect(summaries.get('d')).toMatchObject({
+			outgoingCount: 2,
+			backlinkCount: 0,
+			unresolved: ['Missing']
+		});
+		expect(summaries.get('d')?.outgoing.map((n) => n.id)).toEqual(['b']);
+		// Duplicate outgoing targets still produce one backlink source.
+		expect(summaries.get('b')?.backlinks.map((n) => n.id)).toEqual(['a', 'd']);
 	});
 });
