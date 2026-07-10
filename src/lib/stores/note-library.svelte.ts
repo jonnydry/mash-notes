@@ -6,7 +6,8 @@ import {
 	db,
 	deleteNote,
 	getActiveNotes,
-	syncNoteUpdate
+	syncNoteUpdate,
+	syncNoteUpdateAsync
 } from '$lib/db';
 import {
 	initSearchIndex,
@@ -30,10 +31,15 @@ import {
 import {
 	parseSyncBundle,
 	mergeSyncBundle,
-	applyDeskSnapshot,
+	persistMergedSync,
 	formatConflictSummary
 } from '$lib/sync-file';
 import type { SyncConflict } from '$lib/sync-model';
+import {
+	isStaleSyncBundle,
+	recordSyncImport,
+	shouldRemindSyncBackup
+} from '$lib/sync-hygiene';
 
 export function filterNotes(
 	notes: Note[],
@@ -135,6 +141,10 @@ export type CreateNoteLibraryOpts = {
 	onTagDeleted?: (tag: string) => void;
 	/** Called after sync applies desk layout so the open canvas reloads. */
 	onDeskSynced?: () => void | Promise<void>;
+	/** Open Conflicts peel after sync (wired by page). */
+	onSyncConflicts?: (conflicts: SyncConflict[]) => void;
+	/** Clear pending conflicts for a note when the user edits it. */
+	onNoteEdited?: (noteId: string) => void;
 };
 
 export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
@@ -287,6 +297,7 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 		if (!note) return;
 		const updated = { ...note, title, modified: Date.now() };
 		notes = notes.map((n) => (n.id === noteId ? updated : n));
+		opts.onNoteEdited?.(noteId);
 		scheduleStickyPersist(noteId, { title }, updated);
 	}
 
@@ -296,6 +307,7 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 		const links = extractWikilinks(body);
 		const updated = { ...note, body, links, modified: Date.now() };
 		notes = notes.map((n) => (n.id === noteId ? updated : n));
+		opts.onNoteEdited?.(noteId);
 		scheduleStickyPersist(noteId, { body, links }, updated);
 	}
 
@@ -312,17 +324,25 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 		if (!note) return;
 		const updated = { ...note, ...patch, modified: Date.now() };
 		notes = notes.map((n) => (n.id === noteId ? updated : n));
+		opts.onNoteEdited?.(noteId);
 		scheduleStickyPersist(noteId, patch, updated);
 	}
 
 	function flushPendingSave(): void {
-		for (const [noteId, timer] of stickySaveTimers) {
-			clearTimeout(timer);
+		void flushPendingSaveAsync();
+	}
+
+	async function flushPendingSaveAsync(): Promise<void> {
+		const pendingIds = [...stickySaveTimers.keys()];
+		const writes: Promise<void>[] = [];
+		for (const noteId of pendingIds) {
+			const timer = stickySaveTimers.get(noteId);
+			if (timer) clearTimeout(timer);
 			stickySaveTimers.delete(noteId);
 			stickyPendingPatches.delete(noteId);
 			const note = notes.find((n) => n.id === noteId);
 			if (!note) continue;
-			syncNoteUpdate(noteId, {
+			const patch = {
 				title: note.title,
 				body: note.body,
 				folder: note.folder,
@@ -330,7 +350,8 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 				pinned: note.pinned,
 				links: note.links,
 				textAlign: note.textAlign
-			});
+			};
+			writes.push(syncNoteUpdateAsync(noteId, patch));
 			updateNoteInSearch(
 				{
 					id: noteId,
@@ -345,6 +366,7 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 			);
 		}
 		stickyPendingPatches.clear();
+		await Promise.all(writes);
 	}
 
 	function handleVisibilityChange(): void {
@@ -394,7 +416,10 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 		isLoading = false;
 	}
 
-	async function importSyncText(text: string): Promise<{
+	async function importSyncText(
+		text: string,
+		importOpts?: { force?: boolean }
+	): Promise<{
 		ok: boolean;
 		message: string;
 		added?: number;
@@ -411,6 +436,23 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 				opts.flashToast(parsed.error);
 				return { ok: false, message: parsed.error };
 			}
+
+			if (!importOpts?.force && isStaleSyncBundle(parsed.bundle.exportedAt)) {
+				opts.askConfirm({
+					title: 'Older sync bundle?',
+					message:
+						'This file is older than your last export on this device. Importing may overwrite newer notes with older ones.\n\nImport anyway?',
+					confirmLabel: 'Import anyway',
+					danger: false,
+					action: async () => {
+						await importSyncText(text, { force: true });
+					}
+				});
+				return { ok: false, message: 'Waiting for stale-import confirmation' };
+			}
+
+			await flushPendingSaveAsync();
+
 			const { notes: mergedNotes, summary } = mergeSyncBundle(notes, parsed.bundle);
 			// Dexie can't structured-clone Svelte $state proxies — always put plain objects.
 			const plainNotes = mergedNotes.map((n) => ({
@@ -419,41 +461,47 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 				...(n.links ? { links: [...n.links] } : {}),
 				...(n.mashedFrom ? { mashedFrom: [...n.mashedFrom] } : {})
 			}));
+			const knownNoteIds = new Set(plainNotes.map((n) => n.id));
+
+			const persisted = await persistMergedSync(
+				plainNotes,
+				parsed.bundle.desk,
+				knownNoteIds
+			);
+			if (persisted.desk) summary.desk = persisted.desk;
+
+			notes = plainNotes.filter((n) => n.deletedAt == null);
 			for (const n of plainNotes) {
-				await db.notes.put(n);
-			}
-			notes = plainNotes;
-			for (const n of mergedNotes) {
 				removeNoteFromSearch(n.id);
-				addNoteToSearch(n);
+				if (n.deletedAt == null) addNoteToSearch(n);
 			}
 
 			let deskPart = '';
-			if (parsed.bundle.desk) {
-				try {
-					const deskSummary = await applyDeskSnapshot(
-						parsed.bundle.desk,
-						new Set(mergedNotes.map((n) => n.id))
-					);
-					summary.desk = deskSummary;
-					deskPart = ` · desk ${deskSummary.itemsUpserted} placements`;
-					await opts.onDeskSynced?.();
-				} catch {
-					deskPart = ' · desk apply failed';
-				}
+			if (persisted.desk) {
+				deskPart = ` · desk ${persisted.desk.itemsUpserted} placements`;
+				await opts.onDeskSynced?.();
 			}
+
+			recordSyncImport(parsed.bundle.exportedAt);
 
 			const conflictFields = [
 				...new Set(summary.conflicts.map((c) => `${c.noteId}:${c.field}`))
 			];
+			const removedPart =
+				summary.removed > 0 ? ` · ${summary.removed} removed` : '';
 			const message =
 				`Sync: ${summary.added} added · ${summary.updated} updated` +
+				removedPart +
 				deskPart +
 				(conflictFields.length ? ` · ${conflictFields.length} conflicts` : '');
 			opts.flashToast(message, 3200);
 
 			if (summary.conflicts.length > 0) {
-				await resolveBodyConflicts(summary.conflicts, mergedNotes);
+				if (opts.onSyncConflicts) {
+					opts.onSyncConflicts(summary.conflicts);
+				} else {
+					await resolveBodyConflicts(summary.conflicts, mergedNotes);
+				}
 			}
 			return {
 				ok: true,
@@ -483,8 +531,7 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 	}
 
 	/**
-	 * For body conflicts where LWW kept remote: offer restoring local body.
-	 * Cancel / dismiss keeps remote (already applied). Confirm restores local.
+	 * Fallback when page does not wire Conflicts peel: one-shot dialog for first body conflict.
 	 */
 	function resolveBodyConflicts(conflicts: SyncConflict[], mergedNotes: Note[]) {
 		const bodyConflicts = conflicts.filter((c) => c.field === 'body' && c.chosen === 'remote');
@@ -517,20 +564,71 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 			confirmLabel: 'Restore local',
 			danger: false,
 			action: async () => {
-				const target = notes.find((n) => n.id === first.noteId);
-				if (!target) return;
-				const updated = {
-					...target,
-					body: localBody,
-					links: extractWikilinks(localBody),
-					modified: Date.now()
-				};
-				await db.notes.put(updated);
-				notes = notes.map((n) => (n.id === updated.id ? updated : n));
-				updateNoteInSearch(updated, updated);
-				opts.flashToast(`Restored local body on “${title}”`);
+				await restoreConflictLocal(first.noteId, 'body', localBody);
 			}
 		});
+	}
+
+	async function restoreConflictLocal(
+		noteId: string,
+		field: SyncConflict['field'],
+		localValue: unknown
+	): Promise<boolean> {
+		const target = notes.find((n) => n.id === noteId);
+		if (!target) return false;
+
+		let updated: Note;
+		if (field === 'body' && typeof localValue === 'string') {
+			updated = {
+				...target,
+				body: localValue,
+				links: extractWikilinks(localValue),
+				modified: Date.now()
+			};
+		} else if (field === 'title' && typeof localValue === 'string') {
+			updated = { ...target, title: localValue, modified: Date.now() };
+		} else if (field === 'folder' && typeof localValue === 'string') {
+			updated = { ...target, folder: localValue, modified: Date.now() };
+		} else if (field === 'tags' && Array.isArray(localValue)) {
+			updated = {
+				...target,
+				tags: localValue.filter((t): t is string => typeof t === 'string'),
+				modified: Date.now()
+			};
+		} else if (field === 'pinned' && (localValue === 0 || localValue === 1)) {
+			updated = { ...target, pinned: localValue, modified: Date.now() };
+		} else if (field === 'links' && Array.isArray(localValue)) {
+			updated = {
+				...target,
+				links: localValue.filter((t): t is string => typeof t === 'string'),
+				modified: Date.now()
+			};
+		} else if (field === 'mashedFrom' && Array.isArray(localValue)) {
+			updated = {
+				...target,
+				mashedFrom: localValue.filter((t): t is string => typeof t === 'string'),
+				modified: Date.now()
+			};
+		} else if (
+			field === 'textAlign' &&
+			(localValue === 'left' || localValue === 'center' || localValue === 'right')
+		) {
+			updated = { ...target, textAlign: localValue, modified: Date.now() };
+		} else {
+			return false;
+		}
+
+		const plain: Note = {
+			...updated,
+			tags: [...updated.tags],
+			...(updated.links ? { links: [...updated.links] } : {}),
+			...(updated.mashedFrom ? { mashedFrom: [...updated.mashedFrom] } : {})
+		};
+		await db.notes.put(plain);
+		notes = notes.map((n) => (n.id === plain.id ? plain : n));
+		updateNoteInSearch(plain, plain);
+		opts.flashToast(`Restored local ${field} on “${plain.title}”`);
+		return true;
 	}
 
 	async function handleImportFile(e: Event) {
@@ -820,10 +918,12 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 		markStickySaving,
 		markStickySaved,
 		flushPendingSave,
+		flushPendingSaveAsync,
 		handleVisibilityChange,
 		handleImportFile,
 		handleMarkdownImport,
 		handleSyncFile,
-		importSyncText
+		importSyncText,
+		restoreConflictLocal
 	};
 }

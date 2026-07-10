@@ -5,6 +5,7 @@ import {
 	parseSyncBundle,
 	mergeSyncBundle,
 	applyDeskSnapshot,
+	persistMergedSync,
 	formatConflictSummary,
 	SYNC_BUNDLE_VERSION
 } from './sync-file';
@@ -58,7 +59,7 @@ describe('sync-file', () => {
 		localStorage.clear();
 	});
 
-	it('round-trips a v2 sync bundle with desk', async () => {
+	it('round-trips a v3 sync bundle with desk', async () => {
 		const notes = [note({ id: 'a', title: 'A', body: 'hi', modified: 10 })];
 		await db.canvases.put({
 			id: 'c1',
@@ -80,6 +81,7 @@ describe('sync-file', () => {
 		expect(bundle.version).toBe(SYNC_BUNDLE_VERSION);
 		expect(bundle.desk?.items).toHaveLength(1);
 		expect(bundle.desk?.dismissed.c1).toContain('gone');
+		expect(bundle.tombstones).toEqual([]);
 
 		const parsed = parseSyncBundle(JSON.stringify(bundle));
 		expect(parsed.ok).toBe(true);
@@ -99,6 +101,57 @@ describe('sync-file', () => {
 		expect(parsed.ok).toBe(true);
 		if (!parsed.ok) return;
 		expect(parsed.bundle.desk).toBeUndefined();
+	});
+
+	it('still accepts v2 desk bundles', () => {
+		const parsed = parseSyncBundle(
+			JSON.stringify({
+				version: 2,
+				exportedAt: 1,
+				notes: [note({ id: 'a', title: 'V2' })],
+				desk: { canvases: [], items: [], dismissed: {} }
+			})
+		);
+		expect(parsed.ok).toBe(true);
+		if (!parsed.ok) return;
+		expect(parsed.bundle.desk).toBeTruthy();
+		expect(parsed.bundle.tombstones).toBeUndefined();
+	});
+
+	it('applies tombstones so deletes propagate', () => {
+		const local = [note({ id: 'a', title: 'Keep', body: 'x', modified: 5 })];
+		const remote = {
+			version: 3 as const,
+			exportedAt: 10,
+			notes: [] as Note[],
+			tombstones: [{ id: 'a', deletedAt: 9 }]
+		};
+		const { notes, summary } = mergeSyncBundle(local, remote);
+		expect(summary.removed).toBe(1);
+		expect(notes.find((n) => n.id === 'a')?.deletedAt).toBe(9);
+	});
+
+	it('keeps a newer local note over an older tombstone', () => {
+		const local = [note({ id: 'a', title: 'Edited', body: 'new', modified: 20 })];
+		const remote = {
+			version: 3 as const,
+			exportedAt: 10,
+			notes: [] as Note[],
+			tombstones: [{ id: 'a', deletedAt: 9 }]
+		};
+		const { notes, summary } = mergeSyncBundle(local, remote);
+		expect(summary.removed).toBe(0);
+		expect(notes.find((n) => n.id === 'a')?.deletedAt).toBeUndefined();
+		expect(notes.find((n) => n.id === 'a')?.body).toBe('new');
+	});
+
+	it('exports soft-deleted notes as tombstones', async () => {
+		await db.notes.put(
+			note({ id: 'gone', title: 'Gone', modified: 5, deletedAt: Date.now() })
+		);
+		const bundle = await buildSyncBundle([note({ id: 'a', title: 'A', modified: 10 })]);
+		expect(bundle.notes.map((n) => n.id)).toEqual(['a']);
+		expect(bundle.tombstones?.some((t) => t.id === 'gone')).toBe(true);
 	});
 
 	it('merges remote updates and reports conflicts', async () => {
@@ -181,12 +234,64 @@ describe('sync-file', () => {
 		expect(edges[0].toItemId).toBe(byNote.get('n2'));
 	});
 
+	it('persistMergedSync commits notes and desk together', async () => {
+		const notes = [note({ id: 'n1', title: 'One', modified: 5 })];
+		const desk = {
+			canvases: [
+				{ id: 'remote-root', folder: '', title: 'Desk', created: 1, modified: 10 }
+			],
+			items: [
+				{ id: 'ri1', canvasId: 'remote-root', noteId: 'n1', x: 40, y: 50 }
+			],
+			dismissed: { 'remote-root': ['gone'] }
+		};
+		const { desk: deskSummary } = await persistMergedSync(notes, desk, new Set(['n1']));
+		expect(deskSummary?.itemsUpserted).toBe(1);
+		expect(await db.notes.get('n1')).toMatchObject({ title: 'One' });
+		const canvases = await db.canvases.toArray();
+		expect(canvases).toHaveLength(1);
+		expect([...getDismissedNoteIds(canvases[0].id)]).toEqual(['gone']);
+	});
+
+	it('persistMergedSync rolls notes back when desk apply fails', async () => {
+		await db.notes.put(note({ id: 'keep', title: 'Keep me', modified: 1 }));
+		const notes = [
+			note({ id: 'keep', title: 'Keep me', modified: 1 }),
+			note({ id: 'new', title: 'Should roll back', modified: 2 })
+		];
+		const desk = {
+			canvases: [
+				{ id: 'remote-root', folder: '', title: 'Desk', created: 1, modified: 10 }
+			],
+			items: [
+				{ id: 'ri1', canvasId: 'remote-root', noteId: 'new', x: 0, y: 0 }
+			],
+			dismissed: {}
+		};
+
+		const originalPut = db.canvasItems.put.bind(db.canvasItems);
+		db.canvasItems.put = (async () => {
+			throw new Error('forced desk failure');
+		}) as unknown as typeof db.canvasItems.put;
+
+		await expect(persistMergedSync(notes, desk, new Set(['keep', 'new']))).rejects.toThrow(
+			'forced desk failure'
+		);
+
+		db.canvasItems.put = originalPut;
+
+		expect(await db.notes.get('new')).toBeUndefined();
+		expect(await db.notes.get('keep')).toMatchObject({ title: 'Keep me' });
+		expect(await db.canvases.count()).toBe(0);
+		expect(await db.canvasItems.count()).toBe(0);
+	});
+
 	it('rejects bad JSON and invalid notes', () => {
 		expect(parseSyncBundle('nope').ok).toBe(false);
-		expect(parseSyncBundle(JSON.stringify({ version: 2, notes: [null] })).ok).toBe(false);
 		expect(
-			parseSyncBundle(JSON.stringify({ version: 2, notes: ['not-an-object'] })).ok
+			parseSyncBundle(JSON.stringify({ version: 3, notes: ['not-an-object'] })).ok
 		).toBe(false);
+		expect(parseSyncBundle(JSON.stringify({ version: 2, notes: [null] })).ok).toBe(false);
 	});
 
 	it('formats conflict summaries', () => {
