@@ -14,10 +14,20 @@
 		Trash2,
 		Link2,
 		ArrowUpRight,
-		ArrowDownLeft
+		ArrowDownLeft,
+		Diff
 	} from 'lucide-svelte';
 
-	export type PeelMode = 'notes' | 'folders' | 'tags' | 'linked';
+	export type PeelMode = 'notes' | 'folders' | 'tags' | 'linked' | 'conflicts';
+
+	export type PeelConflictRow = {
+		id: string;
+		noteId: string;
+		noteTitle: string;
+		field: string;
+		chosen: 'local' | 'remote';
+		canRestoreLocal: boolean;
+	};
 
 	interface Props {
 		open: boolean;
@@ -32,6 +42,7 @@
 		linkedFocusTitle?: string;
 		folders?: string[];
 		tags?: string[];
+		conflictRows?: PeelConflictRow[];
 		selectedIds: Set<string>;
 		draggingId?: string | null;
 		saveStatus?: 'saved' | 'saving' | '';
@@ -52,6 +63,9 @@
 		onSelectAllNotes?: () => void;
 		/** Touch long-press place (optional) */
 		onTouchPlaceStart?: (noteId: string, clientX: number, clientY: number) => void;
+		onConflictKeepRemote?: (conflictId: string) => void;
+		onConflictRestoreLocal?: (conflictId: string) => void;
+		onConflictOpenNote?: (noteId: string) => void;
 	}
 
 	let {
@@ -65,6 +79,7 @@
 		linkedFocusTitle = '',
 		folders = [],
 		tags = [],
+		conflictRows = [],
 		selectedIds,
 		draggingId = null,
 		saveStatus = '',
@@ -83,7 +98,10 @@
 		onDeleteTag,
 		onNewNote,
 		onSelectAllNotes,
-		onTouchPlaceStart
+		onTouchPlaceStart,
+		onConflictKeepRemote,
+		onConflictRestoreLocal,
+		onConflictOpenNote
 	}: Props = $props();
 
 	let filterInput: HTMLInputElement | undefined = $state();
@@ -165,6 +183,10 @@
 				{:else if mode === 'linked'}
 					<div class="text-[10px]" style="color: var(--mash-ink-muted);">
 						{linkedFocusTitle || 'Links'}
+					</div>
+				{:else if mode === 'conflicts'}
+					<div class="text-[10px]" style="color: var(--mash-ink-muted);">
+						{conflictRows.length} pending
 					</div>
 				{/if}
 			</div>
@@ -297,6 +319,55 @@
 					{/if}
 				{/if}
 				</div>
+			{:else if mode === 'conflicts'}
+				<div class="mash-peel-body-scroll" onwheel={(e) => e.stopPropagation()} data-testid="sync-conflicts-peel">
+					{#if conflictRows.length === 0}
+						<div class="mash-peel-empty">No pending conflicts</div>
+					{:else}
+						{#each conflictRows as row (row.id)}
+							<div class="mash-peel-conflict-row" data-testid="sync-conflict-row">
+								<div class="flex min-w-0 items-start gap-2">
+									<Diff class="mt-0.5 h-3.5 w-3.5 shrink-0 opacity-60" />
+									<div class="min-w-0 flex-1">
+										<div class="truncate text-[12px] font-medium" style="color: var(--mash-ink);">
+											{row.noteTitle}
+										</div>
+										<div class="text-[10px]" style="color: var(--mash-ink-muted);">
+											{row.field} · kept {row.chosen}
+										</div>
+									</div>
+								</div>
+								<div class="mash-peel-conflict-actions">
+									<button
+										type="button"
+										class="mash-peel-conflict-btn"
+										onclick={() => onConflictOpenNote?.(row.noteId)}
+									>
+										Open
+									</button>
+									{#if row.canRestoreLocal}
+										<button
+											type="button"
+											class="mash-peel-conflict-btn"
+											data-testid="sync-conflict-restore"
+											onclick={() => onConflictRestoreLocal?.(row.id)}
+										>
+											Restore local
+										</button>
+									{/if}
+									<button
+										type="button"
+										class="mash-peel-conflict-btn"
+										data-testid="sync-conflict-keep"
+										onclick={() => onConflictKeepRemote?.(row.id)}
+									>
+										Keep remote
+									</button>
+								</div>
+							</div>
+						{/each}
+					{/if}
+				</div>
 			{:else if isLoading}
 				<div class="mash-peel-empty">Loading…</div>
 			{:else if notes.length === 0}
@@ -384,6 +455,8 @@
 			</div>
 		{:else if mode === 'linked'}
 			<div class="mash-peel-footer">Open a linked note on the canvas</div>
+		{:else if mode === 'conflicts'}
+			<div class="mash-peel-footer">Review after sync — Restore local undoes LWW for that field</div>
 		{/if}
 	</aside>
 {/if}

@@ -43,6 +43,11 @@
 	} from '$lib/canvas-dismiss';
 	import { findBacklinks, findOutgoingNotes } from '$lib/links';
 	import { downloadSyncBundle } from '$lib/sync-file';
+	import {
+		readSyncHygiene,
+		recordSyncExport,
+		shouldRemindSyncBackup
+	} from '$lib/sync-hygiene';
 	import { loadSnapPref, saveSnapPref } from '$lib/canvas-geom';
 	import {
 		COLLAPSED_CARD,
@@ -57,10 +62,12 @@
 	import { createPeelNav, windowPeelNotes } from '$lib/stores/peel-nav.svelte';
 	import { createOpenSpaces } from '$lib/stores/spaces.svelte';
 	import { theme } from '$lib/stores/theme.svelte';
+	import { syncConflicts } from '$lib/stores/sync-conflicts.svelte';
 	import {
 		createEditorStage,
 		type SnapZone
 	} from '$lib/stores/editor-stage.svelte';
+	import type { PeelConflictRow } from '$lib/components/PeelScanner.svelte';
 
 	let actionToast = $state('');
 	let toastTimer: ReturnType<typeof setTimeout> | null = null;
@@ -85,6 +92,19 @@
 	let searchDropdownOpen = $state(false);
 	let searchHighlight = $state(0);
 	let searchWrapEl = $state<HTMLDivElement | null>(null);
+	let syncHygiene = $state(readSyncHygiene());
+	let syncBackupReminded = false;
+
+	function refreshSyncHygiene() {
+		syncHygiene = readSyncHygiene();
+	}
+
+	async function exportSyncBundle() {
+		await downloadSyncBundle(library.notes);
+		recordSyncExport();
+		refreshSyncHygiene();
+		flashToast('Exported sync bundle (notes + desk)');
+	}
 
 	$effect(() => {
 		if (!showPalette) return;
@@ -168,8 +188,32 @@
 		},
 		onDeskSynced: async () => {
 			await canvas.loadContextCanvas(peel.canvasKey);
+		},
+		onSyncConflicts: (conflicts) => {
+			syncConflicts.setFromImport(conflicts);
+			const n = conflicts.length;
+			flashToast(
+				`${n} conflict${n === 1 ? '' : 's'} — review in Conflicts peel`,
+				3600
+			);
+			settingsOpen = false;
+			peel.openPeel('conflicts');
+		},
+		onNoteEdited: (noteId) => {
+			syncConflicts.dismissNote(noteId);
 		}
 	});
+
+	const conflictRows = $derived.by((): PeelConflictRow[] =>
+		syncConflicts.items.map((c) => ({
+			id: c.id,
+			noteId: c.noteId,
+			noteTitle: library.notesById.get(c.noteId)?.title ?? c.noteId.slice(0, 8),
+			field: c.field,
+			chosen: c.chosen,
+			canRestoreLocal: c.chosen === 'remote'
+		}))
+	);
 
 	const peel = createPeelNav({
 		clearSelection: () => library.clearSelection(),
@@ -867,9 +911,7 @@
 		{
 			label: 'Export sync bundle…',
 			action: () => {
-				void downloadSyncBundle(library.notes).then(() => {
-					flashToast('Exported sync bundle (notes + desk)');
-				});
+				void exportSyncBundle();
 				showPalette = false;
 			},
 			shortcut: ''
@@ -940,13 +982,22 @@
 	}
 
 	onMount(() => {
-		void library.loadNotes();
+		void library.loadNotes().then(() => {
+			if (syncBackupReminded) return;
+			if (!shouldRemindSyncBackup(library.notes.length)) return;
+			syncBackupReminded = true;
+			flashToast('Tip: export a sync bundle to back up this browser', 4200);
+		});
 		window.addEventListener('keydown', handleKeydown);
 		window.addEventListener('pointerdown', onSearchPointerDown, true);
 		window.addEventListener('pagehide', library.flushPendingSave);
 		document.addEventListener('visibilitychange', library.handleVisibilityChange);
 		// E2E / diagnostics: import a sync bundle without relying on hidden file inputs.
-		window.__mashImportSync = (text: string) => library.importSyncText(text);
+		window.__mashImportSync = async (text: string) => {
+			const result = await library.importSyncText(text);
+			refreshSyncHygiene();
+			return result;
+		};
 		return () => {
 			window.removeEventListener('keydown', handleKeydown);
 			window.removeEventListener('pointerdown', onSearchPointerDown, true);
@@ -1222,6 +1273,8 @@
 			<div class="mash-peel-slot pointer-events-auto absolute top-1/2 left-[4.75rem] z-30 -translate-y-1/2">
 				<SettingsPanel
 					{snapEnabled}
+					lastExportAt={syncHygiene.lastExportAt}
+					lastImportAt={syncHygiene.lastImportAt}
 					onClose={() => (settingsOpen = false)}
 					onSnapChange={setSnapEnabled}
 					onOrganize={() => canvas.canvasBoard?.organizeToSnap?.()}
@@ -1234,9 +1287,12 @@
 					onExportJson={() => exportNotesJson(library.notes, 'mash-notes-export.json')}
 					onImportSync={() => syncInputEl?.click()}
 					onExportSync={() => {
-						void downloadSyncBundle(library.notes).then(() => {
-							flashToast('Exported sync bundle (notes + desk)');
-						});
+						void exportSyncBundle();
+					}}
+					conflictCount={syncConflicts.count}
+					onOpenConflicts={() => {
+						settingsOpen = false;
+						peel.openPeel('conflicts');
 					}}
 				/>
 			</div>
@@ -1281,6 +1337,30 @@
 						library.selectedId = library.selectionIds[0] ?? null;
 					}}
 					onTouchPlaceStart={canvas.startTouchPlace}
+					conflictRows={conflictRows}
+					onConflictKeepRemote={(id) => {
+						syncConflicts.dismiss(id);
+						if (syncConflicts.count === 0) peel.closePeel(true);
+					}}
+					onConflictRestoreLocal={(id) => {
+						void (async () => {
+							const pending = syncConflicts.get(id);
+							if (!pending) return;
+							const ok = await library.restoreConflictLocal(
+								pending.noteId,
+								pending.field,
+								pending.local
+							);
+							if (ok) {
+								syncConflicts.dismiss(id);
+								if (syncConflicts.count === 0) peel.closePeel(true);
+							}
+						})();
+					}}
+					onConflictOpenNote={(noteId) => {
+						library.selectNote(noteId);
+						void canvas.openStickyFromTray(noteId);
+					}}
 				/>
 			</div>
 		{/if}
@@ -1722,7 +1802,10 @@
 		type="file"
 		accept="application/json,.json"
 		class="hidden"
-		onchange={(e) => void library.handleSyncFile(e)}
+		onchange={async (e) => {
+			await library.handleSyncFile(e);
+			refreshSyncHygiene();
+		}}
 	/>
 
 	{#if actionToast}

@@ -43,6 +43,7 @@ export function peelTitleFor(
 	if (mode === 'folders') return 'Folders';
 	if (mode === 'tags') return 'Tags';
 	if (mode === 'linked') return 'Linked';
+	if (mode === 'conflicts') return 'Conflicts';
 	// Header search has its own dropdown; peel titles reflect browse filters only.
 	if (filter.type === 'pinned') return 'Pinned';
 	if (filter.type === 'folder' && filter.value) return filter.value;

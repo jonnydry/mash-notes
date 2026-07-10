@@ -85,6 +85,12 @@ class MashDB extends Dexie {
 			canvasItems: 'id, canvasId, noteId, &[canvasId+noteId]',
 			canvasEdges: 'id, canvasId, fromItemId, toItemId, &[canvasId+fromItemId+toItemId]'
 		});
+		this.version(6).stores({
+			notes: 'id, modified, folder, pinned, deletedAt, *tags',
+			canvases: 'id, &folder, modified',
+			canvasItems: 'id, canvasId, noteId, &[canvasId+noteId]',
+			canvasEdges: 'id, canvasId, fromItemId, toItemId, &[canvasId+fromItemId+toItemId]'
+		});
 	}
 }
 
@@ -138,7 +144,7 @@ export async function createNote(partial: {
 }
 
 /**
- * Retrieves all notes, sorted by pinned (desc) then modified (desc).
+ * Retrieves active (non-deleted) notes, sorted by pinned (desc) then modified (desc).
  */
 export async function getActiveNotes(opts?: { limit?: number }): Promise<Note[]> {
 	let collection = db.notes.orderBy('modified').reverse();
@@ -147,7 +153,7 @@ export async function getActiveNotes(opts?: { limit?: number }): Promise<Note[]>
 		collection = collection.limit(opts.limit);
 	}
 
-	const notes = await collection.toArray();
+	const notes = (await collection.toArray()).filter((n) => n.deletedAt == null);
 
 	notes.sort((a, b) => {
 		if (a.pinned !== b.pinned) return b.pinned - a.pinned;
@@ -168,10 +174,14 @@ export async function updateNote(id: string, changes: Partial<Note>): Promise<No
 }
 
 /**
- * Deletes a note by ID. DB only — caller should also removeNoteFromSearch.
+ * Soft-deletes a note by ID. Sets deletedAt, strips canvas placements.
+ * DB only — caller should also removeNoteFromSearch.
  */
 export async function deleteNote(id: string): Promise<void> {
-	await db.notes.delete(id);
+	const existing = await db.notes.get(id);
+	if (!existing) return;
+	const deletedAt = Date.now();
+	await db.notes.put({ ...existing, deletedAt, modified: Math.max(existing.modified, deletedAt) });
 	// Drop canvas placements + incident flow edges for this note
 	const items = await db.canvasItems.where('noteId').equals(id).toArray();
 	for (const item of items) {
@@ -181,20 +191,37 @@ export async function deleteNote(id: string): Promise<void> {
 }
 
 /**
+ * Soft-deleted notes still within the sync tombstone retention window.
+ */
+export async function getSyncTombstoneNotes(maxAgeMs: number): Promise<Note[]> {
+	const cutoff = Date.now() - maxAgeMs;
+	const all = await db.notes.toArray();
+	return all.filter(
+		(n) => typeof n.deletedAt === 'number' && n.deletedAt >= cutoff
+	);
+}
+
+/**
  * Fire-and-forget DB write. Used for optimistic UI updates where the
  * full Note is already known. Does NOT touch search — caller does that.
  */
 export function syncNoteUpdate(id: string, partial: Partial<Note>): void {
-	db.notes
-		.update(id, { ...partial, modified: Date.now() })
-		.catch((e) => console.error('Mash syncNoteUpdate DB write failed:', e));
+	void syncNoteUpdateAsync(id, partial).catch((e) =>
+		console.error('Mash syncNoteUpdate DB write failed:', e)
+	);
+}
+
+/** Awaitable sticky persist — used when flushing before sync import. */
+export async function syncNoteUpdateAsync(id: string, partial: Partial<Note>): Promise<void> {
+	await db.notes.update(id, { ...partial, modified: Date.now() });
 }
 
 /**
- * Returns all notes for search index hydration on startup.
+ * Returns active notes for search index hydration on startup.
  */
 export async function getAllNotesForSearchIndex(): Promise<Note[]> {
-	return db.notes.toArray();
+	const notes = await db.notes.toArray();
+	return notes.filter((n) => n.deletedAt == null);
 }
 
 // =============================================================================

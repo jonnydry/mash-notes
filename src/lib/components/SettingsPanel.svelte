@@ -2,9 +2,13 @@
 	import { X } from 'lucide-svelte';
 	import { theme } from '$lib/stores/theme.svelte';
 	import { flatShortcutRows } from '$lib/keyboard-shortcuts';
+	import { formatNoteTimestamp } from '$lib/format';
+	import { syncBackupHint } from '$lib/sync-hygiene';
 
 	interface Props {
 		snapEnabled: boolean;
+		lastExportAt?: number | null;
+		lastImportAt?: number | null;
 		onClose: () => void;
 		onSnapChange: (on: boolean) => void;
 		onOrganize: () => void;
@@ -14,10 +18,14 @@
 		onExportJson: () => void;
 		onImportSync: () => void;
 		onExportSync: () => void;
+		conflictCount?: number;
+		onOpenConflicts?: () => void;
 	}
 
 	let {
 		snapEnabled,
+		lastExportAt = null,
+		lastImportAt = null,
 		onClose,
 		onSnapChange,
 		onOrganize,
@@ -26,10 +34,19 @@
 		onImportJson,
 		onExportJson,
 		onImportSync,
-		onExportSync
+		onExportSync,
+		conflictCount = 0,
+		onOpenConflicts
 	}: Props = $props();
 
 	const shortcuts = flatShortcutRows().slice(0, 6);
+	const backupHint = $derived(
+		syncBackupHint({
+			lastExportAt,
+			lastImportAt,
+			lastImportExportedAt: null
+		})
+	);
 </script>
 
 <aside class="mash-peel mash-settings" aria-label="Settings">
@@ -129,6 +146,33 @@
 			<p class="mash-settings-hint mash-settings-hint--lead">
 				Everything stays in this browser. Sync is a file you move yourself — no cloud, no accounts.
 			</p>
+			<div class="mash-settings-sync-meta" data-testid="sync-hygiene">
+				<div class="mash-settings-row">
+					<span class="mash-settings-label">Last export</span>
+					<span class="mash-settings-value" data-testid="sync-last-export">
+						{lastExportAt != null ? formatNoteTimestamp(lastExportAt) : 'Never'}
+					</span>
+				</div>
+				<div class="mash-settings-row">
+					<span class="mash-settings-label">Last import</span>
+					<span class="mash-settings-value" data-testid="sync-last-import">
+						{lastImportAt != null ? formatNoteTimestamp(lastImportAt) : 'Never'}
+					</span>
+				</div>
+				{#if backupHint}
+					<p class="mash-settings-hint" data-testid="sync-backup-hint">{backupHint}</p>
+				{/if}
+				{#if conflictCount > 0 && onOpenConflicts}
+					<button
+						type="button"
+						class="mash-settings-action"
+						data-testid="open-sync-conflicts"
+						onclick={onOpenConflicts}
+					>
+						Review {conflictCount} sync conflict{conflictCount === 1 ? '' : 's'}…
+					</button>
+				{/if}
+			</div>
 			<div class="mash-settings-actions">
 				<button type="button" class="mash-settings-action" onclick={onImportMarkdown}>
 					Import markdown vault…

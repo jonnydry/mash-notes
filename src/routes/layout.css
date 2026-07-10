@@ -996,6 +996,42 @@ body {
 .mash-settings-hint--lead {
 	margin: 0 0 8px;
 }
+.mash-settings-sync-meta {
+	margin: 0 0 10px;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+.mash-settings-value {
+	font-size: 11px;
+	color: var(--mash-ink-muted);
+	text-align: right;
+}
+.mash-peel-conflict-row {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 10px;
+	border-bottom: 1px solid var(--mash-tray-edge);
+}
+.mash-peel-conflict-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+}
+.mash-peel-conflict-btn {
+	padding: 4px 8px;
+	border-radius: 6px;
+	border: 1px solid var(--mash-tray-edge);
+	font-size: 10px;
+	color: var(--mash-ink);
+	background: var(--mash-tray);
+	cursor: pointer;
+}
+.mash-peel-conflict-btn:hover {
+	border-color: var(--mash-accent);
+	color: var(--mash-accent-bright);
+}
 .mash-settings-actions {
 	display: flex;
 	flex-direction: column;
