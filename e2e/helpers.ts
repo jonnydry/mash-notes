@@ -24,6 +24,11 @@ export async function wipeIndexedDb(page: Page) {
 					})
 			)
 		);
+		try {
+			localStorage.removeItem('mash.openSpaces');
+		} catch {
+			/* ignore */
+		}
 	});
 	await page.reload();
 	await expect(page.getByRole('navigation', { name: 'Mash dock' })).toBeVisible({
@@ -35,17 +40,38 @@ export async function wipeIndexedDb(page: Page) {
 	await expect(peel.getByText('Welcome to Mash')).toBeVisible({ timeout: 15_000 });
 }
 
+/** New note opens in the stage editor (primary surface). */
 export async function createNamedNote(page: Page, title: string, body: string) {
 	await page.getByRole('button', { name: 'New note' }).click();
-	await expect(page.locator('[data-drag-handle] input').first()).toBeVisible({ timeout: 10_000 });
-	await page.locator('[data-drag-handle] input').first().fill(title);
-	await page.locator('textarea.mash-sticky-body').first().fill(body);
+	const stage = page.locator('.mash-editor-stage.is-open, .mash-editor-pane').first();
+	await expect(stage).toBeVisible({ timeout: 10_000 });
+	const titleInput = page.locator('.mash-editor-pane-titlebar input').first();
+	await expect(titleInput).toBeVisible({ timeout: 10_000 });
+	await titleInput.fill(title);
+	const bodyEl = page.locator('textarea.mash-sticky-body').first();
+	await expect(bodyEl).toBeVisible();
+	await bodyEl.fill(body);
 	// Blur so debounced sticky saves flush before the next action.
-	await page.locator('textarea.mash-sticky-body').first().blur();
+	await bodyEl.blur();
 	await page.waitForTimeout(500);
-	await page.getByRole('button', { name: 'Collapse sticky' }).click();
+	await page.getByRole('button', { name: 'Collapse to canvas' }).click();
 	await expect(page.getByRole('group', { name: title })).toBeVisible({ timeout: 5_000 });
 	await page.waitForTimeout(400);
+}
+
+/** Open a note from the peel into the stage editor. */
+export async function openNoteInStage(page: Page, title: string) {
+	await page.getByRole('button', { name: 'Desk' }).click();
+	const peel = page.getByRole('complementary', { name: 'Note scanner' });
+	await expect(peel).toBeVisible();
+	const row = peel.getByRole('option').filter({ hasText: title });
+	await row.dblclick();
+	await expect(page.locator('.mash-editor-pane-titlebar input').first()).toBeVisible({
+		timeout: 10_000
+	});
+	await expect(page.locator('textarea.mash-sticky-body').first()).toBeVisible();
+	// Unpinned Desk peel dismisses when the stage opens so it doesn't cover the editor.
+	await expect(peel).toBeHidden({ timeout: 5_000 });
 }
 
 export function modKey() {

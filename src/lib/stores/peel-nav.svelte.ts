@@ -5,7 +5,7 @@ import { tick } from 'svelte';
 import type { DockAction } from '$lib/dock';
 import type { PeelMode } from '$lib/components/PeelScanner.svelte';
 import type { NavFilter } from '$lib/note-ui';
-import { canvasFolderFromFilter, canvasKeyFromFilter, canvasTitleFromFilter } from '$lib/stores/note-library.svelte';
+import { canvasFolderFromFilter, canvasKeyFromFilter, canvasTitleFromFilter, PINNED_CANVAS_KEY } from '$lib/stores/note-library.svelte';
 
 export type PeelNavState = {
 	peelOpen: boolean;
@@ -221,6 +221,20 @@ export function createPeelNav(opts: CreatePeelNavOpts) {
 		opts.clearSelection();
 	}
 
+	/** Set canvas context without toggle (Spaces switcher / programmatic nav). */
+	function applySpaceKey(key: string) {
+		if (key === '') {
+			currentFilter = { type: null };
+		} else if (key === PINNED_CANVAS_KEY) {
+			currentFilter = { type: 'pinned' };
+		} else {
+			currentFilter = { type: 'folder', value: key };
+		}
+		searchQuery = '';
+		peelFilterText = '';
+		opts.clearSelection();
+	}
+
 	function clearFilter() {
 		currentFilter = { type: null };
 		searchQuery = '';
@@ -345,6 +359,7 @@ export function createPeelNav(opts: CreatePeelNavOpts) {
 		closePeel,
 		openLinkedPeel,
 		setFilter,
+		applySpaceKey,
 		clearFilter,
 		handleGlobalSearch,
 		handleDockAction,

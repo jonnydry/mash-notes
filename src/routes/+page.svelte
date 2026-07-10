@@ -32,6 +32,7 @@
 	import EditorStage from '$lib/components/EditorStage.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import ShortcutsModal from '$lib/components/ShortcutsModal.svelte';
+	import SpacesOverview from '$lib/components/SpacesOverview.svelte';
 	import { extractWikilinks } from '$lib/markdown';
 	import { combineNotes, exportNotesJson } from '$lib/mash';
 	import { clearCanvasViewport } from '$lib/viewport';
@@ -54,6 +55,7 @@
 		filterPeelNotes
 	} from '$lib/stores/note-library.svelte';
 	import { createPeelNav, windowPeelNotes } from '$lib/stores/peel-nav.svelte';
+	import { createOpenSpaces } from '$lib/stores/spaces.svelte';
 	import { theme } from '$lib/stores/theme.svelte';
 	import {
 		createEditorStage,
@@ -76,6 +78,8 @@
 	let paletteHighlight = $state(0);
 	let settingsOpen = $state(false);
 	let shortcutsOpen = $state(false);
+	let spacesOverviewOpen = $state(false);
+	let spacesOverviewIgnoreUntil = 0;
 	/** Sync from localStorage at init (ssr=false) so CanvasBoard never paints Free first. */
 	let snapEnabled = $state(loadSnapPref());
 	let searchDropdownOpen = $state(false);
@@ -122,6 +126,7 @@
 	}
 
 	const canvasHolder: { session?: ReturnType<typeof createCanvasSession> } = {};
+	const spacesHolder: { spaces?: ReturnType<typeof createOpenSpaces> } = {};
 	const editorStage = createEditorStage();
 
 	const library = createNoteLibrary({
@@ -154,6 +159,7 @@
 			if (peel.currentFilter.type === 'folder' && peel.currentFilter.value === folder) {
 				peel.clearFilter();
 			}
+			spacesHolder.spaces?.removeSpace(folder);
 		},
 		onTagDeleted: (tag) => {
 			if (peel.currentFilter.type === 'tag' && peel.currentFilter.value === tag) {
@@ -178,6 +184,34 @@
 		closeSettings: () => {
 			settingsOpen = false;
 		}
+	});
+
+	const spaces = createOpenSpaces({
+		applySpaceKey: (key) => peel.applySpaceKey(key),
+		getActiveKey: () => peel.canvasKey
+	});
+	spacesHolder.spaces = spaces;
+
+	function showSpacesOverview() {
+		if (Date.now() < spacesOverviewIgnoreUntil) return;
+		spacesOverviewOpen = true;
+	}
+
+	function hideSpacesOverview() {
+		// Guard against the closing click retargeting onto the title chip.
+		spacesOverviewIgnoreUntil = Date.now() + 600;
+		spacesOverviewOpen = false;
+	}
+
+	function switchSpace(key: string) {
+		hideSpacesOverview();
+		spaces.switchTo(key);
+	}
+
+	// Opening a folder / pinned context adds it to the open Spaces set.
+	$effect(() => {
+		const key = peel.canvasKey;
+		spaces.ensureFromActiveKey(key);
 	});
 
 	function setSnapEnabled(on: boolean) {
@@ -216,9 +250,17 @@
 	});
 	canvasHolder.session = canvas;
 
+	/** Desk/folders/tags peels sit above the stage and steal clicks — dismiss unless Linked. */
+	function dismissPeelForStage() {
+		if (peel.peelOpen && peel.peelMode !== 'linked') {
+			peel.closePeel();
+		}
+	}
+
 	function openInStage(noteId: string, zone: SnapZone = 'maximize') {
 		if (canvas.expandedNoteId === noteId) canvas.collapseSticky();
 		library.selectNote(noteId, { keepSelection: true });
+		dismissPeelForStage();
 		editorStage.openNote(noteId, zone);
 	}
 
@@ -226,6 +268,7 @@
 		const ids = [...new Set(library.selectionIds)];
 		if (ids.length === 0) return;
 		if (canvas.expandedNoteId) canvas.collapseSticky();
+		dismissPeelForStage();
 		if (ids.length === 1) {
 			editorStage.openNote(ids[0]!, 'maximize');
 			return;
@@ -237,11 +280,15 @@
 		const id = library.selectedId ?? library.selectionIds[0];
 		if (!id) return;
 		if (canvas.expandedNoteId === id) canvas.collapseSticky();
+		dismissPeelForStage();
 		editorStage.openBeside(id);
 	}
 
 	let filteredNotes = $derived(filterNotes(library.notes, peel.currentFilter, ''));
 	let peelNotes = $derived(filterPeelNotes(filteredNotes, peel.peelFilterText));
+	/** Screenplay mode: any open folder/pinned board besides root Desk. */
+	let screenplayActive = $derived(spaces.openKeys.length > 1);
+	let screenplayChipTitle = $derived(screenplayActive ? 'Screenplay' : peel.canvasTitle);
 	let headerSearchResults = $derived(
 		peel.searchQuery.trim() ? searchNotes(peel.searchQuery) : []
 	);
@@ -630,6 +677,14 @@
 				shortcutsOpen = true;
 			}
 		}
+		// Ctrl+ArrowUp — Show Screenplay (open folder boards)
+		if (e.ctrlKey && e.key === 'ArrowUp') {
+			const tag = (e.target as HTMLElement)?.tagName;
+			if (tag !== 'INPUT' && tag !== 'TEXTAREA' && !(e.target as HTMLElement)?.isContentEditable) {
+				e.preventDefault();
+				showSpacesOverview();
+			}
+		}
 		if (e.key === '/' && document.activeElement?.tagName === 'BODY') {
 			e.preventDefault();
 			(document.getElementById('global-search') as HTMLInputElement)?.focus();
@@ -637,6 +692,10 @@
 		if (e.key === 'Escape') {
 			if (confirmDialog) {
 				confirmDialog = null;
+				return;
+			}
+			if (spacesOverviewOpen) {
+				hideSpacesOverview();
 				return;
 			}
 			if (shortcutsOpen) {
@@ -679,6 +738,14 @@
 
 	const paletteActions = [
 		{ label: 'New note', action: handleNewNote, shortcut: '⌘N' },
+		{
+			label: 'Show Screenplay…',
+			action: () => {
+				showPalette = false;
+				showSpacesOverview();
+			},
+			shortcut: '⌃↑'
+		},
 		{
 			label: 'Open Settings…',
 			action: () => {
@@ -890,12 +957,14 @@
 	});
 </script>
 
-<div class="flex h-screen flex-col" style="background: var(--mash-bg); color: var(--mash-ink);">
+<div
+	class="mash-app-shell mash-board-surface flex h-screen flex-col {snapEnabled
+		? 'is-snap-on'
+		: ''}"
+	style="color: var(--mash-ink);"
+>
 	<!-- Header -->
-	<header
-		class="flex items-center justify-between border-b px-5 py-3.5"
-		style="border-color: var(--mash-tray-edge); background: var(--mash-rail);"
-	>
+	<header class="mash-app-header flex items-center justify-between px-5 py-3.5">
 		<div class="flex items-center gap-3.5">
 			<img
 				src="/icons/mash-logo-sprouts.png"
@@ -933,8 +1002,8 @@
 						if (peel.searchQuery.trim()) searchDropdownOpen = true;
 					}}
 					onkeydown={onGlobalSearchKeydown}
-					class="mash-focus w-full rounded-lg border py-2 pr-14 pl-9 text-sm transition-colors"
-					style="border-color: var(--mash-tray-edge); background: var(--mash-tray); color: var(--mash-ink);"
+					class="mash-focus mash-header-search w-full rounded-lg border py-2 pr-14 pl-9 text-sm transition-colors"
+					style="border-color: var(--mash-tray-edge); color: var(--mash-ink);"
 					aria-autocomplete="list"
 					aria-expanded={searchDropdownOpen && Boolean(peel.searchQuery.trim())}
 					aria-controls="mash-header-search-results"
@@ -1026,12 +1095,33 @@
 	<div class="relative flex min-h-0 flex-1">
 		<div class="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
 			<div
-				class="mash-canvas-title-chip pointer-events-none absolute top-3 left-[4.75rem] z-10 rounded-full border px-3 py-1 text-[10px] backdrop-blur-sm"
+				class="mash-canvas-title-chip is-spaces-trigger absolute top-3 left-[4.75rem] z-10 rounded-full border px-3 py-1 text-[10px] backdrop-blur-sm"
+				class:pointer-events-none={spacesOverviewOpen}
 				style="border-color: var(--mash-chrome-chip-border); background: var(--mash-chrome-chip-soft); color: var(--mash-chrome-muted);"
+				role="button"
+				tabindex="0"
+				aria-label="Show Screenplay"
+				aria-haspopup="dialog"
+				aria-expanded={spacesOverviewOpen}
+				data-screenplay-chip
+				onclick={() => showSpacesOverview()}
+				onkeydown={(e) => {
+					if (e.key === 'Enter' || e.key === ' ') {
+						e.preventDefault();
+						showSpacesOverview();
+					}
+				}}
 			>
-				<span class="mash-display font-medium" style="color: var(--mash-chrome-ink);">{peel.canvasTitle}</span>
+				<span class="mash-display font-medium" style="color: var(--mash-chrome-ink);">{screenplayChipTitle}</span>
 				<span class="mx-1.5 opacity-40">·</span>
 				{canvas.canvasItems.length} on canvas
+				{#if spaces.openKeys.length > 1}
+					<span class="mash-spaces-dots" aria-hidden="true">
+						{#each spaces.openKeys as key (key === '' ? '__desk__' : key)}
+							<span class="mash-spaces-dot" class:is-active={key === peel.canvasKey}></span>
+						{/each}
+					</span>
+				{/if}
 			</div>
 
 			<div class="relative min-h-0 flex-1 overflow-hidden">
@@ -1655,4 +1745,14 @@
 	/>
 
 	<ShortcutsModal open={shortcutsOpen} onClose={() => (shortcutsOpen = false)} />
+	{#if spacesOverviewOpen}
+		<SpacesOverview
+			openKeys={spaces.openKeys}
+			activeKey={peel.canvasKey}
+			activeItems={canvas.canvasItems}
+			onClose={hideSpacesOverview}
+			onSwitch={switchSpace}
+			onCloseSpace={(key) => spaces.closeSpace(key)}
+		/>
+	{/if}
 </div>
