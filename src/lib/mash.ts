@@ -198,7 +198,7 @@ ${pages}
       try { window.focus(); window.print(); } catch (e) {}
     }, 100);
   });
-<\/script>
+</script>
 </body>
 </html>`;
 }

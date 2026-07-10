@@ -1,3 +1,4 @@
+/* eslint-disable svelte/prefer-svelte-reactivity -- layoutOf uses a temporary membership set and never exposes it as reactive state. */
 /**
  * Editor stage — screen-space note panes over the canvas (OS-like window snap).
  * Independent of canvas pan/zoom; cards stay on the board underneath.

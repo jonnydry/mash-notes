@@ -1,4 +1,4 @@
-<script lang="ts">
+<script lang="ts" generics="T extends { id?: string | number }">
 	import { onMount, onDestroy, type Snippet } from 'svelte';
 
 	interface Props<T> {
@@ -8,7 +8,7 @@
 		children?: Snippet<[T, number]>; // snippet for rendering each item as children(note, index)
 	}
 
-	let { items = [], itemHeight = 78, overscan = 5, children }: Props<any> = $props();
+	let { items = [], itemHeight = 78, overscan = 5, children }: Props<T> = $props();
 
 	let container: HTMLDivElement | undefined = $state();
 	let scrollTop = $state(0);

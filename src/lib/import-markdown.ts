@@ -106,7 +106,7 @@ export function parseFrontmatter(text: string): ParsedFrontmatter {
 	const end = text.indexOf('\n---', 3);
 	if (end === -1) return empty;
 	const fence = text.slice(3, end).replace(/^\r?\n/, '');
-	let body = text.slice(end + 4).replace(/^\r?\n/, '');
+	const body = text.slice(end + 4).replace(/^\r?\n/, '');
 
 	const tags: string[] = [];
 	let title: string | undefined;

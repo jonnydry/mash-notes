@@ -1,3 +1,4 @@
+/* eslint-disable svelte/prefer-svelte-reactivity -- Collections here are immutable snapshots or local algorithmic indexes, not mutably observed state. */
 /**
  * Canvas session — card helpers + reactive board / layout / sticky store.
  */
@@ -166,14 +167,13 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 	let canvasLoadSeq = 0;
 	const canvasUndo = new CanvasUndoStack();
 
-	const canCanvasUndo = $derived.by(() => {
-		canvasUndoTick;
-		return canvasUndo.canUndo;
-	});
-	const canCanvasRedo = $derived.by(() => {
-		canvasUndoTick;
-		return canvasUndo.canRedo;
-	});
+	const canvasUndoState = $derived.by(() => ({
+		revision: canvasUndoTick,
+		canUndo: canvasUndo.canUndo,
+		canRedo: canvasUndo.canRedo
+	}));
+	const canCanvasUndo = $derived(canvasUndoState.canUndo);
+	const canCanvasRedo = $derived(canvasUndoState.canRedo);
 
 	const membershipKey = $derived.by(() => {
 		const key = opts.getCanvasKey();
@@ -196,15 +196,14 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 
 	/** Re-run canvas load when context or membership changes. */
 	$effect(() => {
-		const key = opts.getCanvasKey();
-		membershipKey;
+		const context = { key: opts.getCanvasKey(), membershipKey };
 		// untrack: canvasUndoTick++ both reads and writes — would infinite-loop the effect.
 		untrack(() => {
 			canvasUndo.clear();
 			canvasUndoTick++;
 			bumpRestore = null;
 		});
-		void loadContextCanvas(key);
+		void loadContextCanvas(context.key);
 	});
 
 	async function loadContextCanvas(key: string) {

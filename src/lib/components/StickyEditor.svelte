@@ -295,6 +295,7 @@
 			onwheel={(e) => e.stopPropagation()}
 		>
 			{#if body.trim()}
+				<!-- eslint-disable-next-line svelte/no-at-html-tags -- renderMarkdown escapes raw HTML before producing previewHtml. -->
 				{@html previewHtml}
 			{:else}
 				<p class="opacity-50">Nothing to preview yet…</p>

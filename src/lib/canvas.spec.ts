@@ -3,8 +3,10 @@ import 'fake-indexeddb/auto';
 import { webcrypto } from 'node:crypto';
 
 if (!globalThis.crypto?.randomUUID) {
-	// @ts-ignore — polyfill only randomUUID
-	globalThis.crypto.randomUUID = (webcrypto.randomUUID as any).bind(webcrypto);
+	Object.defineProperty(globalThis.crypto, 'randomUUID', {
+		value: webcrypto.randomUUID.bind(webcrypto),
+		configurable: true
+	});
 }
 
 import {

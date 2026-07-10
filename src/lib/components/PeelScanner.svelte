@@ -230,7 +230,7 @@
 					{#if folderRows.length === 0}
 						<div class="mash-peel-empty">No folders yet</div>
 					{:else}
-						{#each folderRows as { node, depth }}
+						{#each folderRows as { node, depth } (node.path)}
 							<div class="mash-peel-meta-row group" style="padding-left: {10 + depth * 12}px;">
 								<button
 									type="button"
@@ -257,7 +257,7 @@
 					{#if tags.length === 0}
 						<div class="mash-peel-empty">No tags yet</div>
 					{:else}
-						{#each tags as tag}
+						{#each tags as tag (tag)}
 							<div class="mash-peel-meta-row group">
 								<button
 									type="button"
@@ -295,7 +295,7 @@
 						{#if outgoingNotes.length === 0}
 							<div class="mash-peel-empty py-2">No outgoing links</div>
 						{:else}
-							{#each outgoingNotes as note}
+							{#each outgoingNotes as note (note.id)}
 								<button
 									type="button"
 									class="mash-peel-meta-row w-full text-left"
@@ -317,7 +317,7 @@
 						{#if backlinkNotes.length === 0}
 							<div class="mash-peel-empty py-2">No backlinks</div>
 						{:else}
-							{#each backlinkNotes as note}
+							{#each backlinkNotes as note (note.id)}
 								<button
 									type="button"
 									class="mash-peel-meta-row w-full text-left"

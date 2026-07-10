@@ -1,12 +1,7 @@
 export type NavFilter = { type: 'folder' | 'tag' | 'pinned' | null; value?: string };
 export type NavKind = 'all' | 'pinned' | 'folder' | 'tag';
 
-export function isNavActive(
-	filter: NavFilter,
-	kind: NavKind,
-	value?: string,
-	_searchQuery = ''
-): boolean {
+export function isNavActive(filter: NavFilter, kind: NavKind, value?: string): boolean {
 	switch (kind) {
 		case 'all':
 			return filter.type === null;

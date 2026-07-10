@@ -107,7 +107,8 @@
 	});
 
 	$effect(() => {
-		paletteQuery;
+		const query = paletteQuery;
+		if (query === undefined) return;
 		paletteHighlight = 0;
 	});
 
@@ -511,9 +512,9 @@
 	let peelNotesWindowed = $derived(windowPeelNotes(peelNotes));
 
 	$effect(() => {
-		peel.searchQuery;
+		const query = peel.searchQuery;
 		searchHighlight = 0;
-		searchDropdownOpen = Boolean(peel.searchQuery.trim());
+		searchDropdownOpen = Boolean(query.trim());
 	});
 
 	function closeSearchDropdown(clearQuery = false) {
@@ -1468,7 +1469,6 @@
 		>
 			<MashDock
 				currentFilter={peel.currentFilter}
-				searchQuery={peel.searchQuery}
 				foldersOpen={peel.foldersFlyout}
 				tagsOpen={peel.tagsFlyout}
 				linkedOpen={peel.linkedFlyout}
@@ -1618,7 +1618,7 @@
 							}}
 						/>
 						<div class="flex max-h-28 flex-wrap gap-1 overflow-auto">
-							{#each library.uniqueTags as tag}
+							{#each library.uniqueTags as tag (tag)}
 								<button
 									type="button"
 									class="mash-chip mash-chip-hover rounded-full px-2 py-0.5 text-[10px]"
@@ -1659,7 +1659,7 @@
 							<span class="text-[11px]">No folder</span>
 						</button>
 						<div class="max-h-28 overflow-auto">
-							{#each library.uniqueFolders as folder}
+							{#each library.uniqueFolders as folder (folder)}
 								<button
 									type="button"
 									class="mash-peel-meta-row"
@@ -1947,7 +1947,7 @@
 				<div class="max-h-80 overflow-auto p-1 text-sm">
 					{#each paletteActions.filter((a) => a.label
 							.toLowerCase()
-							.includes(paletteQuery.toLowerCase())) as action, i}
+							.includes(paletteQuery.toLowerCase())) as action, i (action.label)}
 						<button
 							onclick={action.action}
 							class="mash-row-hover flex w-full items-center justify-between rounded px-3 py-2 text-left {i ===
@@ -1973,7 +1973,7 @@
 										.includes(paletteQuery.toLowerCase()) || n.body
 										.toLowerCase()
 										.includes(paletteQuery.toLowerCase()))
-							.slice(0, 6) as note, j}
+							.slice(0, 6) as note, j (note.id)}
 							<button
 								onclick={() => {
 									void canvas.openStickyFromTray(note.id);

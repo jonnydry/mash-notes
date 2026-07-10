@@ -1,3 +1,4 @@
+/* eslint-disable svelte/prefer-svelte-reactivity -- normalizeOpenKeys uses a short-lived deduplication set, not reactive state. */
 /**
  * Open Spaces — session set of folder/pinned canvases the user is working across.
  * Desk ('' ) is always present and never closable. Persisted in localStorage only.

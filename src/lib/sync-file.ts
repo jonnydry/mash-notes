@@ -188,7 +188,8 @@ export async function buildSyncBundle(notes: Note[]): Promise<SyncBundle> {
 	const active = notes
 		.filter((n) => n.deletedAt == null)
 		.map((n) => {
-			const { deletedAt: _drop, ...rest } = n;
+			const rest = { ...n };
+			delete rest.deletedAt;
 			return { ...rest };
 		});
 	const tombstones: SyncTombstone[] = deleted
@@ -252,7 +253,8 @@ export function parseSyncBundle(
 		const result = normalizeImportedNote(obj.notes[i], i);
 		if (typeof result === 'string') return { ok: false, error: result };
 		// JSON / vault-style imports must not invent soft-deletes via deletedAt.
-		const { deletedAt: _ignored, ...active } = result as Note & { deletedAt?: number };
+		const active = { ...(result as Note & { deletedAt?: number }) };
+		delete active.deletedAt;
 		notes.push(active);
 	}
 
@@ -324,7 +326,8 @@ export function mergeSyncBundle(
 		// Remote active note resurrects a locally soft-deleted note when newer.
 		if (local.deletedAt != null) {
 			if (remote.modified > local.deletedAt) {
-				const { deletedAt: _d, ...rest } = local;
+				const rest = { ...local };
+				delete rest.deletedAt;
 				const resurrected = { ...rest, ...remote };
 				delete resurrected.deletedAt;
 				byId.set(remote.id, resurrected);

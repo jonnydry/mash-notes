@@ -1,3 +1,4 @@
+/* eslint-disable svelte/prefer-svelte-reactivity -- Collections are derived snapshots or private indexes whose updates are signaled through surrounding state. */
 /**
  * Note library — filter helpers + reactive selection / sticky-save store.
  */
@@ -35,7 +36,7 @@ import {
 	formatConflictSummary
 } from '$lib/sync-file';
 import type { SyncConflict } from '$lib/sync-model';
-import { isStaleSyncBundle, recordSyncImport, shouldRemindSyncBackup } from '$lib/sync-hygiene';
+import { isStaleSyncBundle, recordSyncImport } from '$lib/sync-hygiene';
 
 export function filterNotes(notes: Note[], currentFilter: NavFilter, searchQuery: string): Note[] {
 	let list = [...notes];

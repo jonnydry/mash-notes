@@ -450,7 +450,7 @@
 
 		{#if folders.length > 0}
 			<datalist id="mash-pane-folders">
-				{#each folders as folder}
+				{#each folders as folder (folder)}
 					<option value={folder}></option>
 				{/each}
 			</datalist>

@@ -6,8 +6,10 @@ import 'fake-indexeddb/auto';
 // Polyfill crypto.randomUUID for older Node test environments
 import { webcrypto } from 'node:crypto';
 if (!globalThis.crypto?.randomUUID) {
-	// @ts-ignore — polyfill only randomUUID, don't replace entire crypto object
-	globalThis.crypto.randomUUID = (webcrypto.randomUUID as any).bind(webcrypto);
+	Object.defineProperty(globalThis.crypto, 'randomUUID', {
+		value: webcrypto.randomUUID.bind(webcrypto),
+		configurable: true
+	});
 }
 
 import { db, createNote, updateNote, deleteNote } from './db';
@@ -110,7 +112,7 @@ describe('MASH sync engine — DB ↔ search lifecycle', () => {
 	it('initSearchIndex hydrates from DB on startup', async () => {
 		// Create notes directly in DB (bypassing search)
 		const n1 = await createNote({ title: 'Stored Note', body: 'persisted in IndexedDB' });
-		const n2 = await createNote({ title: 'Another', body: 'completely different content' });
+		await createNote({ title: 'Another', body: 'completely different content' });
 
 		// Reset search and re-init — should pick up all DB notes
 		resetSearchIndexForTests();

@@ -6,7 +6,6 @@
 
 	interface Props {
 		currentFilter: NavFilter;
-		searchQuery?: string;
 		foldersOpen?: boolean;
 		tagsOpen?: boolean;
 		linkedOpen?: boolean;
@@ -17,7 +16,6 @@
 
 	let {
 		currentFilter,
-		searchQuery = '',
 		foldersOpen = false,
 		tagsOpen = false,
 		linkedOpen = false,
@@ -37,7 +35,7 @@
 			id: 'all',
 			label: 'Desk',
 			active:
-				isNavActive(currentFilter, 'all', undefined, searchQuery) &&
+				isNavActive(currentFilter, 'all') &&
 				!foldersOpen &&
 				!tagsOpen &&
 				!linkedOpen &&
