@@ -66,18 +66,20 @@ describe('MASH sync engine — DB ↔ search lifecycle', () => {
 		expect(staleResults).toHaveLength(0);
 	});
 
-	it('deletes a note and purges it from search', async () => {
+	it('soft-deletes a note and purges it from search', async () => {
 		const note = await createNote({ title: 'Delete me', body: 'temporary content' });
 		addNoteToSearch(note);
 
 		expect(getSearchIndexSize()).toBe(1);
 
-		// Delete from both DB and search (UI orchestration pattern)
+		// Soft-delete from DB; UI removes from search
 		await deleteNote(note.id);
 		removeNoteFromSearch(note.id);
 
 		expect(getSearchIndexSize()).toBe(0);
 		expect(searchNotes('temporary')).toHaveLength(0);
+		const row = await db.notes.get(note.id);
+		expect(row?.deletedAt).toBeTypeOf('number');
 	});
 
 	it('handles multiple notes and searches across all of them', async () => {

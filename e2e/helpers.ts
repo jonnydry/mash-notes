@@ -26,6 +26,7 @@ export async function wipeIndexedDb(page: Page) {
 		);
 		try {
 			localStorage.removeItem('mash.openSpaces');
+			localStorage.removeItem('mash.syncHygiene');
 		} catch {
 			/* ignore */
 		}

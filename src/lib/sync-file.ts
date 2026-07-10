@@ -1,20 +1,29 @@
 /**
  * File-based sync transport on top of LWW merge.
- * Bundle v2 includes notes + desk layout (canvases, placements, dismissals).
- * v1 bundles (notes only) still import.
+ * Bundle v3 includes notes + desk + soft-delete tombstones.
+ * v2 (notes + desk) and v1 (notes only) still import.
  */
 import type { Canvas, CanvasEdge, CanvasItem, Note } from './types';
 import { mergeNotesLww, hasConflicts, type MergeResult, type SyncConflict } from './sync-model';
 import { normalizeImportedNote } from './import-notes';
-import { db, newId } from './db';
+import { db, getSyncTombstoneNotes, newId } from './db';
 import {
 	exportAllDismissed,
 	importDismissedMap,
 	type DismissedByCanvas
 } from './canvas-dismiss';
 
-export const SYNC_BUNDLE_VERSION = 2 as const;
+export const SYNC_BUNDLE_VERSION = 3 as const;
+export const SYNC_BUNDLE_VERSION_V2 = 2 as const;
 export const SYNC_BUNDLE_VERSION_V1 = 1 as const;
+
+/** Keep soft-delete tombstones in sync exports for this long. */
+export const TOMBSTONE_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
+
+export type SyncTombstone = {
+	id: string;
+	deletedAt: number;
+};
 
 export type DeskSnapshot = {
 	canvases: Canvas[];
@@ -26,10 +35,14 @@ export type DeskSnapshot = {
 };
 
 export type SyncBundle = {
-	version: typeof SYNC_BUNDLE_VERSION | typeof SYNC_BUNDLE_VERSION_V1;
+	version:
+		| typeof SYNC_BUNDLE_VERSION
+		| typeof SYNC_BUNDLE_VERSION_V2
+		| typeof SYNC_BUNDLE_VERSION_V1;
 	exportedAt: number;
 	notes: Note[];
 	desk?: DeskSnapshot;
+	tombstones?: SyncTombstone[];
 };
 
 export type DeskApplySummary = {
@@ -44,6 +57,7 @@ export type SyncMergeSummary = {
 	added: number;
 	updated: number;
 	unchanged: number;
+	removed: number;
 	results: MergeResult[];
 	conflicts: SyncConflict[];
 	desk?: DeskApplySummary;
@@ -174,12 +188,39 @@ export async function collectDeskSnapshot(): Promise<DeskSnapshot> {
 
 export async function buildSyncBundle(notes: Note[]): Promise<SyncBundle> {
 	const desk = await collectDeskSnapshot();
+	const deleted = await getSyncTombstoneNotes(TOMBSTONE_RETENTION_MS);
+	const active = notes
+		.filter((n) => n.deletedAt == null)
+		.map((n) => {
+			const { deletedAt: _drop, ...rest } = n;
+			return { ...rest };
+		});
+	const tombstones: SyncTombstone[] = deleted
+		.filter((n) => typeof n.deletedAt === 'number')
+		.map((n) => ({ id: n.id, deletedAt: n.deletedAt as number }));
 	return {
 		version: SYNC_BUNDLE_VERSION,
 		exportedAt: Date.now(),
-		notes: notes.map((n) => ({ ...n })),
-		desk
+		notes: active,
+		desk,
+		tombstones
 	};
+}
+
+function normalizeTombstones(raw: unknown): SyncTombstone[] | string {
+	if (raw == null) return [];
+	if (!Array.isArray(raw)) return 'Tombstones must be an array';
+	if (raw.length > 5000) return 'Too many tombstones in sync bundle';
+	const out: SyncTombstone[] = [];
+	for (let i = 0; i < raw.length; i++) {
+		const row = raw[i];
+		if (!isRecord(row)) return `Tombstone ${i + 1} is not an object`;
+		const id = asString(row.id).trim();
+		const deletedAt = asNumber(row.deletedAt, NaN);
+		if (!id || !Number.isFinite(deletedAt)) return `Tombstone ${i + 1} missing id/deletedAt`;
+		out.push({ id, deletedAt });
+	}
+	return out;
 }
 
 export function parseSyncBundle(
@@ -196,7 +237,11 @@ export function parseSyncBundle(
 	}
 	const obj = data as Record<string, unknown>;
 	const version = obj.version;
-	if (version !== SYNC_BUNDLE_VERSION && version !== SYNC_BUNDLE_VERSION_V1) {
+	if (
+		version !== SYNC_BUNDLE_VERSION &&
+		version !== SYNC_BUNDLE_VERSION_V2 &&
+		version !== SYNC_BUNDLE_VERSION_V1
+	) {
 		return { ok: false, error: `Unsupported sync bundle version (${String(version)})` };
 	}
 	if (!Array.isArray(obj.notes)) {
@@ -210,14 +255,23 @@ export function parseSyncBundle(
 	for (let i = 0; i < obj.notes.length; i++) {
 		const result = normalizeImportedNote(obj.notes[i], i);
 		if (typeof result === 'string') return { ok: false, error: result };
-		notes.push(result);
+		// JSON / vault-style imports must not invent soft-deletes via deletedAt.
+		const { deletedAt: _ignored, ...active } = result as Note & { deletedAt?: number };
+		notes.push(active);
 	}
 
 	let desk: DeskSnapshot | undefined;
-	if (version === SYNC_BUNDLE_VERSION) {
+	if (version === SYNC_BUNDLE_VERSION || version === SYNC_BUNDLE_VERSION_V2) {
 		const deskResult = normalizeDesk(obj.desk);
 		if (typeof deskResult === 'string') return { ok: false, error: deskResult };
 		desk = deskResult;
+	}
+
+	let tombstones: SyncTombstone[] | undefined;
+	if (version === SYNC_BUNDLE_VERSION) {
+		const tombResult = normalizeTombstones(obj.tombstones);
+		if (typeof tombResult === 'string') return { ok: false, error: tombResult };
+		tombstones = tombResult;
 	}
 
 	return {
@@ -226,31 +280,60 @@ export function parseSyncBundle(
 			version: version as SyncBundle['version'],
 			exportedAt: typeof obj.exportedAt === 'number' ? obj.exportedAt : Date.now(),
 			notes,
-			desk
+			desk,
+			tombstones
 		}
 	};
+}
+
+function stripCanvasForDeletedNote(noteId: string): Promise<void> {
+	return (async () => {
+		const items = await db.canvasItems.where('noteId').equals(noteId).toArray();
+		for (const item of items) {
+			const from = await db.canvasEdges.where('fromItemId').equals(item.id).toArray();
+			const to = await db.canvasEdges.where('toItemId').equals(item.id).toArray();
+			const ids = [...new Set([...from, ...to].map((e) => e.id))];
+			if (ids.length > 0) await db.canvasEdges.bulkDelete(ids);
+		}
+		if (items.length > 0) {
+			await db.canvasItems.bulkDelete(items.map((i) => i.id));
+		}
+	})();
 }
 
 /**
  * Merge remote bundle into local notes map.
  * Returns updated note list + conflict summary (LWW already chose winners).
+ * Applies tombstones so deletes propagate across devices.
  */
 export function mergeSyncBundle(
 	localNotes: Note[],
 	bundle: SyncBundle
 ): { notes: Note[]; summary: SyncMergeSummary } {
-	const byId = new Map(localNotes.map((n) => [n.id, n]));
+	const byId = new Map(localNotes.map((n) => [n.id, { ...n }]));
 	const results: MergeResult[] = [];
 	const conflicts: SyncConflict[] = [];
 	let added = 0;
 	let updated = 0;
 	let unchanged = 0;
+	let removed = 0;
 
 	for (const remote of bundle.notes) {
 		const local = byId.get(remote.id);
 		if (!local) {
 			byId.set(remote.id, { ...remote });
 			added += 1;
+			continue;
+		}
+		// Remote active note resurrects a locally soft-deleted note when newer.
+		if (local.deletedAt != null) {
+			if (remote.modified > local.deletedAt) {
+				const { deletedAt: _d, ...rest } = local;
+				const resurrected = { ...rest, ...remote };
+				delete resurrected.deletedAt;
+				byId.set(remote.id, resurrected);
+				updated += 1;
+			}
 			continue;
 		}
 		const merged = mergeNotesLww(local, remote);
@@ -269,21 +352,61 @@ export function mergeSyncBundle(
 		}
 	}
 
+	for (const tomb of bundle.tombstones ?? []) {
+		const local = byId.get(tomb.id);
+		if (!local) {
+			byId.set(tomb.id, {
+				id: tomb.id,
+				title: 'Deleted',
+				body: '',
+				folder: '',
+				tags: [],
+				created: tomb.deletedAt,
+				modified: tomb.deletedAt,
+				pinned: 0,
+				deletedAt: tomb.deletedAt
+			});
+			removed += 1;
+			continue;
+		}
+		if (local.deletedAt != null) {
+			if (tomb.deletedAt > local.deletedAt) {
+				byId.set(tomb.id, { ...local, deletedAt: tomb.deletedAt });
+			}
+			continue;
+		}
+		if (tomb.deletedAt >= local.modified) {
+			byId.set(tomb.id, {
+				...local,
+				deletedAt: tomb.deletedAt,
+				modified: Math.max(local.modified, tomb.deletedAt)
+			});
+			removed += 1;
+		}
+		// else: local is newer than tombstone — keep / drop tombstone on next export
+	}
+
+	const notes = [...byId.values()].sort((a, b) => b.modified - a.modified);
 	return {
-		notes: [...byId.values()].sort((a, b) => b.modified - a.modified),
-		summary: { added, updated, unchanged, results, conflicts }
+		notes,
+		summary: { added, updated, unchanged, removed, results, conflicts }
 	};
 }
 
+type DeskIdbApplyResult = DeskApplySummary & {
+	remappedDismissed: DismissedByCanvas;
+};
+
 /**
- * Apply remote desk onto local IndexedDB.
+ * Apply remote desk onto local IndexedDB only (no localStorage dismissals).
  * Canvases keyed by folder; items remapped to local canvas ids.
  * Newer canvas.modified wins placement for a note; otherwise keep local.
+ * Joins an ambient Dexie transaction when one already covers these tables.
  */
-export async function applyDeskSnapshot(
+async function applyDeskIdbSnapshot(
 	desk: DeskSnapshot,
 	knownNoteIds: Set<string>
-): Promise<DeskApplySummary> {
+): Promise<DeskIdbApplyResult> {
 	const localCanvases = await db.canvases.toArray();
 	const localByFolder = new Map(localCanvases.map((c) => [c.folder, c]));
 	/** folder → effective modified used for LWW placement */
@@ -402,15 +525,79 @@ export async function applyDeskSnapshot(
 		edgesUpserted += 1;
 	}
 
-	const remapped: DismissedByCanvas = {};
+	const remappedDismissed: DismissedByCanvas = {};
 	for (const [remoteCanvasId, noteIds] of Object.entries(desk.dismissed)) {
 		const localId = idMap.get(remoteCanvasId);
 		if (!localId) continue;
-		remapped[localId] = noteIds;
+		remappedDismissed[localId] = noteIds;
 	}
-	importDismissedMap(remapped);
 
-	return { canvasesUpserted, itemsUpserted, itemsSkipped, edgesUpserted, edgesSkipped };
+	return {
+		canvasesUpserted,
+		itemsUpserted,
+		itemsSkipped,
+		edgesUpserted,
+		edgesSkipped,
+		remappedDismissed
+	};
+}
+
+/**
+ * Apply remote desk onto local IndexedDB, then merge dismissals into localStorage.
+ */
+export async function applyDeskSnapshot(
+	desk: DeskSnapshot,
+	knownNoteIds: Set<string>
+): Promise<DeskApplySummary> {
+	const { remappedDismissed, ...summary } = await applyDeskIdbSnapshot(desk, knownNoteIds);
+	importDismissedMap(remappedDismissed);
+	return summary;
+}
+
+/**
+ * Persist merged notes + optional desk in one IndexedDB transaction.
+ * Soft-deleted notes are written (tombstones) and stripped from canvases.
+ * localStorage dismissals apply only after the transaction commits.
+ */
+export async function persistMergedSync(
+	plainNotes: Note[],
+	desk: DeskSnapshot | undefined,
+	knownNoteIds: Set<string>
+): Promise<{ desk?: DeskApplySummary }> {
+	let deskSummary: DeskApplySummary | undefined;
+	let remappedDismissed: DismissedByCanvas = {};
+	const deletedIds = plainNotes
+		.filter((n) => n.deletedAt != null)
+		.map((n) => n.id);
+
+	await db.transaction(
+		'rw',
+		db.notes,
+		db.canvases,
+		db.canvasItems,
+		db.canvasEdges,
+		async () => {
+			await db.notes.bulkPut(plainNotes);
+			for (const id of deletedIds) {
+				await stripCanvasForDeletedNote(id);
+			}
+			if (desk) {
+				const activeIds = new Set(
+					[...knownNoteIds].filter((id) => !deletedIds.includes(id))
+				);
+				const result = await applyDeskIdbSnapshot(desk, activeIds);
+				const { remappedDismissed: remapped, ...summary } = result;
+				deskSummary = summary;
+				remappedDismissed = remapped;
+			}
+		}
+	);
+
+	if (Object.keys(remappedDismissed).length > 0) {
+		importDismissedMap(remappedDismissed);
+	}
+
+	return { desk: deskSummary };
 }
 
 export async function downloadSyncBundle(

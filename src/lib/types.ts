@@ -22,6 +22,8 @@ export interface Note {
 	mashedFrom?: string[];
 	/** Sticky body alignment (edit + preview). Defaults to left when unset. */
 	textAlign?: TextAlign;
+	/** Soft-delete timestamp for sync tombstones. Active notes omit this. */
+	deletedAt?: number;
 }
 
 export interface Folder {
