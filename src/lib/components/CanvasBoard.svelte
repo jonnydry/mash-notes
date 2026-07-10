@@ -18,7 +18,7 @@
 		snapSize,
 		viewCenterPlacement
 	} from '$lib/canvas-geom';
-	import { Pin, Folder, Tag, Minimize2, Maximize2, X, FileUp } from 'lucide-svelte';
+	import { Pin, Folder, Tag, Minimize2, Maximize2, X, FileUp, FileText } from 'lucide-svelte';
 	import StickyEditor from '$lib/components/StickyEditor.svelte';
 	import { buildLinkSummaryMap } from '$lib/links';
 	import { isPermanentMashWelcomeNote, MASH_SPOON_LOGO } from '$lib/canvas-empty-state';
@@ -2063,6 +2063,16 @@
 							{:else}
 								{notePreview(note.body, 220)}
 							{/if}
+							{#if note.source?.kind === 'pdf'}
+								<div
+									class="mt-1.5 flex items-center gap-1 border-t pt-1 text-[9px]"
+									style="border-color: var(--mash-card-edge); color: var(--mash-accent);"
+									title="Captured from {note.source.title}, page {note.source.page}"
+								>
+									<FileText class="h-2.5 w-2.5 shrink-0" />
+									<span class="truncate">{note.source.title} · p. {note.source.page}</span>
+								</div>
+							{/if}
 						</div>
 					{/if}
 					<div
@@ -2289,7 +2299,7 @@
 				</p>
 				{#if isFileDragOver}
 					<p class="mash-empty-copy mt-1.5 max-w-[18rem] text-sm">
-						Markdown, text, note JSON, or a Mash sync bundle
+						PDF, Markdown, text, note JSON, or a Mash sync bundle
 					</p>
 				{:else if !isExternalDragOver}
 					<p class="mash-empty-copy mt-1.5 max-w-[16rem] text-sm">
@@ -2306,7 +2316,7 @@
 				<div class="mash-drop-file-prompt flex flex-col items-center rounded-2xl border px-6 py-5 text-center shadow-lg">
 					<FileUp size={28} strokeWidth={1.8} aria-hidden="true" />
 					<p class="mash-display mt-2 text-lg font-medium">Drop files to import</p>
-					<p class="mt-1 text-xs">.md, .markdown, .txt, or Mash .json</p>
+					<p class="mt-1 text-xs">.pdf, .md, .markdown, .txt, or Mash .json</p>
 				</div>
 			{/if}
 		</div>

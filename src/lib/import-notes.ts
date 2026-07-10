@@ -51,6 +51,18 @@ export function normalizeImportedNote(raw: unknown, index: number): Note | strin
 		textAlignRaw === 'left' || textAlignRaw === 'center' || textAlignRaw === 'right'
 			? textAlignRaw
 			: undefined;
+	const sourceRaw = isRecord(raw.source) ? raw.source : null;
+	const source =
+		sourceRaw?.kind === 'pdf' &&
+		typeof sourceRaw.title === 'string' &&
+		typeof sourceRaw.page === 'number' &&
+		Number.isFinite(sourceRaw.page)
+			? {
+					kind: 'pdf' as const,
+					title: sourceRaw.title.trim().slice(0, 300),
+					page: Math.max(1, Math.floor(sourceRaw.page))
+				}
+			: undefined;
 	return {
 		id,
 		title,
@@ -62,7 +74,8 @@ export function normalizeImportedNote(raw: unknown, index: number): Note | strin
 		pinned,
 		links,
 		mashedFrom,
-		textAlign
+		textAlign,
+		source
 	};
 }
 

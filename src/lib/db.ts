@@ -124,6 +124,7 @@ export async function createNote(partial: {
 	mashedFrom?: string[];
 	pinned?: 0 | 1;
 	textAlign?: Note['textAlign'];
+	source?: Note['source'];
 }): Promise<Note> {
 	const note: Note = {
 		id: newId(),
@@ -136,7 +137,8 @@ export async function createNote(partial: {
 		created: Date.now(),
 		modified: Date.now(),
 		pinned: partial.pinned === 1 ? 1 : 0,
-		textAlign: partial.textAlign
+		textAlign: partial.textAlign,
+		source: partial.source
 	};
 
 	await db.notes.add(note);

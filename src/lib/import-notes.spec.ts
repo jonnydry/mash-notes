@@ -46,4 +46,25 @@ describe('import-notes', () => {
 		expect(result.ok).toBe(true);
 		if (result.ok) expect(result.notes[0].textAlign).toBe('center');
 	});
+
+	it('preserves validated PDF provenance', () => {
+		const json = JSON.stringify([
+			{
+				id: 'pdf-note',
+				title: 'Useful excerpt',
+				body: 'Selected text',
+				folder: '',
+				tags: ['pdf-clipping'],
+				created: 1,
+				modified: 2,
+				pinned: 0,
+				source: { kind: 'pdf', title: 'paper.pdf', page: 12 }
+			}
+		]);
+		const result = parseNotesJson(json);
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(result.notes[0].source).toEqual({ kind: 'pdf', title: 'paper.pdf', page: 12 });
+		}
+	});
 });

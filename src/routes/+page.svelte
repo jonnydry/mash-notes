@@ -22,7 +22,8 @@
 		StretchHorizontal,
 		StretchVertical,
 		LayoutGrid,
-		Columns2
+		Columns2,
+		BookOpen
 	} from 'lucide-svelte';
 	import MashDock from '$lib/components/MashDock.svelte';
 	import PeelScanner from '$lib/components/PeelScanner.svelte';
@@ -33,6 +34,7 @@
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import ShortcutsModal from '$lib/components/ShortcutsModal.svelte';
 	import SpacesOverview from '$lib/components/SpacesOverview.svelte';
+	import PdfReader from '$lib/components/PdfReader.svelte';
 	import { extractWikilinks } from '$lib/markdown';
 	import { combineNotes, exportNotesJson } from '$lib/mash';
 	import { clearCanvasViewport } from '$lib/viewport';
@@ -70,6 +72,11 @@
 	import type { PeelConflictRow } from '$lib/components/PeelScanner.svelte';
 	import { shouldShowCanvasEmptyState } from '$lib/canvas-empty-state';
 	import { detectJsonImportKind, splitExternalImportFiles } from '$lib/external-file-drop';
+	import {
+		normalizePdfExcerpt,
+		pdfClippingTitle,
+		type PdfClipping
+	} from '$lib/pdf-clipping';
 
 	let actionToast = $state('');
 	let toastTimer: ReturnType<typeof setTimeout> | null = null;
@@ -122,6 +129,11 @@
 	let importInputEl: HTMLInputElement | undefined = $state();
 	let markdownImportInputEl: HTMLInputElement | undefined = $state();
 	let syncInputEl: HTMLInputElement | undefined = $state();
+	let pdfInputEl: HTMLInputElement | undefined = $state();
+	let pdfReaderFile: File | null = $state(null);
+	let pdfReaderOpen = $state(false);
+	let pdfReaderView = $state({ page: 1, zoom: 1 });
+	let pdfClippings = $state<PdfClipping[]>([]);
 
 	function flashToast(msg: string, ms = 1600) {
 		actionToast = msg;
@@ -296,11 +308,76 @@
 	});
 	canvasHolder.session = canvas;
 
+	function openPdfReader(file: File) {
+		pdfReaderFile = file;
+		pdfReaderOpen = true;
+		pdfReaderView = { page: 1, zoom: 1 };
+		pdfClippings = [];
+		showPalette = false;
+		settingsOpen = false;
+		peel.closePeel(true);
+		library.clearSelection();
+		if (canvas.expandedNoteId) canvas.collapseSticky();
+		if (editorStage.open) editorStage.dismissAll();
+	}
+
+	function resumePdfReader() {
+		if (!pdfReaderFile) return;
+		pdfReaderOpen = true;
+		settingsOpen = false;
+		peel.closePeel(true);
+		library.clearSelection();
+		if (canvas.expandedNoteId) canvas.collapseSticky();
+		if (editorStage.open) editorStage.dismissAll();
+	}
+
+	function hidePdfReader() {
+		pdfReaderOpen = false;
+	}
+
+	async function savePdfClipping(excerpt: { text: string; page: number }) {
+		if (!pdfReaderFile) return;
+		const text = normalizePdfExcerpt(excerpt.text);
+		if (!text) return;
+		const note = await createNote({
+			title: pdfClippingTitle(text),
+			body: text,
+			folder: peel.canvasFolder,
+			tags: ['pdf-clipping'],
+			links: [],
+			source: {
+				kind: 'pdf',
+				title: pdfReaderFile.name,
+				page: excerpt.page
+			}
+		});
+		addNoteToSearch(note);
+		library.notes = [note, ...library.notes];
+		pdfClippings = [
+			...pdfClippings,
+			{ id: crypto.randomUUID(), noteId: note.id, text, page: excerpt.page }
+		];
+		flashToast(`Saved excerpt from page ${excerpt.page}`);
+	}
+
+	async function openPdfClippingsOnCanvas(noteIds: string[]) {
+		if (noteIds.length === 0) return;
+		const spawn = canvas.canvasBoard?.getSpawnPoint(COLLAPSED_CARD, canvas.canvasItems.length) ?? {
+			x: 80,
+			y: 80
+		};
+		pdfReaderOpen = false;
+		await tick();
+		await canvas.handleDropNotes(noteIds, spawn.x, spawn.y);
+		flashToast(`Opened ${noteIds.length} clipping${noteIds.length === 1 ? '' : 's'} on canvas`);
+	}
+
 	async function handleDroppedFiles(files: File[], x: number, y: number) {
 		const batch = splitExternalImportFiles(files);
-		const supportedCount = batch.noteTextFiles.length + batch.jsonFiles.length;
+		const supportedCount =
+			batch.noteTextFiles.length + batch.jsonFiles.length + batch.pdfFiles.length;
 		if (supportedCount === 0) {
-			flashToast('Drop .md, .markdown, .txt, or Mash .json files', 3000);
+			flashToast('Drop a PDF, text note, or Mash JSON file', 3000);
 			return;
 		}
 
@@ -310,6 +387,13 @@
 		let importedSyncCount = 0;
 		let failedCount = 0;
 		let waitingForConfirmation = false;
+		let openedPdfName = '';
+
+		if (batch.pdfFiles.length > 0) {
+			openPdfReader(batch.pdfFiles[0]!);
+			openedPdfName = batch.pdfFiles[0]!.name;
+			if (batch.pdfFiles.length > 1) failedCount += batch.pdfFiles.length - 1;
+		}
 
 		if (batch.noteTextFiles.length > 0) {
 			const result = await library.importMarkdownFiles(batch.noteTextFiles, {
@@ -366,6 +450,7 @@
 
 		const skippedCount = batch.unsupportedFiles.length + failedCount;
 		const parts: string[] = [];
+		if (openedPdfName) parts.push(`Opened ${openedPdfName}`);
 		if (uniqueNoteIds.length > 0) {
 			parts.push(
 				`Imported ${uniqueNoteIds.length} note${uniqueNoteIds.length === 1 ? '' : 's'} from ${importedFileCount} file${importedFileCount === 1 ? '' : 's'}`
@@ -830,6 +915,10 @@
 			(document.getElementById('global-search') as HTMLInputElement)?.focus();
 		}
 		if (e.key === 'Escape') {
+			if (pdfReaderOpen) {
+				hidePdfReader();
+				return;
+			}
 			if (confirmDialog) {
 				confirmDialog = null;
 				return;
@@ -878,6 +967,14 @@
 
 	const paletteActions = [
 		{ label: 'New note', action: handleNewNote, shortcut: '⌘N' },
+		{
+			label: 'Open PDF reader…',
+			action: () => {
+				showPalette = false;
+				pdfInputEl?.click();
+			},
+			shortcut: ''
+		},
 		{
 			label: 'Show Screenplay…',
 			action: () => {
@@ -1181,6 +1278,17 @@
 		<div class="flex items-center gap-2">
 			<button
 				type="button"
+				class="mash-reader-launch mash-focus"
+				class:is-active={pdfReaderOpen}
+				class:has-session={Boolean(pdfReaderFile) && !pdfReaderOpen}
+				onclick={() => (pdfReaderFile ? resumePdfReader() : pdfInputEl?.click())}
+				aria-label={pdfReaderFile ? 'Return to PDF reader' : 'Open PDF reader'}
+				title={pdfReaderFile ? `Return to ${pdfReaderFile.name}` : 'Open a PDF and capture excerpts'}
+			>
+				<BookOpen class="h-[18px] w-[18px]" strokeWidth={1.9} />
+			</button>
+			<button
+				type="button"
 				class="mash-theme-toggle mash-focus"
 				onclick={() => theme.toggle()}
 				aria-label={theme.mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
@@ -1241,8 +1349,9 @@
 	<!-- Full-bleed canvas stage -->
 	<div class="relative flex min-h-0 flex-1">
 		<div class="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-			<div
-				class="mash-canvas-title-chip is-spaces-trigger absolute top-3 left-[4.75rem] z-10 rounded-full border px-3 py-1 text-[10px] backdrop-blur-sm"
+			{#if !pdfReaderOpen}
+				<div
+					class="mash-canvas-title-chip is-spaces-trigger absolute top-3 left-[4.75rem] z-10 rounded-full border px-3 py-1 text-[10px] backdrop-blur-sm"
 				class:pointer-events-none={spacesOverviewOpen}
 				style="border-color: var(--mash-chrome-chip-border); background: var(--mash-chrome-chip-soft); color: var(--mash-chrome-muted);"
 				role="button"
@@ -1269,9 +1378,22 @@
 						{/each}
 					</span>
 				{/if}
-			</div>
+				</div>
+			{/if}
 
 			<div class="relative min-h-0 flex-1 overflow-hidden">
+				{#if pdfReaderFile && !pdfReaderOpen}
+					<button
+						type="button"
+						class="mash-reader-return mash-focus"
+						onclick={resumePdfReader}
+						title={`Return to ${pdfReaderFile.name}`}
+					>
+						<BookOpen class="h-4 w-4 shrink-0" strokeWidth={2} />
+						<span>Return to PDF</span>
+						<small>{pdfReaderFile.name}</small>
+					</button>
+				{/if}
 				<CanvasBoard
 					bind:this={canvas.canvasBoard}
 					items={canvas.canvasItems}
@@ -1338,18 +1460,35 @@
 					onOpenShortcuts={() => (shortcutsOpen = true)}
 					bind:snapEnabled
 				/>
-				<EditorStage
-					stage={editorStage}
-					notesById={library.notesById}
-					canvasNotes={canvas.canvasItems
-						.map((i) => library.notesById.get(i.noteId))
-						.filter((n): n is Note => Boolean(n))}
-					folders={library.uniqueFolders}
-					onTitleChange={library.handleStickyTitleChange}
-					onBodyChange={library.handleStickyBodyChange}
-					onMetaChange={library.handleStickyMetaChange}
-					onWikilink={(target) => void openWikilink(target)}
-				/>
+				{#if pdfReaderFile}
+					{#key pdfReaderFile}
+						<PdfReader
+							file={pdfReaderFile}
+							clippings={pdfClippings}
+							open={pdfReaderOpen}
+							initialPage={pdfReaderView.page}
+							initialZoom={pdfReaderView.zoom}
+							onClose={hidePdfReader}
+							onClip={savePdfClipping}
+							onOpenClippings={openPdfClippingsOnCanvas}
+							onViewChange={(view) => (pdfReaderView = view)}
+						/>
+					{/key}
+				{/if}
+				{#if !pdfReaderOpen}
+					<EditorStage
+						stage={editorStage}
+						notesById={library.notesById}
+						canvasNotes={canvas.canvasItems
+							.map((i) => library.notesById.get(i.noteId))
+							.filter((n): n is Note => Boolean(n))}
+						folders={library.uniqueFolders}
+						onTitleChange={library.handleStickyTitleChange}
+						onBodyChange={library.handleStickyBodyChange}
+						onMetaChange={library.handleStickyMetaChange}
+						onWikilink={(target) => void openWikilink(target)}
+					/>
+				{/if}
 			</div>
 		</div>
 
@@ -1476,7 +1615,7 @@
 			</div>
 		{/if}
 
-		{#if library.selectionIds.length > 0}
+		{#if library.selectionIds.length > 0 && !pdfReaderOpen}
 			<div
 				class="mash-selection-bar absolute bottom-5 left-1/2 z-20 flex -translate-x-1/2 flex-col items-center gap-2"
 				class:mash-selection-bar--peel={peel.peelOpen || settingsOpen}
@@ -1883,6 +2022,19 @@
 		accept="application/json,.json"
 		class="hidden"
 		onchange={(e) => void library.handleImportFile(e)}
+	/>
+	<input
+		bind:this={pdfInputEl}
+		data-testid="pdf-reader-input"
+		type="file"
+		accept="application/pdf,.pdf"
+		class="hidden"
+		onchange={(e) => {
+			const input = e.currentTarget as HTMLInputElement;
+			const file = input.files?.[0];
+			input.value = '';
+			if (file) openPdfReader(file);
+		}}
 	/>
 	<input
 		bind:this={markdownImportInputEl}

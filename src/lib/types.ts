@@ -8,6 +8,12 @@
 /** Body text alignment in the sticky editor / preview. */
 export type TextAlign = 'left' | 'center' | 'right';
 
+export type NoteSource = {
+	kind: 'pdf';
+	title: string;
+	page: number;
+};
+
 export interface Note {
 	id: string;
 	title: string;
@@ -22,6 +28,8 @@ export interface Note {
 	mashedFrom?: string[];
 	/** Sticky body alignment (edit + preview). Defaults to left when unset. */
 	textAlign?: TextAlign;
+	/** Origin metadata for captured source material such as PDF excerpts. */
+	source?: NoteSource;
 	/** Soft-delete timestamp for sync tombstones. Active notes omit this. */
 	deletedAt?: number;
 }

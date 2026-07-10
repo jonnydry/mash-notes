@@ -349,7 +349,8 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 				tags: note.tags,
 				pinned: note.pinned,
 				links: note.links,
-				textAlign: note.textAlign
+				textAlign: note.textAlign,
+				source: note.source
 			};
 			writes.push(syncNoteUpdateAsync(noteId, patch));
 			updateNoteInSearch(
@@ -614,6 +615,13 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 			(localValue === 'left' || localValue === 'center' || localValue === 'right')
 		) {
 			updated = { ...target, textAlign: localValue, modified: Date.now() };
+		} else if (
+			field === 'source' &&
+			typeof localValue === 'object' &&
+			localValue !== null &&
+			(localValue as { kind?: unknown }).kind === 'pdf'
+		) {
+			updated = { ...target, source: localValue as Note['source'], modified: Date.now() };
 		} else {
 			return false;
 		}

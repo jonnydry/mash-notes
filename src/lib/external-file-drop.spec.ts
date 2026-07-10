@@ -16,6 +16,7 @@ describe('external file drops', () => {
 		expect(externalImportKind(file('scratch.txt', 'text/plain'))).toBe('note-text');
 		expect(externalImportKind(file('notes.json'))).toBe('json');
 		expect(externalImportKind(file('export', 'application/json'))).toBe('json');
+		expect(externalImportKind(file('paper.pdf', 'application/pdf'))).toBe('pdf');
 		expect(externalImportKind(file('photo.png', 'image/png'))).toBe('unsupported');
 	});
 
@@ -27,7 +28,8 @@ describe('external file drops', () => {
 		expect(splitExternalImportFiles([a, b, c, d])).toEqual({
 			noteTextFiles: [a, d],
 			jsonFiles: [b],
-			unsupportedFiles: [c]
+			pdfFiles: [c],
+			unsupportedFiles: []
 		});
 	});
 
