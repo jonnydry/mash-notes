@@ -9,6 +9,10 @@ export default defineConfig({
 		sveltekit(),
 		SvelteKitPWA({
 			registerType: 'autoUpdate',
+			kit: {
+				adapterFallback: 'index.html',
+				spa: true
+			},
 			manifest: {
 				name: 'Mash',
 				short_name: 'Mash',
@@ -29,7 +33,8 @@ export default defineConfig({
 				]
 			},
 			workbox: {
-				globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}']
+				globPatterns: ['client/**/*.{js,mjs,css,html,ico,png,svg,webp,webmanifest,woff,woff2}'],
+				modifyURLPrefix: { 'client/': '' }
 			}
 		})
 	],

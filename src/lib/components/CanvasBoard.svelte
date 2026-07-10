@@ -30,7 +30,6 @@
 		listFlowSequences
 	} from '$lib/canvas-flow';
 	import { printSequenceAsPdf } from '$lib/mash';
-	import { exportSequencePdf as downloadSequencePdf } from '$lib/sequence-pdf';
 	import {
 		detectFillOrSnapZone,
 		stageContentRect,
@@ -405,6 +404,7 @@
 		const payload = notesForSequence(idx);
 		if (!payload) return;
 		try {
+			const { exportSequencePdf: downloadSequencePdf } = await import('$lib/sequence-pdf');
 			const ok = await downloadSequencePdf(payload.notes, payload.title);
 			if (!ok) {
 				console.error('Export PDF failed');
