@@ -132,6 +132,22 @@
 		onMove(e);
 	}
 
+	function onSplitterKeydown(e: KeyboardEvent, axis: 'h' | 'v') {
+		const current = axis === 'h' ? stage.splitH : stage.splitV;
+		const step = e.shiftKey ? 0.05 : 0.01;
+		let next: number | null = null;
+		if (e.key === 'Home') next = 0.2;
+		else if (e.key === 'End') next = 0.8;
+		else if (axis === 'h' && e.key === 'ArrowLeft') next = current - step;
+		else if (axis === 'h' && e.key === 'ArrowRight') next = current + step;
+		else if (axis === 'v' && e.key === 'ArrowUp') next = current - step;
+		else if (axis === 'v' && e.key === 'ArrowDown') next = current + step;
+		if (next === null) return;
+		e.preventDefault();
+		if (axis === 'h') stage.setSplitH(next);
+		else stage.setSplitV(next);
+	}
+
 	function slotStyle(pane: EditorPane): string {
 		const gap = 8;
 		const layout = stage.layout;
@@ -252,18 +268,12 @@
 						</span>
 					</p>
 					{#if pickerNotes.length > 0}
-						<ul
-							class="mash-empty-half-list"
-							role="listbox"
-							aria-label="Notes on this desk"
-							onwheel={(e) => e.stopPropagation()}
-						>
+						<ul class="mash-empty-half-list" onwheel={(e) => e.stopPropagation()}>
 							{#each pickerNotes as note (note.id)}
 								<li>
 									<button
 										type="button"
 										class="mash-empty-half-item"
-										role="option"
 										onclick={() => pickForEmptyHalf(note.id)}
 									>
 										<span class="mash-empty-half-item-title">
@@ -423,6 +433,9 @@
 		{/each}
 
 		{#if stage.layout === 'split-h' || stage.layout === 'waiting-h'}
+			<!-- The ARIA separator is interactive when focusable and implements arrow-key resizing. -->
+			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+			<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 			<div
 				class="mash-pane-splitter is-h"
 				class:is-dragging={splitterAxis === 'h'}
@@ -431,10 +444,16 @@
 				tabindex="0"
 				aria-label="Resize panes"
 				aria-orientation="vertical"
+				aria-valuemin="20"
+				aria-valuemax="80"
 				aria-valuenow={Math.round(stage.splitH * 100)}
 				onpointerdown={(e) => startSplitter(e, 'h')}
+				onkeydown={(e) => onSplitterKeydown(e, 'h')}
 			></div>
 		{:else if stage.layout === 'split-v' || stage.layout === 'waiting-v'}
+			<!-- The ARIA separator is interactive when focusable and implements arrow-key resizing. -->
+			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+			<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 			<div
 				class="mash-pane-splitter is-v"
 				class:is-dragging={splitterAxis === 'v'}
@@ -443,8 +462,11 @@
 				tabindex="0"
 				aria-label="Resize panes"
 				aria-orientation="horizontal"
+				aria-valuemin="20"
+				aria-valuemax="80"
 				aria-valuenow={Math.round(stage.splitV * 100)}
 				onpointerdown={(e) => startSplitter(e, 'v')}
+				onkeydown={(e) => onSplitterKeydown(e, 'v')}
 			></div>
 		{/if}
 

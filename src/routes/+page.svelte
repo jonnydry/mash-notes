@@ -1219,9 +1219,13 @@
 					onkeydown={onGlobalSearchKeydown}
 					class="mash-focus mash-header-search w-full rounded-lg border py-2 pr-14 pl-9 text-sm transition-colors"
 					style="border-color: var(--mash-tray-edge); color: var(--mash-ink);"
+					role="combobox"
 					aria-autocomplete="list"
 					aria-expanded={searchDropdownOpen && Boolean(peel.searchQuery.trim())}
 					aria-controls="mash-header-search-results"
+					aria-activedescendant={searchDropdownOpen && headerSearchResults[searchHighlight]
+						? `mash-search-result-${headerSearchResults[searchHighlight].id}`
+						: undefined}
 				/>
 				<kbd
 					class="pointer-events-none absolute top-1/2 right-2.5 hidden -translate-y-1/2 items-center gap-0.5 rounded border px-1.5 py-0.5 text-[10px] font-medium sm:flex"

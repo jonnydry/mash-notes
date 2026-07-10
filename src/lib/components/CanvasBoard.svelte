@@ -1688,13 +1688,16 @@
 				{@const pageBadge = flowBadges.get(item.id)}
 				{@const isPrimaryFocus = primaryFocusNoteId === note.id}
 				{@const endSeqId = flowEndItemToSeqId.get(item.id)}
+				<!-- Canvas cards are focus-managed composite widgets inside the application surface. -->
+				<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+				<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 				<div
 					data-canvas-card
 					data-note-id={note.id}
 					data-system-welcome={isPermanentWelcome ? 'true' : undefined}
 					role="group"
-					aria-label={note.title}
-					aria-selected={selected}
+					aria-label={`${note.title || 'Untitled'}${selected ? ', selected' : ''}`}
+					aria-roledescription="canvas card"
 					tabindex={isPrimaryFocus ? 0 : -1}
 					data-expanded={expanded ? 'true' : undefined}
 					class="mash-note-card absolute flex flex-col rounded-xl {selected

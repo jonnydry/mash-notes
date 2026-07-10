@@ -44,11 +44,13 @@
 			{#each results as result, i (result.id)}
 				{@const note = notesById.get(result.id)}
 				<div
+					id={`mash-search-result-${result.id}`}
 					class="mash-search-dropdown-row mash-row-hover
 						{draggingId === result.id ? 'is-dragging' : ''}
 						{i === highlightIndex ? 'mash-row-active' : ''}"
 					role="option"
 					aria-selected={i === highlightIndex}
+					tabindex="-1"
 					onmouseenter={() => onHighlight(i)}
 				>
 					<button
