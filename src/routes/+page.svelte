@@ -68,6 +68,8 @@
 		type SnapZone
 	} from '$lib/stores/editor-stage.svelte';
 	import type { PeelConflictRow } from '$lib/components/PeelScanner.svelte';
+	import { shouldShowCanvasEmptyState } from '$lib/canvas-empty-state';
+	import { detectJsonImportKind, splitExternalImportFiles } from '$lib/external-file-drop';
 
 	let actionToast = $state('');
 	let toastTimer: ReturnType<typeof setTimeout> | null = null;
@@ -294,6 +296,93 @@
 	});
 	canvasHolder.session = canvas;
 
+	async function handleDroppedFiles(files: File[], x: number, y: number) {
+		const batch = splitExternalImportFiles(files);
+		const supportedCount = batch.noteTextFiles.length + batch.jsonFiles.length;
+		if (supportedCount === 0) {
+			flashToast('Drop .md, .markdown, .txt, or Mash .json files', 3000);
+			return;
+		}
+
+		flashToast(`Importing ${supportedCount} file${supportedCount === 1 ? '' : 's'}…`, 5000);
+		const importedNoteIds: string[] = [];
+		let importedFileCount = 0;
+		let importedSyncCount = 0;
+		let failedCount = 0;
+		let waitingForConfirmation = false;
+
+		if (batch.noteTextFiles.length > 0) {
+			const result = await library.importMarkdownFiles(batch.noteTextFiles, {
+				allowPlainText: true,
+				silent: true
+			});
+			if (result.ok && result.notes) {
+				importedNoteIds.push(...result.notes.map((note) => note.id));
+				importedFileCount += batch.noteTextFiles.length;
+			} else {
+				failedCount += batch.noteTextFiles.length;
+			}
+		}
+
+		for (const file of batch.jsonFiles) {
+			try {
+				if (file.size > 8_000_000) {
+					failedCount++;
+					continue;
+				}
+				const text = await file.text();
+				const kind = detectJsonImportKind(text);
+				if (kind === 'notes') {
+					const result = await library.importNotesText(text, { silent: true });
+					if (result.ok && result.notes) {
+						importedNoteIds.push(...result.notes.map((note) => note.id));
+						importedFileCount++;
+					} else {
+						failedCount++;
+					}
+				} else if (kind === 'sync') {
+					const result = await library.importSyncText(text);
+					if (result.ok) {
+						importedSyncCount++;
+						refreshSyncHygiene();
+					} else if (result.message === 'Waiting for stale-import confirmation') {
+						waitingForConfirmation = true;
+					} else {
+						failedCount++;
+					}
+				} else {
+					failedCount++;
+				}
+			} catch (error) {
+				console.error(error);
+				failedCount++;
+			}
+		}
+
+		const uniqueNoteIds = [...new Set(importedNoteIds)];
+		if (uniqueNoteIds.length > 0) {
+			await canvas.handleDropNotes(uniqueNoteIds, x, y);
+		}
+
+		const skippedCount = batch.unsupportedFiles.length + failedCount;
+		const parts: string[] = [];
+		if (uniqueNoteIds.length > 0) {
+			parts.push(
+				`Imported ${uniqueNoteIds.length} note${uniqueNoteIds.length === 1 ? '' : 's'} from ${importedFileCount} file${importedFileCount === 1 ? '' : 's'}`
+			);
+		}
+		if (importedSyncCount > 0) {
+			parts.push(
+				`Imported ${importedSyncCount} sync bundle${importedSyncCount === 1 ? '' : 's'}`
+			);
+		}
+		if (skippedCount > 0) {
+			parts.push(`Skipped ${skippedCount} unsupported or invalid`);
+		}
+		if (parts.length > 0) flashToast(parts.join(' · '), 3600);
+		else if (!waitingForConfirmation) flashToast('No supported files imported', 3600);
+	}
+
 	/** Desk/folders/tags peels sit above the stage and steal clicks — dismiss unless Linked. */
 	function dismissPeelForStage() {
 		if (peel.peelOpen && peel.peelMode !== 'linked') {
@@ -329,6 +418,13 @@
 	}
 
 	let filteredNotes = $derived(filterNotes(library.notes, peel.currentFilter, ''));
+	let showCanvasEmptyState = $derived(
+		shouldShowCanvasEmptyState(
+			canvas.canvasItems,
+			library.notesById,
+			peel.currentFilter.type === 'pinned'
+		)
+	);
 	let peelNotes = $derived(filterPeelNotes(filteredNotes, peel.peelFilterText));
 	/** Screenplay mode: any open folder/pinned board besides root Desk. */
 	let screenplayActive = $derived(spaces.openKeys.length > 1);
@@ -1206,6 +1302,7 @@
 								}
 							: undefined
 					}
+					showEmptyState={showCanvasEmptyState}
 					onSelect={canvas.handleCanvasSelect}
 					onSelectNotes={canvas.handleCanvasSelectNotes}
 					onMove={canvas.handleCanvasMove}
@@ -1228,6 +1325,7 @@
 					onOpenLinks={peel.openLinkedPeel}
 					folders={library.uniqueFolders}
 					onDropNotes={canvas.handleDropNotes}
+					onDropFiles={handleDroppedFiles}
 					onMashCards={handleMashCards}
 					onBlankPointerDown={() => {
 						peel.closePeel();

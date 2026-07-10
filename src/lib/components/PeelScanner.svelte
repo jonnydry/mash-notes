@@ -3,6 +3,7 @@
 	import VirtualList from '$lib/components/VirtualList.svelte';
 	import { formatNoteTimestamp, notePreview } from '$lib/format';
 	import { buildFolderTree, flattenFolderTree } from '$lib/folder-tree';
+	import { isPermanentMashWelcomeNote, MASH_SPOON_LOGO } from '$lib/canvas-empty-state';
 	import {
 		GripVertical,
 		Pin,
@@ -383,6 +384,7 @@
 				<VirtualList items={notes} itemHeight={80}>
 					{#snippet children(note)}
 						{@const isSelected = selectedIds.has(note.id)}
+						{@const isPermanentWelcome = isPermanentMashWelcomeNote(note)}
 						<div
 							class="mash-tray-chip group flex h-full w-full border-b px-2.5 py-2 text-left
 								{draggingId === note.id ? 'is-dragging' : ''}
@@ -410,6 +412,13 @@
 							>
 								<GripVertical class="h-3.5 w-3.5" />
 							</button>
+							{#if isPermanentWelcome}
+								<img
+									src={MASH_SPOON_LOGO}
+									alt="Spoon, the Mash mascot"
+									class="h-12 w-12 shrink-0 self-center object-contain drop-shadow-sm"
+								/>
+							{/if}
 							<button
 								type="button"
 								class="min-w-0 flex-1 text-left"

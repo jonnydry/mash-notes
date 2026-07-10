@@ -631,21 +631,20 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 		return true;
 	}
 
-	async function handleImportFile(e: Event) {
-		const input = e.currentTarget as HTMLInputElement;
-		const file = input.files?.[0];
-		input.value = '';
-		if (!file) return;
+	async function importNotesText(
+		text: string,
+		importOpts?: { silent?: boolean }
+	): Promise<{ ok: boolean; message: string; notes?: Note[] }> {
 		try {
-			const text = await file.text();
 			if (text.length > 8_000_000) {
-				opts.flashToast('Import file too large');
-				return;
+				const message = 'Import file too large';
+				if (!importOpts?.silent) opts.flashToast(message);
+				return { ok: false, message };
 			}
 			const result = parseNotesJson(text);
 			if (!result.ok) {
-				opts.flashToast(result.error);
-				return;
+				if (!importOpts?.silent) opts.flashToast(result.error);
+				return { ok: false, message: result.error };
 			}
 			let added = 0;
 			for (const note of result.notes) {
@@ -667,33 +666,46 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 					added++;
 				}
 			}
-			opts.flashToast(
+			const message =
 				added === result.notes.length
 					? `Imported ${added} notes`
-					: `Imported ${result.notes.length} notes (${added} new)`
-			);
+					: `Imported ${result.notes.length} notes (${added} new)`;
+			if (!importOpts?.silent) opts.flashToast(message);
+			return { ok: true, message, notes: result.notes };
 		} catch (err) {
 			console.error(err);
-			opts.flashToast('Import failed');
+			const message = 'Import failed';
+			if (!importOpts?.silent) opts.flashToast(message);
+			return { ok: false, message };
 		}
+	}
+
+	async function handleImportFile(e: Event) {
+		const input = e.currentTarget as HTMLInputElement;
+		const file = input.files?.[0];
+		input.value = '';
+		if (!file) return;
+		await importNotesText(await file.text());
 	}
 
 	/**
 	 * Import an Obsidian vault folder or Bear markdown export (multi-file / directory).
 	 * Always creates new notes (new UUIDs) — does not merge by path.
 	 */
-	async function handleMarkdownImport(e: Event) {
-		const input = e.currentTarget as HTMLInputElement;
-		const list = input.files;
-		input.value = '';
-		if (!list || list.length === 0) return;
+	async function importMarkdownFiles(
+		list: FileList | File[],
+		importOpts?: { allowPlainText?: boolean; silent?: boolean }
+	): Promise<{ ok: boolean; message: string; notes?: Note[] }> {
+		if (list.length === 0) return { ok: false, message: 'No files selected' };
 		try {
-			opts.flashToast('Importing markdown…');
-			const files = await filesFromFileList(list);
+			if (!importOpts?.silent) opts.flashToast('Importing markdown…');
+			const files = await filesFromFileList(list, {
+				allowPlainText: importOpts?.allowPlainText
+			});
 			const result = parseMarkdownVault(files);
 			if (!result.ok) {
-				opts.flashToast(result.error);
-				return;
+				if (!importOpts?.silent) opts.flashToast(result.error);
+				return { ok: false, message: result.error };
 			}
 
 			const CHUNK = 100;
@@ -708,11 +720,23 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 
 			const skipHint =
 				result.skipped > 0 ? ` (skipped ${result.skipped} non-markdown)` : '';
-			opts.flashToast(`Imported ${result.notes.length} markdown notes${skipHint}`);
+			const message = `Imported ${result.notes.length} markdown notes${skipHint}`;
+			if (!importOpts?.silent) opts.flashToast(message);
+			return { ok: true, message, notes: result.notes };
 		} catch (err) {
 			console.error(err);
-			opts.flashToast('Markdown import failed');
+			const message = 'Markdown import failed';
+			if (!importOpts?.silent) opts.flashToast(message);
+			return { ok: false, message };
 		}
+	}
+
+	async function handleMarkdownImport(e: Event) {
+		const input = e.currentTarget as HTMLInputElement;
+		const list = input.files;
+		input.value = '';
+		if (!list || list.length === 0) return;
+		await importMarkdownFiles(list);
 	}
 
 	async function handleDelete() {
@@ -921,7 +945,9 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 		flushPendingSaveAsync,
 		handleVisibilityChange,
 		handleImportFile,
+		importNotesText,
 		handleMarkdownImport,
+		importMarkdownFiles,
 		handleSyncFile,
 		importSyncText,
 		restoreConflictLocal

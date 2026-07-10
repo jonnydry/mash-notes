@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
 	extractInlineTags,
+	filesFromFileList,
 	firstHeadingTitle,
 	isMarkdownNotePath,
 	markdownFileToNote,
@@ -102,5 +103,18 @@ See [[Other]] and #urgent
 
 	it('rejects empty vaults', () => {
 		expect(parseMarkdownVault([{ path: 'V/readme.txt', text: 'x' }]).ok).toBe(false);
+	});
+
+	it('adapts externally dropped text files into note imports', async () => {
+		const files = await filesFromFileList(
+			[new File(['Plain text body'], 'scratch.txt', { type: 'text/plain' })],
+			{ allowPlainText: true }
+		);
+		expect(files).toEqual([
+			expect.objectContaining({ path: 'scratch.md', text: 'Plain text body' })
+		]);
+		const result = parseMarkdownVault(files);
+		expect(result.ok).toBe(true);
+		if (result.ok) expect(result.notes[0]?.title).toBe('scratch');
 	});
 });

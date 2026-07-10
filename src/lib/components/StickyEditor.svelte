@@ -23,6 +23,7 @@
 		textAlign?: TextAlign;
 		autofocus?: boolean;
 		mode?: 'edit' | 'preview';
+		heroImage?: { src: string; alt: string } | null;
 		onBodyChange: (body: string) => void;
 		onTextAlignChange?: (align: TextAlign) => void;
 		onModeChange?: (mode: 'edit' | 'preview') => void;
@@ -35,6 +36,7 @@
 		textAlign = 'left',
 		autofocus = true,
 		mode = $bindable<'edit' | 'preview'>('edit'),
+		heroImage = null,
 		onBodyChange,
 		onTextAlignChange,
 		onModeChange,
@@ -261,6 +263,12 @@
 		</div>
 	</div>
 
+	{#if heroImage}
+		<div class="mash-sticky-hero-wrap shrink-0" aria-label="Spoon logo">
+			<img class="mash-sticky-hero" src={heroImage.src} alt={heroImage.alt} />
+		</div>
+	{/if}
+
 	{#if mode === 'edit'}
 		<div class="relative min-h-0 flex-1">
 			<textarea
@@ -315,6 +323,22 @@
 		margin: 0 2px;
 		background: var(--mash-card-edge-strong);
 		opacity: 0.7;
+	}
+	.mash-sticky-hero-wrap {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 88px;
+		padding: 8px 12px 4px;
+		background: color-mix(in srgb, var(--mash-card-hover) 55%, transparent);
+	}
+	.mash-sticky-hero {
+		display: block;
+		width: auto;
+		height: 80px;
+		max-width: 100%;
+		object-fit: contain;
+		filter: drop-shadow(0 5px 8px color-mix(in srgb, var(--mash-card-ink) 12%, transparent));
 	}
 	.mash-sticky-mode-btn {
 		display: flex;

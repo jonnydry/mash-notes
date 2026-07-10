@@ -7,6 +7,7 @@
 	import type { Note } from '$lib/types';
 	import StickyEditor from '$lib/components/StickyEditor.svelte';
 	import { notePreview } from '$lib/format';
+	import { isPermanentMashWelcomeNote, MASH_SPOON_LOGO } from '$lib/canvas-empty-state';
 	import {
 		detectFillOrSnapZone,
 		type EditorPane,
@@ -289,6 +290,7 @@
 		{#each stage.panes as pane (pane.id)}
 			{@const note = paneNote(pane)}
 			{#if note}
+				{@const isPermanentWelcome = isPermanentMashWelcomeNote(note)}
 				<section
 					class="mash-editor-pane"
 					class:is-active={stage.activeNoteId === note.id}
@@ -403,6 +405,9 @@
 						<StickyEditor
 							body={note.body}
 							noteId={note.id}
+							heroImage={isPermanentWelcome
+								? { src: MASH_SPOON_LOGO, alt: 'Spoon, the Mash mascot' }
+								: null}
 							textAlign={note.textAlign}
 							autofocus={stage.activeNoteId === note.id}
 							onBodyChange={(b) => onBodyChange(note.id, b)}

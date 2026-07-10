@@ -250,12 +250,19 @@ export function parseMarkdownVault(files: MarkdownImportFile[]): MarkdownImportR
 /**
  * Build import payloads from a browser FileList (folder or multi-file pick).
  */
-export async function filesFromFileList(list: FileList | File[]): Promise<MarkdownImportFile[]> {
+export async function filesFromFileList(
+	list: FileList | File[],
+	opts?: { allowPlainText?: boolean }
+): Promise<MarkdownImportFile[]> {
 	const files = Array.from(list);
 	const out: MarkdownImportFile[] = [];
 	for (const file of files) {
-		const path =
+		let path =
 			('webkitRelativePath' in file && file.webkitRelativePath) || file.name;
+		if (opts?.allowPlainText && /\.(markdown|txt)$/i.test(path)) {
+			// Reuse the Markdown note parser while preserving the original basename.
+			path = path.replace(/\.(markdown|txt)$/i, '.md');
+		}
 		if (!isMarkdownNotePath(path)) continue;
 		out.push({
 			path,

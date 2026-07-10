@@ -225,6 +225,18 @@ body {
 	box-shadow: inset 0 0 0 3px var(--mash-accent-select);
 	animation: mash-drop-pulse 1.1s ease-in-out infinite;
 }
+.mash-drop-file-prompt {
+	border-color: var(--mash-accent-select);
+	background: var(--mash-panel);
+	color: var(--mash-ink);
+	backdrop-filter: blur(14px) saturate(1.1);
+}
+.mash-drop-file-prompt svg {
+	color: var(--mash-accent-bright);
+}
+.mash-drop-file-prompt p:last-child {
+	color: var(--mash-ink-muted);
+}
 .mash-board-surface.is-snap-on {
 	background-image:
 		radial-gradient(

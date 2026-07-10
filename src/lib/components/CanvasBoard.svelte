@@ -18,9 +18,10 @@
 		snapSize,
 		viewCenterPlacement
 	} from '$lib/canvas-geom';
-	import { Pin, Folder, Tag, Minimize2, Maximize2, X } from 'lucide-svelte';
+	import { Pin, Folder, Tag, Minimize2, Maximize2, X, FileUp } from 'lucide-svelte';
 	import StickyEditor from '$lib/components/StickyEditor.svelte';
 	import { buildLinkSummaryMap } from '$lib/links';
+	import { isPermanentMashWelcomeNote, MASH_SPOON_LOGO } from '$lib/canvas-empty-state';
 	import {
 		flowEdgePath,
 		flowOutlineMarkdown,
@@ -99,6 +100,8 @@
 			title: string;
 			copy: string;
 		};
+		/** Override whether the board mascot/guidance is visible behind cards. */
+		showEmptyState?: boolean;
 		onSelect: (noteId: string, opts: { additive: boolean; range: boolean }) => void;
 		onSelectNotes: (noteIds: string[], opts: { additive: boolean }) => void;
 		onMove: (itemId: string, x: number, y: number) => void;
@@ -138,6 +141,8 @@
 		onOpenLinks?: (noteId: string) => void;
 		folders?: string[];
 		onDropNotes: (noteIds: string[], x: number, y: number) => void;
+		/** Import files dragged in from the operating system at this canvas position. */
+		onDropFiles?: (files: File[], x: number, y: number) => void | Promise<void>;
 		onMashCards: (sourceItemId: string, targetItemId: string) => void;
 		/** Fired when the user presses on empty board (not a card/chrome). */
 		onBlankPointerDown?: () => void;
@@ -175,6 +180,7 @@
 			title: 'Drop notes here',
 			copy: 'Drag notes from the tray onto the canvas. Double-click to open the large editor.'
 		},
+		showEmptyState,
 		onSelect,
 		onSelectNotes,
 		onMove,
@@ -197,6 +203,7 @@
 		onOpenLinks,
 		folders = [],
 		onDropNotes,
+		onDropFiles,
 		onMashCards,
 		onBlankPointerDown,
 		canUndo = false,
@@ -225,6 +232,7 @@
 	let folderSuggestQuery = $state('');
 	let isPanning = $state(false);
 	let isExternalDragOver = $state(false);
+	let isFileDragOver = $state(false);
 	let panStart = { x: 0, y: 0, panX: 0, panY: 0 };
 	let viewportSaveTimer: ReturnType<typeof setTimeout> | null = null;
 	let appliedCanvasId: string | null = null;
@@ -253,6 +261,7 @@
 	let marqueeAdditive = false;
 
 	let snapEffective = $derived(altHeld ? !snapEnabled : snapEnabled);
+	let emptyStateVisible = $derived(showEmptyState ?? items.length === 0);
 	let linkSummaries = $derived(buildLinkSummaryMap([...notesById.values()]));
 	let pendingMashCopy = $derived.by(() => {
 		if (!pendingMash) return null;
@@ -1118,7 +1127,9 @@
 	}
 
 	function handleDragOver(e: DragEvent) {
+		const hasFiles = e.dataTransfer?.types.includes('Files') ?? false;
 		if (
+			!hasFiles &&
 			!e.dataTransfer?.types.includes(NOTE_MIME) &&
 			!e.dataTransfer?.types.includes('text/plain')
 		) {
@@ -1127,17 +1138,27 @@
 		e.preventDefault();
 		if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
 		isExternalDragOver = true;
+		isFileDragOver = hasFiles;
 	}
 
 	function handleDragLeave(e: DragEvent) {
 		const related = e.relatedTarget as Node | null;
 		if (related && boardEl?.contains(related)) return;
 		isExternalDragOver = false;
+		isFileDragOver = false;
 	}
 
 	function handleDrop(e: DragEvent) {
 		e.preventDefault();
 		isExternalDragOver = false;
+		isFileDragOver = false;
+		const droppedFiles = Array.from(e.dataTransfer?.files ?? []);
+		if (droppedFiles.length > 0) {
+			let pos = clientToBoard(e.clientX, e.clientY);
+			pos = maybeSnapPos(pos.x, pos.y);
+			void onDropFiles?.(droppedFiles, pos.x, pos.y);
+			return;
+		}
 		const raw = e.dataTransfer?.getData(NOTE_MIME) || e.dataTransfer?.getData('text/plain') || '';
 		let noteIds: string[] = [];
 		try {
@@ -1662,6 +1683,7 @@
 				{@const isPendingSource = pendingMash?.sourceId === item.id}
 				{@const isPendingPartner = pendingMash?.targetId === item.id}
 				{@const isMash = Boolean(note.mashedFrom?.length)}
+				{@const isPermanentWelcome = isPermanentMashWelcomeNote(note)}
 				{@const links = linkSummaries.get(note.id)!}
 				{@const pageBadge = flowBadges.get(item.id)}
 				{@const isPrimaryFocus = primaryFocusNoteId === note.id}
@@ -1669,6 +1691,7 @@
 				<div
 					data-canvas-card
 					data-note-id={note.id}
+					data-system-welcome={isPermanentWelcome ? 'true' : undefined}
 					role="group"
 					aria-label={note.title}
 					aria-selected={selected}
@@ -1985,6 +2008,9 @@
 							<StickyEditor
 								body={note.body}
 								noteId={note.id}
+								heroImage={isPermanentWelcome
+									? { src: MASH_SPOON_LOGO, alt: 'Spoon, the Mash mascot' }
+									: null}
 								textAlign={note.textAlign}
 								autofocus={expandFocus !== 'title'}
 								onBodyChange={(b) => onBodyChange(note.id, b)}
@@ -2025,7 +2051,18 @@
 								? note.textAlign
 								: 'left'};"
 						>
-							{notePreview(note.body, 220)}
+							{#if isPermanentWelcome}
+								<div class="flex items-center gap-2">
+									<img
+										src={MASH_SPOON_LOGO}
+										alt="Spoon, the Mash mascot"
+										class="h-14 w-14 shrink-0 object-contain drop-shadow-sm"
+									/>
+									<span class="line-clamp-4">{notePreview(note.body, 140)}</span>
+								</div>
+							{:else}
+								{notePreview(note.body, 220)}
+							{/if}
 						</div>
 					{/if}
 					<div
@@ -2232,7 +2269,7 @@
 		{/each}
 	</div>
 
-	{#if items.length === 0}
+	{#if emptyStateVisible}
 		<div class="pointer-events-none absolute inset-0 flex items-center justify-center p-6">
 			<div
 				class="mash-empty-state flex max-w-sm flex-col items-center text-center transition-transform duration-200
@@ -2248,9 +2285,13 @@
 					draggable="false"
 				/>
 				<p class="mash-display mash-empty-title mt-4 text-xl font-medium tracking-tight">
-					{isExternalDragOver ? 'Drop to place' : emptyMascot.title}
+					{isFileDragOver ? 'Drop files to import' : isExternalDragOver ? 'Drop to place' : emptyMascot.title}
 				</p>
-				{#if !isExternalDragOver}
+				{#if isFileDragOver}
+					<p class="mash-empty-copy mt-1.5 max-w-[18rem] text-sm">
+						Markdown, text, note JSON, or a Mash sync bundle
+					</p>
+				{:else if !isExternalDragOver}
 					<p class="mash-empty-copy mt-1.5 max-w-[16rem] text-sm">
 						{emptyMascot.copy}
 					</p>
@@ -2259,8 +2300,16 @@
 		</div>
 	{:else if isExternalDragOver}
 		<div
-			class="pointer-events-none absolute inset-0 z-10 border-2 border-[var(--mash-accent)] bg-[var(--mash-accent-wash)]"
-		></div>
+			class="pointer-events-none absolute inset-0 z-10 flex items-center justify-center border-2 border-[var(--mash-accent)] bg-[var(--mash-accent-wash)] p-6"
+		>
+			{#if isFileDragOver}
+				<div class="mash-drop-file-prompt flex flex-col items-center rounded-2xl border px-6 py-5 text-center shadow-lg">
+					<FileUp size={28} strokeWidth={1.8} aria-hidden="true" />
+					<p class="mash-display mt-2 text-lg font-medium">Drop files to import</p>
+					<p class="mt-1 text-xs">.md, .markdown, .txt, or Mash .json</p>
+				</div>
+			{/if}
+		</div>
 	{/if}
 
 	<div
