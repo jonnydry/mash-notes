@@ -93,14 +93,33 @@
 		>
 			<header class="mash-session-header">
 				<div class="min-w-0 flex-1">
-					<h2 id="mash-session-panel-title" class="mash-display text-lg font-semibold">
-						{view === 'finish' ? 'Finish this desk' : 'Your desks'}
-					</h2>
-					<p id="mash-session-panel-description" class="mash-session-header-desc">
-						{view === 'finish'
-							? 'Take the useful part with you, then decide what stays.'
-							: 'Scratch desks clear themselves. Kept desks stay on this device.'}
-					</p>
+					{#if view === 'finish'}
+						<div class="mash-finish-header-brand">
+							<img
+								src="/icons/New%20Icons/Salt%20and%20pepper%20shakers@2x.png"
+								alt=""
+								width="48"
+								height="48"
+								class="mash-finish-header-logo"
+								draggable="false"
+							/>
+							<div class="min-w-0">
+								<h2 id="mash-session-panel-title" class="mash-display text-lg font-semibold">
+									Finish this desk
+								</h2>
+								<p id="mash-session-panel-description" class="mash-session-header-desc">
+									Take the useful part with you, then decide what stays.
+								</p>
+							</div>
+						</div>
+					{:else}
+						<h2 id="mash-session-panel-title" class="mash-display text-lg font-semibold">
+							Your desks
+						</h2>
+						<p id="mash-session-panel-description" class="mash-session-header-desc">
+							Scratch desks clear themselves. Kept desks stay on this device.
+						</p>
+					{/if}
 				</div>
 				<button
 					data-dialog-initial-focus

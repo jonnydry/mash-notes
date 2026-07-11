@@ -2482,6 +2482,7 @@
 					onWikilink={(target) => void openWikilink(target)}
 					onOpenLinks={peel.openLinkedPeel}
 					folders={library.uniqueFolders}
+					tags={library.uniqueTags}
 					onDropNotes={canvas.handleDropNotes}
 					onDropFiles={handleDroppedFiles}
 					onMashCards={handleMashCards}
@@ -2549,6 +2550,7 @@
 							.map((i) => library.notesById.get(i.noteId))
 							.filter((n): n is Note => Boolean(n))}
 						folders={library.uniqueFolders}
+						tags={library.uniqueTags}
 						onTitleChange={library.handleStickyTitleChange}
 						onBodyChange={library.handleStickyBodyChange}
 						onMetaChange={library.handleStickyMetaChange}

@@ -2,10 +2,12 @@
 	/**
 	 * Screen-space editor stage — OS-like tiled note panes over the canvas.
 	 */
-	import { Minimize2, X, Pin, Folder, Tag } from 'lucide-svelte';
+	import { Minimize2, X, Pin } from 'lucide-svelte';
 	import { onDestroy } from 'svelte';
 	import type { Note } from '$lib/types';
 	import StickyEditor from '$lib/components/StickyEditor.svelte';
+	import FolderSuggestField from '$lib/components/FolderSuggestField.svelte';
+	import TagSuggestField from '$lib/components/TagSuggestField.svelte';
 	import { notePreview } from '$lib/format';
 	import { isPermanentMashWelcomeNote, MASH_SPOON_LOGO } from '$lib/canvas-empty-state';
 	import {
@@ -21,6 +23,7 @@
 		/** Notes currently on the desk — offered in the empty split half. */
 		canvasNotes?: Note[];
 		folders?: string[];
+		tags?: string[];
 		onTitleChange: (noteId: string, title: string) => void;
 		onBodyChange: (noteId: string, body: string) => void;
 		onMetaChange?: (
@@ -43,6 +46,7 @@
 		notesById,
 		canvasNotes = [],
 		folders = [],
+		tags = [],
 		onTitleChange,
 		onBodyChange,
 		onMetaChange,
@@ -375,43 +379,19 @@
 					</header>
 
 					<div class="mash-editor-pane-meta">
-						<label
-							class="flex min-w-0 flex-1 items-center gap-1 text-[10px] text-[var(--mash-card-muted)]"
-						>
-							<Folder class="h-3 w-3 shrink-0" />
-							<input
-								type="text"
-								value={note.folder}
-								list="mash-pane-folders"
-								placeholder="folder"
-								class="mash-focus min-w-0 flex-1 rounded border-0 bg-transparent py-0.5 text-[11px] outline-none"
-								style="color: var(--mash-card-ink);"
-								oninput={(e) =>
-									onMetaChange?.(note.id, {
-										folder: (e.currentTarget as HTMLInputElement).value
-									})}
-							/>
-						</label>
-						<label
-							class="flex min-w-[40%] flex-1 items-center gap-1 text-[10px] text-[var(--mash-card-muted)]"
-						>
-							<Tag class="h-3 w-3 shrink-0" />
-							<input
-								type="text"
-								value={note.tags.join(', ')}
-								placeholder="tags"
-								class="mash-focus min-w-0 flex-1 rounded border-0 bg-transparent py-0.5 text-[11px] outline-none"
-								style="color: var(--mash-card-ink);"
-								oninput={(e) => {
-									const raw = (e.currentTarget as HTMLInputElement).value;
-									const tags = raw
-										.split(',')
-										.map((t) => t.trim())
-										.filter(Boolean);
-									onMetaChange?.(note.id, { tags });
-								}}
-							/>
-						</label>
+						<FolderSuggestField
+							value={note.folder}
+							{folders}
+							placeholder="folder"
+							onChange={(folder) => onMetaChange?.(note.id, { folder })}
+						/>
+						<TagSuggestField
+							class="min-w-[40%]"
+							value={note.tags}
+							{tags}
+							placeholder="tags"
+							onChange={(nextTags) => onMetaChange?.(note.id, { tags: nextTags })}
+						/>
 					</div>
 
 					{#if note.mashedFrom?.length}
@@ -500,12 +480,5 @@
 			></div>
 		{/if}
 
-		{#if folders.length > 0}
-			<datalist id="mash-pane-folders">
-				{#each folders as folder (folder)}
-					<option value={folder}></option>
-				{/each}
-			</datalist>
-		{/if}
 	</div>
 {/if}

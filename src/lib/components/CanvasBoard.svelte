@@ -26,8 +26,6 @@
 	} from '$lib/canvas-geom';
 	import {
 		Pin,
-		Folder,
-		Tag,
 		Minimize2,
 		Maximize2,
 		X,
@@ -37,6 +35,8 @@
 	} from 'lucide-svelte';
 	import { focusTrap } from '$lib/focus-trap';
 	import StickyEditor from '$lib/components/StickyEditor.svelte';
+	import FolderSuggestField from '$lib/components/FolderSuggestField.svelte';
+	import TagSuggestField from '$lib/components/TagSuggestField.svelte';
 	import { buildLinkSummaryMap } from '$lib/links';
 	import { isPermanentMashWelcomeNote, MASH_SPOON_LOGO } from '$lib/canvas-empty-state';
 	import {
@@ -156,6 +156,7 @@
 		/** Open peel Linked for this note (links chip). */
 		onOpenLinks?: (noteId: string) => void;
 		folders?: string[];
+		tags?: string[];
 		onDropNotes: (noteIds: string[], x: number, y: number) => void;
 		/** Import files dragged in from the operating system at this canvas position. */
 		onDropFiles?: (files: File[], x: number, y: number) => void | Promise<void>;
@@ -218,6 +219,7 @@
 		onWikilink,
 		onOpenLinks,
 		folders = [],
+		tags = [],
 		onDropNotes,
 		onDropFiles,
 		onMashCards,
@@ -242,9 +244,6 @@
 	let pointerOverBoard = $state(false);
 	let titleInputEl: HTMLInputElement | undefined = $state();
 	let focusedExpandId: string | null = null;
-	/** Custom folder picker — native datalist mispositions under canvas transform. */
-	let folderSuggestNoteId = $state<string | null>(null);
-	let folderSuggestQuery = $state('');
 	let isPanning = $state(false);
 	let isExternalDragOver = $state(false);
 	let isFileDragOver = $state(false);
@@ -503,14 +502,6 @@
 		if (!hasInvalid || invalidExportToastShown) return;
 		invalidExportToastShown = true;
 		onToast?.('Fix or Unstitch broken sequences to export');
-	});
-
-	$effect(() => {
-		if (!expandedNoteId || folderSuggestNoteId !== expandedNoteId) {
-			if (folderSuggestNoteId && folderSuggestNoteId !== expandedNoteId) {
-				folderSuggestNoteId = null;
-			}
-		}
 	});
 
 	function cardSize(item: CanvasItem, noteId: string): { w: number; h: number } {
@@ -1367,40 +1358,6 @@
 		);
 	}
 
-	/**
-	 * Autocomplete for existing folder paths — not a required picker.
-	 * Hide when the only hit is exactly what's already typed (avoids echo menus).
-	 */
-	function folderSuggestions(query: string, currentFolder: string): string[] {
-		const q = query.trim().toLowerCase();
-		if (!q) {
-			// On focus: other folders you can switch to (skip current).
-			return folders.filter((f) => f !== currentFolder).slice(0, 8);
-		}
-		return folders
-			.filter((f) => {
-				const fl = f.toLowerCase();
-				if (fl === q) return false; // exact typed match — no echo
-				return fl.includes(q);
-			})
-			.slice(0, 8);
-	}
-
-	function openFolderSuggest(noteId: string, current: string) {
-		folderSuggestNoteId = noteId;
-		folderSuggestQuery = current;
-	}
-
-	function closeFolderSuggest() {
-		folderSuggestNoteId = null;
-	}
-
-	function pickFolder(noteId: string, folder: string) {
-		onMetaChange?.(noteId, { folder });
-		folderSuggestQuery = folder;
-		closeFolderSuggest();
-	}
-
 	/** Align / arrange selected cards (also used by the page selection bar). */
 	export function applyAlign(mode: AlignMode) {
 		const rects = items
@@ -1975,108 +1932,18 @@
 							aria-label="Note metadata"
 							onpointerdown={(e) => e.stopPropagation()}
 						>
-							<div
-								class="relative flex min-w-0 flex-1 items-center gap-1 text-[10px] text-[var(--mash-card-muted)]"
-							>
-								<Folder class="h-3 w-3 shrink-0" />
-								<input
-									type="text"
-									value={note.folder}
-									placeholder="Folder path…"
-									title="Type a folder path, or pick an existing one"
-									autocomplete="off"
-									class="mash-focus min-w-0 flex-1 rounded border-0 bg-transparent py-0.5 text-[11px] outline-none"
-									style="color: var(--mash-card-ink);"
-									onfocus={() => openFolderSuggest(note.id, note.folder)}
-									oninput={(e) => {
-										const folder = (e.currentTarget as HTMLInputElement).value;
-										folderSuggestQuery = folder;
-										folderSuggestNoteId = note.id;
-										onMetaChange?.(note.id, { folder });
-									}}
-									onkeydown={(e) => {
-										if (e.key === 'Escape') {
-											e.stopPropagation();
-											closeFolderSuggest();
-											(e.currentTarget as HTMLInputElement).blur();
-										}
-										if (e.key === 'Enter') {
-											const hits = folderSuggestions(folderSuggestQuery, note.folder);
-											if (hits.length === 1) {
-												e.preventDefault();
-												pickFolder(note.id, hits[0]);
-											} else {
-												closeFolderSuggest();
-											}
-										}
-									}}
-									onblur={() => {
-										setTimeout(() => {
-											if (folderSuggestNoteId === note.id) closeFolderSuggest();
-										}, 120);
-									}}
-								/>
-								{#if folderSuggestNoteId === note.id}
-									{@const hits = folderSuggestions(folderSuggestQuery, note.folder)}
-									{#if hits.length > 0 || note.folder}
-										<ul
-											class="absolute top-full left-0 z-30 mt-0.5 max-h-32 min-w-full overflow-auto rounded border py-0.5"
-											style="border-color: var(--mash-paper-chip-border); background: var(--mash-paper-chip); box-shadow: var(--mash-shadow-card);"
-											role="listbox"
-											aria-label="Existing folders"
-										>
-											{#if note.folder}
-												<li role="option" aria-selected="false">
-													<button
-														type="button"
-														class="block w-full truncate px-2 py-1 text-left text-[10px] text-[var(--mash-card-muted)] hover:bg-[var(--mash-card-hover)]"
-														onmousedown={(e) => {
-															e.preventDefault();
-															pickFolder(note.id, '');
-														}}
-													>
-														Clear folder
-													</button>
-												</li>
-											{/if}
-											{#each hits as folder (folder)}
-												<li role="option" aria-selected="false">
-													<button
-														type="button"
-														class="block w-full truncate px-2 py-1 text-left text-[11px] text-[var(--mash-card-ink)] hover:bg-[var(--mash-card-hover)]"
-														onmousedown={(e) => {
-															e.preventDefault();
-															pickFolder(note.id, folder);
-														}}
-													>
-														{folder}
-													</button>
-												</li>
-											{/each}
-										</ul>
-									{/if}
-								{/if}
-							</div>
-							<label
-								class="flex min-w-[40%] flex-1 items-center gap-1 text-[10px] text-[var(--mash-card-muted)]"
-							>
-								<Tag class="h-3 w-3 shrink-0" />
-								<input
-									type="text"
-									value={note.tags.join(', ')}
-									placeholder="tags, comma, separated"
-									class="mash-focus min-w-0 flex-1 rounded border-0 bg-transparent py-0.5 text-[11px] outline-none"
-									style="color: var(--mash-card-ink);"
-									oninput={(e) => {
-										const raw = (e.currentTarget as HTMLInputElement).value;
-										const tags = raw
-											.split(',')
-											.map((t) => t.trim())
-											.filter(Boolean);
-										onMetaChange?.(note.id, { tags });
-									}}
-								/>
-							</label>
+							<FolderSuggestField
+								value={note.folder}
+								{folders}
+								onChange={(folder) => onMetaChange?.(note.id, { folder })}
+							/>
+							<TagSuggestField
+								class="min-w-[40%]"
+								value={note.tags}
+								{tags}
+								placeholder="tags, comma, separated"
+								onChange={(nextTags) => onMetaChange?.(note.id, { tags: nextTags })}
+							/>
 							{#if links.outgoingCount + links.backlinkCount > 0}
 								<button
 									type="button"
