@@ -2,7 +2,7 @@
 	/**
 	 * Screen-space editor stage — OS-like tiled note panes over the canvas.
 	 */
-	import { Maximize2, Minimize2, X, Pin, Folder, Tag } from 'lucide-svelte';
+	import { Minimize2, X, Pin, Folder, Tag } from 'lucide-svelte';
 	import { onDestroy } from 'svelte';
 	import type { Note } from '$lib/types';
 	import StickyEditor from '$lib/components/StickyEditor.svelte';
@@ -349,18 +349,6 @@
 								<Pin class="h-3.5 w-3.5" />
 							</button>
 						{/if}
-						<button
-							type="button"
-							class="mash-pane-btn"
-							onclick={(e) => {
-								e.stopPropagation();
-								stage.snapPane(pane.id, 'maximize');
-							}}
-							aria-label="Maximize pane"
-							title="Maximize"
-						>
-							<Maximize2 class="h-3.5 w-3.5" />
-						</button>
 						<button
 							type="button"
 							class="mash-pane-btn"
