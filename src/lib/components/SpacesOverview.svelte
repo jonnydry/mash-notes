@@ -104,7 +104,7 @@
 </script>
 
 <div
-	class="mash-spaces-backdrop"
+	class="mash-dialog-backdrop mash-spaces-backdrop"
 	role="presentation"
 	onclick={(e) => {
 		if (e.target === e.currentTarget) onClose();
@@ -112,36 +112,38 @@
 >
 	<div
 		use:focusTrap={{ initialFocus: '[data-dialog-initial-focus]' }}
-		class="mash-spaces-dialog"
+		class="mash-dialog-panel mash-spaces-dialog"
 		role="dialog"
 		aria-modal="true"
 		aria-labelledby="mash-spaces-title"
 	>
 		<div class="mash-spaces-header">
 			<div class="min-w-0 flex-1">
-				<div class="flex items-center gap-2">
+				<div class="flex items-center gap-2.5">
 					<img
 						src="/icons/mash-screenplay-mascot.png"
 						alt=""
-						width="48"
-						height="48"
+						width="44"
+						height="44"
 						class="mash-spaces-header-mascot"
 						draggable="false"
 					/>
-					<h2
-						id="mash-spaces-title"
-						class="mash-display text-base font-semibold tracking-tight"
-						style="color: var(--mash-ink);"
-					>
-						Screenplay
-					</h2>
+					<div class="min-w-0">
+						<h2
+							id="mash-spaces-title"
+							class="mash-display text-base font-semibold tracking-tight"
+							style="color: var(--mash-ink);"
+						>
+							Screenplay
+						</h2>
+						<p class="mash-dialog-subtitle">
+							Open folder boards — click to switch
+							{#if loading}
+								<span class="opacity-60"> · loading…</span>
+							{/if}
+						</p>
+					</div>
 				</div>
-				<p class="mt-0.5 text-[11px]" style="color: var(--mash-ink-muted);">
-					Open folder boards — click to switch
-					{#if loading}
-						<span class="opacity-60"> · loading…</span>
-					{/if}
-				</p>
 			</div>
 			<button
 				data-dialog-initial-focus

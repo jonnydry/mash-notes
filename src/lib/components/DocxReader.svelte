@@ -177,39 +177,44 @@
 		min-height: 0;
 		flex: 1;
 		overflow: auto;
-		padding: 28px;
-		background: color-mix(in srgb, var(--mash-board) 82%, var(--mash-panel));
+		padding: 28px 24px 36px;
+		background: color-mix(in srgb, var(--mash-board) 84%, var(--mash-panel));
 		outline: none;
+		scrollbar-width: thin;
 	}
 	.mash-docx-page {
 		position: relative;
 		margin: 0 auto;
-		max-width: 48rem;
+		max-width: 46rem;
 	}
 	.mash-docx-article {
-		max-width: 42rem;
+		max-width: 40rem;
 		margin: 0 auto;
-		padding: 32px 36px 48px;
-		border-radius: 4px;
-		background: color-mix(in srgb, var(--mash-panel) 94%, white);
-		box-shadow: 0 18px 48px rgb(0 0 0 / 0.18);
+		padding: 2.25rem 2.5rem 3rem;
+		border-radius: 6px;
+		border: 1px solid color-mix(in srgb, var(--mash-panel-border) 55%, transparent);
+		background: color-mix(in srgb, var(--mash-panel) 96%, white);
+		box-shadow: 0 16px 44px rgb(0 0 0 / 0.16);
 		color: var(--mash-ink);
-		font-size: 15px;
-		line-height: 1.65;
+		font-size: 15.5px;
+		line-height: 1.68;
+		letter-spacing: -0.005em;
 		user-select: text;
 	}
 	.mash-docx-article :global(p) {
-		margin: 0 0 0.9em;
+		margin: 0 0 0.95em;
 	}
 	.mash-docx-article :global(:is(h1, h2, h3, h4, h5, h6)) {
-		margin: 1.35em 0 0.55em;
+		margin: 1.4em 0 0.5em;
 		color: var(--mash-ink);
 		font-family: var(--mash-font-display, Georgia, serif);
 		font-weight: 650;
 		line-height: 1.25;
+		letter-spacing: -0.015em;
 	}
 	.mash-docx-article :global(h1) {
 		font-size: 1.55em;
+		margin-top: 0.2em;
 	}
 	.mash-docx-article :global(h2) {
 		font-size: 1.3em;
@@ -222,11 +227,11 @@
 		color: var(--mash-ink-muted);
 	}
 	.mash-docx-article :global(:is(ul, ol)) {
-		margin: 0 0 0.9em;
-		padding-left: 1.4em;
+		margin: 0 0 0.95em;
+		padding-left: 1.45em;
 	}
 	.mash-docx-article :global(li) {
-		margin: 0.25em 0;
+		margin: 0.28em 0;
 	}
 	.mash-docx-article :global(strong) {
 		font-weight: 700;
@@ -246,13 +251,25 @@
 		position: absolute;
 		z-index: 5;
 		min-width: 124px;
-		padding: 8px 13px;
+		padding: 8px 14px;
 		border-radius: 999px;
 		background: var(--mash-accent);
 		color: var(--mash-accent-ink);
 		font-size: 12px;
 		font-weight: 650;
 		box-shadow: 0 8px 24px rgb(0 0 0 / 0.28);
+		transition:
+			background 120ms ease,
+			transform 100ms ease;
+	}
+	.mash-pdf-save-selection:hover:not(:disabled) {
+		background: var(--mash-accent-bright);
+	}
+	.mash-pdf-save-selection:focus-visible {
+		outline: none;
+		box-shadow:
+			0 0 0 2px var(--mash-panel),
+			0 0 0 4px var(--mash-accent-ring);
 	}
 	.mash-docx-loading {
 		display: grid;
@@ -285,11 +302,13 @@
 
 	@media (max-width: 840px) {
 		.mash-docx-stage {
-			padding: 16px;
+			padding: 16px 12px 24px;
 		}
 		.mash-docx-article {
-			padding: 22px 18px 32px;
-			font-size: 14px;
+			padding: 1.4rem 1.15rem 2rem;
+			font-size: 14.5px;
+			line-height: 1.62;
+			border-radius: 4px;
 		}
 	}
 </style>

@@ -625,23 +625,23 @@
 	.mash-pdf-zoom {
 		display: flex;
 		align-items: center;
-		gap: 7px;
+		gap: 6px;
 		color: var(--mash-ink-muted);
 		font-size: 12px;
 	}
 	.mash-pdf-page-jump {
 		display: inline-flex;
 		align-items: center;
-		gap: 6px;
+		gap: 5px;
 		font-variant-numeric: tabular-nums;
 	}
 	.mash-pdf-page-jump input {
-		width: 3.25rem;
+		width: 3.1rem;
 		height: 28px;
-		padding: 0 6px;
+		padding: 0 5px;
 		border: 1px solid var(--mash-tray-edge);
 		border-radius: 8px;
-		background: color-mix(in srgb, var(--mash-panel) 70%, transparent);
+		background: color-mix(in srgb, var(--mash-panel) 72%, transparent);
 		color: var(--mash-ink);
 		font: inherit;
 		font-weight: 700;
@@ -649,6 +649,9 @@
 		text-align: center;
 		appearance: textfield;
 		-moz-appearance: textfield;
+		transition:
+			border-color 120ms ease,
+			box-shadow 120ms ease;
 	}
 	.mash-pdf-page-jump input::-webkit-outer-spin-button,
 	.mash-pdf-page-jump input::-webkit-inner-spin-button {
@@ -659,21 +662,25 @@
 		outline: none;
 		border-color: var(--mash-accent-select);
 		box-shadow:
-			0 0 0 2px var(--mash-bg),
+			0 0 0 2px var(--mash-panel),
 			0 0 0 4px var(--mash-accent-ring);
 	}
 	.mash-pdf-page-jump input:disabled {
 		opacity: 0.55;
 	}
 	.mash-pdf-zoom {
-		gap: 2px;
+		gap: 1px;
 		padding: 2px;
 		border: 1px solid var(--mash-tray-edge);
 		border-radius: 9px;
+		background: color-mix(in srgb, var(--mash-hover-fill-soft) 80%, transparent);
 	}
 	.mash-pdf-zoom span {
-		min-width: 45px;
+		min-width: 42px;
 		text-align: center;
+		font-variant-numeric: tabular-nums;
+		font-weight: 600;
+		font-size: 11px;
 	}
 	.mash-pdf-region-tool.is-active {
 		background: var(--mash-accent-wash);
@@ -684,9 +691,10 @@
 		min-height: 0;
 		flex: 1;
 		overflow: auto;
-		padding: 28px;
-		background: color-mix(in srgb, var(--mash-board) 82%, var(--mash-panel));
+		padding: 26px 24px 32px;
+		background: color-mix(in srgb, var(--mash-board) 84%, var(--mash-panel));
 		outline: none;
+		scrollbar-width: thin;
 	}
 	.mash-pdf-stage.is-region-mode {
 		cursor: crosshair;
@@ -770,13 +778,25 @@
 		position: absolute;
 		z-index: 5;
 		min-width: 124px;
-		padding: 8px 13px;
+		padding: 8px 14px;
 		border-radius: 999px;
 		background: var(--mash-accent);
 		color: var(--mash-accent-ink);
 		font-size: 12px;
 		font-weight: 650;
 		box-shadow: 0 8px 24px rgb(0 0 0 / 0.28);
+		transition:
+			background 120ms ease,
+			transform 100ms ease;
+	}
+	.mash-pdf-save-selection:hover:not(:disabled) {
+		background: var(--mash-accent-bright);
+	}
+	.mash-pdf-save-selection:focus-visible {
+		outline: none;
+		box-shadow:
+			0 0 0 2px var(--mash-panel),
+			0 0 0 4px var(--mash-accent-ring);
 	}
 	.mash-pdf-page-loading {
 		position: absolute;

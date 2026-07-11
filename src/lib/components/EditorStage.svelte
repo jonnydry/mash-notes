@@ -461,7 +461,7 @@
 							noteId={note.id}
 							readOnly={isPermanentWelcome}
 							heroImage={isPermanentWelcome
-								? { src: MASH_SPOON_LOGO, alt: 'Spoon, the Mash mascot' }
+								? { src: MASH_SPOON_LOGO, alt: 'Scoop, the Mash mascot' }
 								: null}
 							textAlign={note.textAlign}
 							autofocus={stage.activeNoteId === note.id}

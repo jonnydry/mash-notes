@@ -238,12 +238,15 @@
 	}
 </script>
 
-<div class="flex h-full min-h-0 w-full flex-col" data-no-drag>
-	<div
-		class="flex shrink-0 items-center justify-between gap-0.5 border-b border-[var(--mash-card-edge)] px-1.5 py-0.5"
-	>
+<div
+	class="mash-sticky-editor flex h-full min-h-0 w-full flex-col"
+	class:is-preview={mode === 'preview'}
+	class:is-readonly={readOnly}
+	data-no-drag
+>
+	<div class="mash-sticky-toolbar">
 		{#if mode === 'edit' && !readOnly}
-			<div class="flex items-center gap-0.5">
+			<div class="mash-sticky-toolbar-cluster" role="toolbar" aria-label="Formatting">
 				<button
 					type="button"
 					class="mash-sticky-mode-btn"
@@ -325,19 +328,17 @@
 				</button>
 			</div>
 		{:else if readOnly}
-			<span
-				class="flex items-center gap-1 px-1 text-[9px] font-medium text-[var(--mash-card-muted)]"
-			>
+			<span class="mash-sticky-toolbar-hint">
 				<Lock class="h-2.5 w-2.5" /> From the Mash team · permanent
 			</span>
 		{:else}
-			<span class="px-1 text-[9px] font-medium text-[var(--mash-card-muted)]">Preview</span>
+			<span class="mash-sticky-toolbar-hint">Preview</span>
 		{/if}
-		<div class="flex items-center gap-0.5">
+		<div class="mash-sticky-toolbar-cluster mash-sticky-toolbar-secondary">
 			{#if embeddedImage}
 				<button
 					type="button"
-					class="mash-sticky-mode-btn"
+					class="mash-sticky-mode-btn is-quiet"
 					disabled={clipZoom <= CLIP_ZOOM_MIN}
 					onclick={(e) => {
 						e.stopPropagation();
@@ -351,7 +352,7 @@
 				<span class="mash-sticky-zoom-label" title="Image zoom">{clipZoomLabel}</span>
 				<button
 					type="button"
-					class="mash-sticky-mode-btn"
+					class="mash-sticky-mode-btn is-quiet"
 					disabled={clipZoom >= CLIP_ZOOM_MAX}
 					onclick={(e) => {
 						e.stopPropagation();
@@ -364,7 +365,7 @@
 				</button>
 				<button
 					type="button"
-					class="mash-sticky-mode-btn"
+					class="mash-sticky-mode-btn is-quiet"
 					onclick={(e) => {
 						e.stopPropagation();
 						clipInspectOpen = true;
@@ -378,7 +379,7 @@
 					<span class="mash-sticky-toolbar-sep" aria-hidden="true"></span>
 					<button
 						type="button"
-						class="mash-sticky-mode-btn"
+						class="mash-sticky-mode-btn is-quiet"
 						disabled={rotating}
 						onclick={(e) => {
 							e.stopPropagation();
@@ -391,7 +392,7 @@
 					</button>
 					<button
 						type="button"
-						class="mash-sticky-mode-btn"
+						class="mash-sticky-mode-btn is-quiet"
 						disabled={rotating}
 						onclick={(e) => {
 							e.stopPropagation();
@@ -405,39 +406,41 @@
 				{/if}
 				<span class="mash-sticky-toolbar-sep" aria-hidden="true"></span>
 			{/if}
-			{#if !readOnly}
+			<div class="mash-sticky-mode-toggle" role="group" aria-label="Editor mode">
+				{#if !readOnly}
+					<button
+						type="button"
+						class="mash-sticky-mode-btn"
+						class:is-active={mode === 'edit'}
+						onclick={(e) => {
+							e.stopPropagation();
+							setMode('edit');
+						}}
+						aria-label="Edit"
+						title="Edit"
+					>
+						<Pencil class="h-3 w-3" />
+					</button>
+				{/if}
 				<button
 					type="button"
 					class="mash-sticky-mode-btn"
-					class:is-active={mode === 'edit'}
+					class:is-active={mode === 'preview'}
 					onclick={(e) => {
 						e.stopPropagation();
-						setMode('edit');
+						setMode('preview');
 					}}
-					aria-label="Edit"
-					title="Edit"
+					aria-label="Preview"
+					title="Preview"
 				>
-					<Pencil class="h-3 w-3" />
+					<Eye class="h-3 w-3" />
 				</button>
-			{/if}
-			<button
-				type="button"
-				class="mash-sticky-mode-btn"
-				class:is-active={mode === 'preview'}
-				onclick={(e) => {
-					e.stopPropagation();
-					setMode('preview');
-				}}
-				aria-label="Preview"
-				title="Preview"
-			>
-				<Eye class="h-3 w-3" />
-			</button>
+			</div>
 		</div>
 	</div>
 
 	{#if heroImage}
-		<div class="mash-sticky-hero-wrap shrink-0" aria-label="Spoon logo">
+		<div class="mash-sticky-hero-wrap shrink-0" aria-label="Scoop logo">
 			<img class="mash-sticky-hero" src={heroImage.src} alt={heroImage.alt} />
 		</div>
 	{/if}
@@ -476,7 +479,7 @@
 					data-card-scroll
 					value={editableText}
 					placeholder="Add a caption…"
-					class="mash-sticky-body is-caption min-h-0 w-full resize-none overflow-y-auto overscroll-contain bg-transparent px-3 py-2 text-[13px] leading-relaxed outline-none"
+					class="mash-sticky-body is-caption min-h-0 w-full resize-none overflow-y-auto overscroll-contain bg-transparent outline-none"
 					style="color: var(--mash-card-ink); text-align: {align};"
 					oninput={(e) => commitEditable((e.currentTarget as HTMLTextAreaElement).value)}
 					onpointerdown={(e) => e.stopPropagation()}
@@ -487,7 +490,7 @@
 				<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 				<div
 					data-card-scroll
-					class="mash-sticky-preview mash-sticky-clip-caption px-3 py-2 text-[13px] leading-relaxed"
+					class="mash-sticky-preview mash-sticky-clip-caption"
 					style="color: var(--mash-card-ink); text-align: {align};"
 					role="article"
 					onclick={onPreviewClick}
@@ -506,7 +509,7 @@
 				data-card-scroll
 				value={editableText}
 				placeholder="Write here… Use [[Note title]] for links."
-				class="mash-sticky-body absolute inset-0 h-full w-full resize-none overflow-y-auto overscroll-contain bg-transparent px-3 py-2 text-[13px] leading-relaxed outline-none"
+				class="mash-sticky-body absolute inset-0 h-full w-full resize-none overflow-y-auto overscroll-contain bg-transparent outline-none"
 				style="color: var(--mash-card-ink); text-align: {align};"
 				oninput={(e) => commitEditable((e.currentTarget as HTMLTextAreaElement).value)}
 				onpointerdown={(e) => e.stopPropagation()}
@@ -519,7 +522,7 @@
 		<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 		<div
 			data-card-scroll
-			class="mash-sticky-preview min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-2 text-[13px] leading-relaxed"
+			class="mash-sticky-preview min-h-0 flex-1 overflow-y-auto overscroll-contain"
 			style="color: var(--mash-card-ink); text-align: {align};"
 			role="article"
 			onclick={onPreviewClick}
@@ -530,7 +533,7 @@
 				<!-- eslint-disable-next-line svelte/no-at-html-tags -- renderMarkdown escapes raw HTML before producing previewHtml. -->
 				{@html previewHtml}
 			{:else}
-				<p class="opacity-50">Nothing to preview yet…</p>
+				<p class="mash-sticky-preview-empty">Nothing to preview yet…</p>
 			{/if}
 		</div>
 	{/if}
@@ -630,6 +633,59 @@
 {/if}
 
 <style>
+	.mash-sticky-editor {
+		--mash-sticky-pad-x: 0.85rem;
+		--mash-sticky-pad-y: 0.7rem;
+	}
+	.mash-sticky-toolbar {
+		display: flex;
+		flex-shrink: 0;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.35rem;
+		min-height: 1.85rem;
+		padding: 0.28rem 0.4rem 0.28rem 0.45rem;
+		border-bottom: 1px solid var(--mash-card-edge);
+		background: color-mix(in srgb, var(--mash-card) 88%, var(--mash-card-hover));
+	}
+	.mash-sticky-editor.is-preview .mash-sticky-toolbar {
+		background: color-mix(in srgb, var(--mash-card) 96%, transparent);
+	}
+	.mash-sticky-toolbar-cluster {
+		display: flex;
+		align-items: center;
+		gap: 1px;
+		min-width: 0;
+	}
+	.mash-sticky-toolbar-secondary {
+		flex-shrink: 0;
+		margin-left: auto;
+	}
+	.mash-sticky-toolbar-hint {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		padding: 0 0.3rem;
+		color: var(--mash-card-muted, #6b5e4e);
+		font-size: 9px;
+		font-weight: 550;
+		letter-spacing: 0.02em;
+		opacity: 0.88;
+	}
+	.mash-sticky-mode-toggle {
+		display: inline-flex;
+		align-items: center;
+		gap: 1px;
+		padding: 1px;
+		border-radius: 8px;
+		background: color-mix(in srgb, var(--mash-card-hover) 70%, transparent);
+	}
+	.mash-sticky-body,
+	.mash-sticky-preview {
+		padding: var(--mash-sticky-pad-y) var(--mash-sticky-pad-x);
+		font-size: 13px;
+		line-height: 1.6;
+	}
 	.mash-sticky-body {
 		font-family: var(--mash-font-ui, 'IBM Plex Sans', sans-serif);
 		caret-color: var(--mash-accent, #4f7a3e);
@@ -638,31 +694,37 @@
 	}
 	.mash-sticky-body::placeholder {
 		color: var(--mash-card-muted, #6b5e4e);
-		opacity: 0.7;
+		opacity: 0.65;
+	}
+	.mash-sticky-body:focus-visible {
+		outline: none;
 	}
 	.mash-sticky-toolbar-sep {
 		display: inline-block;
 		width: 1px;
-		height: 14px;
-		margin: 0 2px;
+		height: 12px;
+		margin: 0 3px;
 		background: var(--mash-card-edge-strong);
-		opacity: 0.7;
+		opacity: 0.55;
+		flex-shrink: 0;
 	}
 	.mash-sticky-zoom-label {
-		min-width: 2.4rem;
-		padding: 0 2px;
+		min-width: 2.35rem;
+		padding: 0 1px;
 		color: var(--mash-card-muted, #6b5e4e);
 		font-size: 9px;
 		font-variant-numeric: tabular-nums;
+		letter-spacing: 0.01em;
 		text-align: center;
+		opacity: 0.85;
 	}
 	.mash-sticky-hero-wrap {
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		min-height: 88px;
-		padding: 8px 12px 4px;
-		background: color-mix(in srgb, var(--mash-card-hover) 55%, transparent);
+		padding: 10px 14px 6px;
+		background: color-mix(in srgb, var(--mash-card-hover) 48%, transparent);
 	}
 	.mash-sticky-hero {
 		display: block;
@@ -677,7 +739,7 @@
 		flex: 1 1 auto;
 		max-height: min(52vh, 420px);
 		overflow: auto;
-		padding: 8px 12px 0;
+		padding: 10px var(--mash-sticky-pad-x) 0;
 		overscroll-behavior: contain;
 		scrollbar-width: thin;
 	}
@@ -692,6 +754,13 @@
 		border: none;
 		background: transparent;
 		cursor: zoom-in;
+		border-radius: 8px;
+	}
+	.mash-sticky-clip-hit:focus-visible {
+		outline: none;
+		box-shadow:
+			0 0 0 2px var(--mash-card),
+			0 0 0 4px var(--mash-accent-ring);
 	}
 	.mash-sticky-clip-viewport.is-zoomed .mash-sticky-clip-hit {
 		width: calc(100% * var(--clip-zoom, 1));
@@ -730,8 +799,9 @@
 	.mash-clip-inspect-backdrop {
 		position: absolute;
 		inset: 0;
-		background: rgb(20 16 12 / 0.62);
-		backdrop-filter: blur(6px);
+		background: var(--mash-backdrop, rgb(20 16 12 / 0.62));
+		backdrop-filter: blur(8px);
+		-webkit-backdrop-filter: blur(8px);
 	}
 	.mash-clip-inspect-panel {
 		position: relative;
@@ -742,9 +812,9 @@
 		height: min(860px, 100%);
 		overflow: hidden;
 		border: 1px solid var(--mash-panel-border, var(--mash-card-edge));
-		border-radius: 16px;
+		border-radius: 18px;
 		background: var(--mash-panel, var(--mash-card-hover));
-		box-shadow: 0 24px 64px rgb(0 0 0 / 0.35);
+		box-shadow: var(--mash-panel-shadow, 0 24px 64px rgb(0 0 0 / 0.35));
 		color: var(--mash-ink, var(--mash-card-ink));
 	}
 	.mash-clip-inspect-toolbar {
@@ -752,8 +822,10 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: 12px;
-		padding: 10px 12px;
+		min-height: 48px;
+		padding: 10px 14px;
 		border-bottom: 1px solid var(--mash-tray-edge, var(--mash-card-edge));
+		background: color-mix(in srgb, var(--mash-panel) 88%, var(--mash-board));
 	}
 	.mash-clip-inspect-title {
 		min-width: 0;
@@ -762,26 +834,28 @@
 		white-space: nowrap;
 		font-size: 13px;
 		font-weight: 600;
+		letter-spacing: -0.01em;
 	}
 	.mash-clip-inspect-actions {
 		display: flex;
 		align-items: center;
 		gap: 2px;
+		flex-shrink: 0;
 	}
 	.mash-clip-inspect-viewport {
 		min-height: 0;
 		flex: 1;
 		overflow: auto;
-		padding: 18px;
+		padding: 20px;
 		overscroll-behavior: contain;
-		background: color-mix(in srgb, var(--mash-board, #efe6d8) 70%, transparent);
+		background: color-mix(in srgb, var(--mash-board, #efe6d8) 72%, transparent);
 	}
 	.mash-clip-inspect-viewport img {
 		display: block;
 		width: min(100%, 720px);
 		max-height: 100%;
 		margin: 0 auto;
-		border-radius: 10px;
+		border-radius: 12px;
 		object-fit: contain;
 		background: white;
 		box-shadow: 0 12px 32px rgb(0 0 0 / 0.18);
@@ -795,25 +869,47 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		width: 22px;
-		height: 22px;
-		border-radius: 6px;
+		width: 24px;
+		height: 24px;
+		border-radius: 7px;
 		color: var(--mash-card-muted, #6b5e4e);
 		background: transparent;
 		border: none;
 		cursor: pointer;
+		transition:
+			background 120ms ease,
+			color 120ms ease,
+			opacity 120ms ease;
 	}
-	.mash-sticky-mode-btn:hover {
+	.mash-sticky-mode-btn.is-quiet {
+		color: color-mix(in srgb, var(--mash-card-muted, #6b5e4e) 82%, transparent);
+	}
+	.mash-sticky-mode-btn:hover:not(:disabled) {
 		background: var(--mash-card-hover);
 		color: var(--mash-card-ink, #2c2418);
 	}
+	.mash-sticky-mode-btn:focus-visible {
+		outline: none;
+		box-shadow:
+			0 0 0 2px var(--mash-card),
+			0 0 0 3.5px var(--mash-accent-ring);
+		color: var(--mash-card-ink, #2c2418);
+	}
 	.mash-sticky-mode-btn:disabled {
-		opacity: 0.4;
+		opacity: 0.38;
 		cursor: default;
 	}
 	.mash-sticky-mode-btn.is-active {
 		background: var(--mash-accent-wash);
 		color: var(--mash-accent, #4f7a3e);
+	}
+	.mash-sticky-preview {
+		color: var(--mash-card-ink);
+	}
+	.mash-sticky-preview-empty {
+		margin: 0.35em 0;
+		opacity: 0.48;
+		font-style: italic;
 	}
 	.mash-sticky-preview :global(h1),
 	.mash-sticky-preview :global(h2),
@@ -821,7 +917,7 @@
 		font-family: var(--mash-font-display, Georgia, serif);
 		font-weight: 650;
 		line-height: 1.25;
-		margin: 0.6em 0 0.35em;
+		margin: 0.65em 0 0.35em;
 	}
 	.mash-sticky-preview :global(h1) {
 		font-size: 1.15em;
@@ -835,7 +931,7 @@
 	.mash-sticky-preview :global(p),
 	.mash-sticky-preview :global(ul),
 	.mash-sticky-preview :global(ol) {
-		margin: 0.35em 0;
+		margin: 0.4em 0;
 	}
 	.mash-sticky-preview :global(ul),
 	.mash-sticky-preview :global(ol) {
@@ -849,7 +945,7 @@
 	}
 	.mash-sticky-preview :global(pre) {
 		overflow-x: auto;
-		padding: 0.6em 0.75em;
+		padding: 0.65em 0.8em;
 		border-radius: 8px;
 		background: var(--mash-card-hover);
 		font-size: 0.85em;
@@ -863,8 +959,8 @@
 		color: var(--mash-accent, #4f7a3e);
 	}
 	.mash-sticky-preview :global(blockquote) {
-		margin: 0.4em 0;
-		padding-left: 0.75em;
+		margin: 0.45em 0;
+		padding-left: 0.8em;
 		border-left: 3px solid var(--mash-card-edge-strong);
 		opacity: 0.9;
 	}
@@ -872,7 +968,7 @@
 		display: block;
 		max-width: 100%;
 		height: auto;
-		margin: 0.4em 0;
+		margin: 0.45em 0;
 		border-radius: 6px;
 	}
 	.mash-sticky-preview :global(.mash-wikilink) {
@@ -887,5 +983,12 @@
 	}
 	.mash-sticky-preview :global(.mash-wikilink:hover) {
 		opacity: 0.85;
+	}
+	.mash-sticky-preview :global(.mash-wikilink:focus-visible) {
+		outline: none;
+		border-radius: 3px;
+		box-shadow:
+			0 0 0 2px var(--mash-card),
+			0 0 0 3.5px var(--mash-accent-ring);
 	}
 </style>

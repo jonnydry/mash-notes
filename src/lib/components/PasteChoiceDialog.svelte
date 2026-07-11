@@ -30,7 +30,7 @@
 
 {#if open && analysis}
 	<div
-		class="fixed inset-0 z-[60] flex items-center justify-center bg-[var(--mash-backdrop)] p-4 backdrop-blur-md"
+		class="mash-dialog-backdrop mash-paste-backdrop"
 		role="presentation"
 		onclick={(event) => {
 			if (event.target === event.currentTarget) onClose();
@@ -38,21 +38,17 @@
 	>
 		<div
 			use:focusTrap={{ initialFocus: '[data-dialog-initial-focus]' }}
-			class="w-full max-w-xl overflow-hidden rounded-2xl border shadow-2xl"
-			style="border-color: var(--mash-panel-border); background: var(--mash-panel-strong); color: var(--mash-ink);"
+			class="mash-dialog-panel mash-paste-dialog"
 			role="dialog"
 			aria-modal="true"
 			aria-labelledby="mash-paste-choice-title"
 		>
-			<header
-				class="flex items-center gap-3 border-b px-5 py-4"
-				style="border-color: var(--mash-divider);"
-			>
+			<header class="mash-paste-header">
 				<div class="min-w-0 flex-1">
-					<h2 id="mash-paste-choice-title" class="mash-display text-lg font-semibold">
+					<h2 id="mash-paste-choice-title" class="mash-display text-lg font-semibold tracking-tight">
 						How should this land?
 					</h2>
-					<p class="mt-0.5 text-xs" style="color: var(--mash-ink-muted);">
+					<p class="mash-dialog-subtitle">
 						Turn the clipboard into one note or a ready-to-move set.
 					</p>
 				</div>
@@ -67,63 +63,52 @@
 				</button>
 			</header>
 
-			<div class="p-5">
-				<pre
-					class="max-h-36 overflow-auto rounded-xl border p-3 text-xs leading-relaxed whitespace-pre-wrap"
-					style="border-color: var(--mash-divider); background: var(--mash-hover-fill-soft); color: var(--mash-ink-muted);">{previewText()}</pre>
+			<div class="mash-paste-body">
+				<pre class="mash-paste-preview">{previewText()}</pre>
 
-				<div class="mt-4 grid gap-2 sm:grid-cols-3">
+				<div class="mash-paste-choices">
 					<button
 						type="button"
-						class="mash-btn-ghost relative flex min-h-28 flex-col items-start rounded-xl p-3 text-left"
-						class:border-[var(--mash-accent)]={analysis.suggestedMode === 'single'}
+						class="mash-btn-ghost mash-paste-choice"
+						class:is-suggested={analysis.suggestedMode === 'single'}
 						onclick={() => onChoose('single')}
 					>
 						<ClipboardPaste class="h-5 w-5 text-[var(--mash-accent-bright)]" />
-						<strong class="mt-3 text-sm">One card</strong>
-						<small class="mt-1" style="color: var(--mash-ink-muted);"
-							>Keep the clipboard together</small
-						>
-						{#if analysis.suggestedMode === 'single'}<span
-								class="mt-auto pt-2 text-[9px] font-semibold uppercase"
-								style="color: var(--mash-accent-bright);">Suggested</span
-							>{/if}
+						<strong>One card</strong>
+						<small>Keep the clipboard together</small>
+						{#if analysis.suggestedMode === 'single'}
+							<span class="mash-paste-suggested">Suggested</span>
+						{/if}
 					</button>
 
 					<button
 						type="button"
-						class="mash-btn-ghost relative flex min-h-28 flex-col items-start rounded-xl p-3 text-left disabled:opacity-40"
-						class:border-[var(--mash-accent)]={analysis.suggestedMode === 'lines'}
+						class="mash-btn-ghost mash-paste-choice"
+						class:is-suggested={analysis.suggestedMode === 'lines'}
 						disabled={analysis.lines.length < 2}
 						onclick={() => onChoose('lines')}
 					>
 						<Rows3 class="h-5 w-5 text-[var(--mash-accent-bright)]" />
-						<strong class="mt-3 text-sm">{analysis.lines.length} line cards</strong>
-						<small class="mt-1" style="color: var(--mash-ink-muted);"
-							>Great for lists and options</small
-						>
-						{#if analysis.suggestedMode === 'lines'}<span
-								class="mt-auto pt-2 text-[9px] font-semibold uppercase"
-								style="color: var(--mash-accent-bright);">Suggested</span
-							>{/if}
+						<strong>{analysis.lines.length} line cards</strong>
+						<small>Great for lists and options</small>
+						{#if analysis.suggestedMode === 'lines'}
+							<span class="mash-paste-suggested">Suggested</span>
+						{/if}
 					</button>
 
 					<button
 						type="button"
-						class="mash-btn-ghost relative flex min-h-28 flex-col items-start rounded-xl p-3 text-left disabled:opacity-40"
-						class:border-[var(--mash-accent)]={analysis.suggestedMode === 'paragraphs'}
+						class="mash-btn-ghost mash-paste-choice"
+						class:is-suggested={analysis.suggestedMode === 'paragraphs'}
 						disabled={analysis.paragraphs.length < 2}
 						onclick={() => onChoose('paragraphs')}
 					>
 						<Pilcrow class="h-5 w-5 text-[var(--mash-accent-bright)]" />
-						<strong class="mt-3 text-sm">{analysis.paragraphs.length} paragraph cards</strong>
-						<small class="mt-1" style="color: var(--mash-ink-muted);"
-							>Keep related context together</small
-						>
-						{#if analysis.suggestedMode === 'paragraphs'}<span
-								class="mt-auto pt-2 text-[9px] font-semibold uppercase"
-								style="color: var(--mash-accent-bright);">Suggested</span
-							>{/if}
+						<strong>{analysis.paragraphs.length} paragraph cards</strong>
+						<small>Keep related context together</small>
+						{#if analysis.suggestedMode === 'paragraphs'}
+							<span class="mash-paste-suggested">Suggested</span>
+						{/if}
 					</button>
 				</div>
 			</div>

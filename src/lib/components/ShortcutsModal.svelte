@@ -27,7 +27,7 @@
 
 {#if open}
 	<div
-		class="mash-shortcuts-backdrop"
+		class="mash-dialog-backdrop mash-shortcuts-backdrop"
 		role="presentation"
 		onclick={(e) => {
 			if (e.target === e.currentTarget) onClose();
@@ -35,7 +35,7 @@
 	>
 		<div
 			use:focusTrap={{ initialFocus: '[data-dialog-initial-focus]' }}
-			class="mash-shortcuts-dialog"
+			class="mash-dialog-panel mash-shortcuts-dialog"
 			role="dialog"
 			aria-modal="true"
 			aria-labelledby="mash-shortcuts-title"
@@ -49,9 +49,7 @@
 					>
 						Keyboard shortcuts
 					</h2>
-					<p class="mt-0.5 text-[11px]" style="color: var(--mash-ink-muted);">
-						⌘ is Ctrl on Windows and Linux
-					</p>
+					<p class="mash-dialog-subtitle">⌘ is Ctrl on Windows and Linux</p>
 				</div>
 				<button
 					data-dialog-initial-focus

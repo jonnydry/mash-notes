@@ -81,7 +81,7 @@
 				<div class="mash-pdf-clippings-empty">
 					<img
 						src="/icons/New%20Icons/Mashed%20potato%20character@2x.png"
-						alt="Spoon, the Mash mascot"
+						alt="Scoop, the Mash mascot"
 					/>
 					<p>{emptyClippingsHint}</p>
 					{#if emptyClippingsSubhint}
@@ -133,9 +133,9 @@
 		inset: 0;
 		z-index: 20;
 		display: grid;
-		grid-template-columns: minmax(0, 1fr) minmax(250px, 320px);
-		gap: 16px;
-		padding: 18px 24px 18px 100px;
+		grid-template-columns: minmax(0, 1fr) minmax(248px, 308px);
+		gap: 14px;
+		padding: 16px 20px 16px 100px;
 		background: color-mix(in srgb, var(--mash-board) 97%, transparent);
 		color: var(--mash-ink);
 	}
@@ -146,7 +146,7 @@
 	.mash-pdf-clippings {
 		min-width: 0;
 		border: 1px solid var(--mash-panel-border);
-		border-radius: 18px;
+		border-radius: 16px;
 		background: var(--mash-panel);
 		box-shadow: var(--mash-shadow-lift);
 		overflow: hidden;
@@ -159,19 +159,26 @@
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) auto auto auto auto;
 		align-items: center;
-		gap: 14px;
-		min-height: 58px;
-		padding: 0 14px 0 18px;
+		gap: 10px 12px;
+		min-height: 54px;
+		padding: 0 12px 0 16px;
 		border-bottom: 1px solid var(--mash-panel-border);
-		background: color-mix(in srgb, var(--mash-panel) 88%, var(--mash-board));
+		background: color-mix(in srgb, var(--mash-panel) 90%, var(--mash-board));
 	}
 	.mash-pdf-file {
 		display: flex;
 		min-width: 0;
 		align-items: center;
-		gap: 9px;
+		gap: 8px;
 		font-size: 13px;
 		font-weight: 600;
+		letter-spacing: -0.01em;
+		color: var(--mash-ink);
+	}
+	.mash-pdf-file :global(svg) {
+		flex-shrink: 0;
+		color: var(--mash-ink-muted);
+		opacity: 0.88;
 	}
 	.mash-pdf-file span {
 		overflow: hidden;
@@ -185,10 +192,20 @@
 		width: 30px;
 		height: 30px;
 		border-radius: 8px;
-		color: inherit;
+		color: var(--mash-ink-muted);
+		transition:
+			background 120ms ease,
+			color 120ms ease;
 	}
 	.mash-pdf-toolbar :global(button:hover:not(:disabled)) {
 		background: var(--mash-hover-fill);
+		color: var(--mash-ink);
+	}
+	.mash-pdf-toolbar :global(button:focus-visible) {
+		outline: none;
+		box-shadow:
+			0 0 0 2px var(--mash-panel),
+			0 0 0 4px var(--mash-accent-ring);
 		color: var(--mash-ink);
 	}
 	.mash-pdf-toolbar :global(button:disabled) {
@@ -196,6 +213,7 @@
 	}
 	.mash-pdf-close {
 		margin-left: 2px;
+		color: var(--mash-ink-muted);
 	}
 	.mash-pdf-clippings {
 		display: flex;
@@ -203,82 +221,108 @@
 	}
 	.mash-pdf-clippings-title {
 		display: flex;
-		min-height: 72px;
+		min-height: 64px;
 		align-items: flex-start;
-		gap: 9px;
-		padding: 18px 18px 14px;
+		gap: 10px;
+		padding: 14px 16px 12px;
 		border-bottom: 1px solid var(--mash-panel-border);
+		background: color-mix(in srgb, var(--mash-panel) 92%, var(--mash-board));
 	}
 	.mash-pdf-clippings-title > :global(svg) {
-		margin-top: 4px;
+		margin-top: 3px;
 		color: var(--mash-accent);
+		flex-shrink: 0;
 	}
 	.mash-pdf-clippings-title span {
 		display: block;
-		font-size: 20px;
+		font-size: 18px;
 		font-weight: 600;
+		letter-spacing: -0.015em;
+		line-height: 1.2;
 	}
 	.mash-pdf-clippings-title small {
 		display: block;
 		margin-top: 3px;
 		color: var(--mash-ink-muted);
 		font-size: 10px;
+		line-height: 1.35;
 	}
 	.mash-pdf-clipping-list {
 		min-height: 0;
 		flex: 1;
 		overflow-y: auto;
-		padding: 12px;
+		padding: 10px;
+		scrollbar-width: thin;
 	}
 	.mash-pdf-clippings-empty {
 		display: flex;
 		height: 100%;
-		min-height: 280px;
+		min-height: 240px;
 		flex-direction: column;
 		align-items: center;
 		justify-content: center;
-		padding: 24px;
+		padding: 28px 20px;
 		text-align: center;
+		border-radius: 12px;
+		background: color-mix(in srgb, var(--mash-hover-fill-soft) 70%, transparent);
 	}
 	.mash-pdf-clippings-empty img {
-		width: 72px;
-		height: 72px;
+		width: 68px;
+		height: 68px;
 		object-fit: contain;
-		filter: drop-shadow(0 6px 8px rgb(0 0 0 / 0.18));
+		opacity: 0.96;
+		filter: drop-shadow(0 6px 10px rgb(0 0 0 / 0.16));
 	}
 	.mash-pdf-clippings-empty p {
-		margin-top: 12px;
+		margin: 14px 0 0;
+		max-width: 16rem;
 		font-family: var(--mash-font-display, Georgia, serif);
-		font-size: 16px;
-		line-height: 1.3;
+		font-size: 15px;
+		line-height: 1.35;
+		color: var(--mash-ink);
 	}
 	.mash-pdf-clippings-empty span {
 		margin-top: 6px;
+		max-width: 15rem;
 		color: var(--mash-ink-muted);
 		font-size: 11px;
 		line-height: 1.45;
 	}
 	.mash-pdf-clipping {
 		position: relative;
-		margin-bottom: 10px;
-		padding: 12px 12px 13px;
+		margin-bottom: 8px;
+		padding: 11px 11px 12px;
 		border: 1px solid var(--mash-tray-edge);
-		border-radius: 13px;
+		border-radius: 12px;
 		background: var(--mash-hover-fill-soft);
+		transition:
+			border-color 140ms ease,
+			box-shadow 140ms ease;
+	}
+	.mash-pdf-clipping:last-child {
+		margin-bottom: 0;
 	}
 	.mash-pdf-clipping.is-newest {
-		border-color: var(--mash-accent-select);
-		box-shadow: 0 0 0 1px color-mix(in srgb, var(--mash-accent) 18%, transparent);
+		border-color: color-mix(in srgb, var(--mash-accent) 55%, var(--mash-tray-edge));
+		box-shadow: 0 0 0 1px color-mix(in srgb, var(--mash-accent) 16%, transparent);
+		background: color-mix(in srgb, var(--mash-accent-wash) 35%, var(--mash-hover-fill-soft));
 	}
 	.mash-pdf-clipping-meta {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
+		min-height: 1rem;
 		color: var(--mash-accent-bright);
 		font-size: 10px;
+		font-weight: 600;
+		letter-spacing: 0.01em;
+	}
+	.mash-pdf-clipping-meta :global(svg) {
+		color: var(--mash-ink-muted);
+		opacity: 0.55;
 	}
 	.mash-pdf-clipping p {
-		margin-top: 8px;
+		margin-top: 7px;
 		display: -webkit-box;
 		overflow: hidden;
 		-webkit-box-orient: vertical;
@@ -299,49 +343,70 @@
 	}
 	.mash-pdf-new-badge {
 		position: absolute;
-		top: 9px;
+		top: 8px;
 		right: 28px;
-		padding: 2px 6px;
+		padding: 2px 7px;
 		border-radius: 999px;
 		background: var(--mash-accent-wash);
 		color: var(--mash-accent-bright);
 		font-size: 8px;
 		font-weight: 650;
+		letter-spacing: 0.02em;
+		text-transform: uppercase;
 	}
 	.mash-pdf-clippings-actions {
-		padding: 13px;
+		padding: 12px;
 		border-top: 1px solid var(--mash-panel-border);
+		background: color-mix(in srgb, var(--mash-panel) 94%, var(--mash-board));
 	}
 	.mash-pdf-open-canvas,
 	.mash-pdf-keep-reading {
 		width: 100%;
-		min-height: 40px;
-		border-radius: 11px;
+		min-height: 38px;
+		border-radius: 10px;
 		font-size: 12px;
 		font-weight: 650;
+		transition:
+			background 140ms ease,
+			color 140ms ease,
+			opacity 140ms ease,
+			border-color 140ms ease;
 	}
 	.mash-pdf-open-canvas {
 		background: var(--mash-accent);
 		color: var(--mash-accent-ink);
+		box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+	}
+	.mash-pdf-open-canvas:hover:not(:disabled) {
+		background: var(--mash-accent-bright);
 	}
 	.mash-pdf-open-canvas:disabled {
 		opacity: 0.38;
 	}
+	.mash-pdf-open-canvas:focus-visible,
+	.mash-pdf-keep-reading:focus-visible {
+		outline: none;
+		box-shadow:
+			0 0 0 2px var(--mash-panel),
+			0 0 0 4px var(--mash-accent-ring);
+	}
 	.mash-pdf-keep-reading {
-		margin-top: 8px;
+		margin-top: 7px;
 		border: 1px solid var(--mash-tray-edge);
 		color: var(--mash-ink-muted);
 	}
 	.mash-pdf-keep-reading:hover {
 		color: var(--mash-ink);
 		background: var(--mash-hover-fill-soft);
+		border-color: color-mix(in srgb, var(--mash-ink-muted) 40%, var(--mash-tray-edge));
 	}
 	.mash-pdf-clippings-actions p {
-		margin-top: 9px;
+		margin: 9px 0 0;
 		color: var(--mash-ink-muted);
 		font-size: 9px;
 		line-height: 1.4;
 		text-align: center;
+		opacity: 0.9;
 	}
 
 	@media (max-width: 840px) {
@@ -350,13 +415,20 @@
 			grid-template-rows: minmax(270px, 1fr) minmax(210px, 30vh);
 			overflow: hidden;
 			padding: 12px 12px 84px;
+			gap: 10px;
 		}
 		.mash-pdf-clippings-title {
-			min-height: 58px;
-			padding: 11px 14px 9px;
+			min-height: 54px;
+			padding: 10px 12px 8px;
+		}
+		.mash-pdf-clippings-title span {
+			font-size: 16px;
+		}
+		.mash-pdf-clipping-list {
+			padding: 8px;
 		}
 		.mash-pdf-clippings-actions {
-			padding: 10px;
+			padding: 9px;
 		}
 		.mash-pdf-keep-reading,
 		.mash-pdf-clippings-actions p {
@@ -364,8 +436,9 @@
 		}
 		.mash-pdf-toolbar {
 			grid-template-columns: minmax(0, 1fr) auto auto auto;
-			gap: 7px;
-			padding-left: 12px;
+			gap: 6px;
+			min-height: 50px;
+			padding: 0 8px 0 12px;
 		}
 	}
 </style>

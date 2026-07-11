@@ -44,7 +44,7 @@
 
 {#if open}
 	<div
-		class="mash-confirm-backdrop"
+		class="mash-dialog-backdrop mash-confirm-backdrop"
 		role="presentation"
 		onclick={(e) => {
 			if (e.target === e.currentTarget) onCancel();
@@ -52,7 +52,7 @@
 	>
 		<div
 			use:focusTrap={{ initialFocus: '[data-dialog-initial-focus]' }}
-			class="mash-confirm-dialog"
+			class="mash-dialog-panel mash-confirm-dialog"
 			role="alertdialog"
 			aria-modal="true"
 			aria-labelledby="mash-confirm-title"
@@ -61,27 +61,17 @@
 			<h2 id="mash-confirm-title" class="mash-display text-base font-semibold tracking-tight">
 				{title}
 			</h2>
-			<p
-				id="mash-confirm-msg"
-				class="mt-2 text-sm leading-relaxed"
-				style="color: var(--mash-ink-muted);"
-			>
+			<p id="mash-confirm-msg" class="mash-dialog-message">
 				{message}
 			</p>
-			<div class="mt-4 flex items-center justify-end gap-2">
-				<button
-					type="button"
-					class="mash-btn-ghost rounded-lg px-3 py-1.5 text-xs"
-					onclick={onCancel}
-				>
+			<div class="mash-dialog-actions">
+				<button type="button" class="mash-btn-ghost mash-dialog-btn" onclick={onCancel}>
 					{cancelLabel}
 				</button>
 				<button
 					data-dialog-initial-focus
 					type="button"
-					class="rounded-lg px-3 py-1.5 text-xs font-semibold {danger
-						? 'mash-btn-danger'
-						: 'mash-btn'}"
+					class="mash-dialog-btn mash-dialog-btn-primary {danger ? 'mash-btn-danger' : 'mash-btn'}"
 					onclick={onConfirm}
 				>
 					{confirmLabel}
