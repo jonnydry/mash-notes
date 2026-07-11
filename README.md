@@ -22,6 +22,7 @@ Fast, cute, minimal web notes — a canvas-first, local-only PWA. Open in any br
 - **Import markdown vault…** — pick an Obsidian vault folder or Bear `.md` export; folders, YAML frontmatter, `[[wikilinks]]`, and `#tags` map into Mash
 - Command palette (⌘K), search, folders/tags filters
 - Mobile / coarse-pointer desk: bottom dock, peel + selection bar above it, long-press place from peel
+- Drop or open **Word (.docx)** documents in a read-only reader and clip text to stickies (PDF reader remains for PDFs)
 - PWA install + offline static assets
 
 ## Quick start
