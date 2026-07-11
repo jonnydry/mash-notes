@@ -231,13 +231,18 @@ export function fitViewport(
 	bounds: { minX: number; minY: number; width: number; height: number },
 	viewW: number,
 	viewH: number,
-	padding = 48
+	padding = 48,
+	scaleBounds: { min?: number; max?: number } = {}
 ): { panX: number; panY: number; scale: number } {
 	const usableW = Math.max(1, viewW - padding * 2);
 	const usableH = Math.max(1, viewH - padding * 2);
 	const bw = Math.max(1, bounds.width);
 	const bh = Math.max(1, bounds.height);
-	const scale = clamp(Math.min(usableW / bw, usableH / bh), 0.4, 2);
+	const scale = clamp(
+		Math.min(usableW / bw, usableH / bh),
+		scaleBounds.min ?? 0.4,
+		scaleBounds.max ?? 2
+	);
 	const contentW = bw * scale;
 	const contentH = bh * scale;
 	const panX = (viewW - contentW) / 2 - bounds.minX * scale;

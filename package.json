@@ -16,7 +16,8 @@
 		"test:unit": "vitest",
 		"test": "npm run test:unit -- --run",
 		"test:e2e": "playwright test",
-		"ci": "npm run check && npm run build && npm run test && npm run test:e2e"
+		"perf:budget": "node scripts/check-performance-budget.mjs",
+		"ci": "npm run check && npm run build && npm run perf:budget && npm run test && npm run test:e2e"
 	},
 	"devDependencies": {
 		"@eslint/compat": "^2.0.4",

@@ -1,9 +1,5 @@
 <script lang="ts">
-	import '@fontsource/ibm-plex-sans/400.css';
-	import '@fontsource/ibm-plex-sans/500.css';
-	import '@fontsource/ibm-plex-sans/600.css';
-	import '@fontsource/fraunces/500.css';
-	import '@fontsource/fraunces/600.css';
+	import './fonts.css';
 	import './layout.css';
 	import { theme } from '$lib/stores/theme.svelte';
 

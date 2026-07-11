@@ -59,8 +59,16 @@ describe('sync-file', () => {
 		localStorage.clear();
 	});
 
-	it('round-trips a v3 sync bundle with desk', async () => {
-		const notes = [note({ id: 'a', title: 'A', body: 'hi', modified: 10 })];
+	it('round-trips a v4 sync bundle with desk and operation provenance', async () => {
+		const notes = [note({ id: 'a', title: 'A', body: 'hi', modified: 10, operationId: 'op-1' })];
+		await db.operations.put({
+			id: 'op-1',
+			sessionId: 'session-1',
+			type: 'mash',
+			inputNoteIds: ['source-a', 'source-b'],
+			outputNoteIds: ['a'],
+			created: 9
+		});
 		await db.canvases.put({
 			id: 'c1',
 			folder: '',
@@ -82,12 +90,24 @@ describe('sync-file', () => {
 		expect(bundle.desk?.items).toHaveLength(1);
 		expect(bundle.desk?.dismissed.c1).toContain('gone');
 		expect(bundle.tombstones).toEqual([]);
+		expect(bundle.operations?.[0]).toMatchObject({ id: 'op-1', type: 'mash' });
 
 		const parsed = parseSyncBundle(JSON.stringify(bundle));
 		expect(parsed.ok).toBe(true);
 		if (!parsed.ok) return;
 		expect(parsed.bundle.notes[0].title).toBe('A');
+		expect(parsed.bundle.notes[0].operationId).toBe('op-1');
+		expect(parsed.bundle.operations?.[0].outputNoteIds).toEqual(['a']);
 		expect(parsed.bundle.desk?.canvases[0].folder).toBe('');
+	});
+
+	it('still accepts v3 tombstone bundles without operation history', () => {
+		const parsed = parseSyncBundle(
+			JSON.stringify({ version: 3, exportedAt: 1, notes: [], tombstones: [] })
+		);
+		expect(parsed.ok).toBe(true);
+		if (!parsed.ok) return;
+		expect(parsed.bundle.operations).toBeUndefined();
 	});
 
 	it('still accepts v1 notes-only bundles', () => {
@@ -227,18 +247,61 @@ describe('sync-file', () => {
 	});
 
 	it('persistMergedSync commits notes and desk together', async () => {
-		const notes = [note({ id: 'n1', title: 'One', modified: 5 })];
+		const notes = [note({ id: 'n1', title: 'One', modified: 5, operationId: 'op-1' })];
 		const desk = {
 			canvases: [{ id: 'remote-root', folder: '', title: 'Desk', created: 1, modified: 10 }],
 			items: [{ id: 'ri1', canvasId: 'remote-root', noteId: 'n1', x: 40, y: 50 }],
 			dismissed: { 'remote-root': ['gone'] }
 		};
-		const { desk: deskSummary } = await persistMergedSync(notes, desk, new Set(['n1']));
+		const operation = {
+			id: 'op-1',
+			sessionId: 'remote-session',
+			type: 'split-lines',
+			inputNoteIds: ['source'],
+			outputNoteIds: ['n1'],
+			created: 4
+		};
+		const { desk: deskSummary, operationsUpserted } = await persistMergedSync(
+			notes,
+			desk,
+			new Set(['n1']),
+			'local-session',
+			[operation]
+		);
 		expect(deskSummary?.itemsUpserted).toBe(1);
+		expect(operationsUpserted).toBe(1);
 		expect(await db.notes.get('n1')).toMatchObject({ title: 'One' });
+		expect(await db.operations.get('op-1')).toMatchObject({ sessionId: 'local-session' });
 		const canvases = await db.canvases.toArray();
 		expect(canvases).toHaveLength(1);
 		expect([...getDismissedNoteIds(canvases[0].id)]).toEqual(['gone']);
+	});
+
+	it('remaps an operation id that belongs to another local desk', async () => {
+		await db.operations.put({
+			id: 'shared-op',
+			sessionId: 'desk-a',
+			type: 'mash',
+			inputNoteIds: ['old-a', 'old-b'],
+			outputNoteIds: ['old-result'],
+			created: 1
+		});
+		const notes = [note({ id: 'new-result', title: 'Imported result', operationId: 'shared-op' })];
+		await persistMergedSync(notes, undefined, new Set(['new-result']), 'desk-b', [
+			{
+				id: 'shared-op',
+				sessionId: 'remote-desk',
+				type: 'split-lines',
+				inputNoteIds: ['source'],
+				outputNoteIds: ['new-result'],
+				created: 2
+			}
+		]);
+
+		const imported = await db.notes.get('new-result');
+		expect(imported?.operationId).not.toBe('shared-op');
+		expect((await db.operations.get(imported!.operationId!))?.sessionId).toBe('desk-b');
+		expect((await db.operations.get('shared-op'))?.sessionId).toBe('desk-a');
 	});
 
 	it('persistMergedSync rolls notes back when desk apply fails', async () => {

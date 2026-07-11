@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { X } from 'lucide-svelte';
 	import { KEYBOARD_SHORTCUT_GROUPS, type ShortcutGroup } from '$lib/keyboard-shortcuts';
+	import { focusTrap } from '$lib/focus-trap';
 
 	interface Props {
 		open: boolean;
@@ -10,11 +11,8 @@
 
 	let { open, onClose, groups = KEYBOARD_SHORTCUT_GROUPS }: Props = $props();
 
-	let closeBtn: HTMLButtonElement | undefined = $state();
-
 	$effect(() => {
 		if (!open) return;
-		requestAnimationFrame(() => closeBtn?.focus());
 		function onKey(e: KeyboardEvent) {
 			if (e.key === 'Escape') {
 				e.preventDefault();
@@ -36,6 +34,7 @@
 		}}
 	>
 		<div
+			use:focusTrap={{ initialFocus: '[data-dialog-initial-focus]' }}
 			class="mash-shortcuts-dialog"
 			role="dialog"
 			aria-modal="true"
@@ -55,7 +54,7 @@
 					</p>
 				</div>
 				<button
-					bind:this={closeBtn}
+					data-dialog-initial-focus
 					type="button"
 					class="mash-peel-icon-btn"
 					onclick={onClose}

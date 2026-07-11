@@ -9,10 +9,13 @@ import {
 	getCanvasItems,
 	getOrCreateFolderCanvas,
 	listCanvasEdges,
+	newId,
 	removeCanvasEdge,
 	removeCanvasItem,
 	removeNotesFromCanvas,
 	replaceCanvasEdges,
+	replaceCanvasItemSubset,
+	setOperationReverted,
 	updateCanvasItemPosition
 } from '$lib/db';
 import type { Canvas, CanvasEdge, CanvasItem, Note } from '$lib/types';
@@ -28,6 +31,7 @@ import {
 	spatialNoteOrder,
 	type CanvasLayoutSnapshot
 } from '$lib/canvas-undo';
+import { deduplicateSet, spatialSetItems } from '$lib/set-operators';
 import {
 	bumpOverlappingRects,
 	gridSlotPosition,
@@ -48,6 +52,16 @@ export const COLLAPSED_CARD = { w: 220, h: 120 };
 export const EXPANDED_CARD = { w: 360, h: 320 };
 export const BUMP_GAP = 24;
 export const NOTE_MIME = 'application/x-mash-notes';
+
+function plainNoteSnapshot(note: Note): Note {
+	return {
+		...note,
+		tags: [...note.tags],
+		...(note.links ? { links: [...note.links] } : {}),
+		...(note.mashedFrom ? { mashedFrom: [...note.mashedFrom] } : {}),
+		...(note.source ? { source: { ...note.source } } : {})
+	};
+}
 
 export type CardSize = { w: number; h: number };
 
@@ -131,6 +145,10 @@ export type CreateCanvasSessionOpts = {
 	getNotesById: () => Map<string, Note>;
 	/** Dexie canvas.folder key ('' desk, folder path, or PINNED_CANVAS_KEY). */
 	getCanvasKey: () => string;
+	/** Owning lifecycle session. Canvas loading waits until this is available. */
+	getSessionId?: () => string | null;
+	onMeaningfulActivity?: () => void;
+	onOperationChanged?: () => void | Promise<void>;
 	/** Pin a note when dropped onto the Pinned canvas. */
 	ensureNotePinned?: (noteId: string) => void | Promise<void>;
 	getSelectionIds: () => string[];
@@ -142,6 +160,12 @@ export type CreateCanvasSessionOpts = {
 	deleteBlankNote: (id: string) => Promise<void>;
 	removeNoteFromSearch: (id: string) => void;
 	removeNoteFromLibrary: (id: string) => void;
+	/** Apply generated-note membership when a content receipt is undone/redone. */
+	applyNoteReceipt?: (
+		notesBefore: Note[] | undefined,
+		notesAfter: Note[] | undefined,
+		direction: 'before' | 'after'
+	) => void | Promise<void>;
 	/** Open a note in the screen-space editor (preferred over sticky expand). */
 	openNoteInStage?: (noteId: string, zone?: SnapZone) => void;
 };
@@ -165,15 +189,18 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 
 	// Non-reactive: must not invalidate folder-membership $effect via seq bumps.
 	let canvasLoadSeq = 0;
+	let undoContextKey = '';
 	const canvasUndo = new CanvasUndoStack();
 
 	const canvasUndoState = $derived.by(() => ({
 		revision: canvasUndoTick,
 		canUndo: canvasUndo.canUndo,
-		canRedo: canvasUndo.canRedo
+		canRedo: canvasUndo.canRedo,
+		operationId: canvasUndo.undoOperationId
 	}));
 	const canCanvasUndo = $derived(canvasUndoState.canUndo);
 	const canCanvasRedo = $derived(canvasUndoState.canRedo);
+	const canvasUndoOperationId = $derived(canvasUndoState.operationId);
 
 	const membershipKey = $derived.by(() => {
 		const key = opts.getCanvasKey();
@@ -196,20 +223,30 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 
 	/** Re-run canvas load when context or membership changes. */
 	$effect(() => {
-		const context = { key: opts.getCanvasKey(), membershipKey };
-		// untrack: canvasUndoTick++ both reads and writes — would infinite-loop the effect.
-		untrack(() => {
-			canvasUndo.clear();
-			canvasUndoTick++;
-			bumpRestore = null;
-		});
-		void loadContextCanvas(context.key);
+		const context = {
+			key: opts.getCanvasKey(),
+			sessionId: opts.getSessionId?.() ?? null,
+			membershipKey
+		};
+		if (opts.getSessionId && !context.sessionId) return;
+		const nextUndoContextKey = `${context.sessionId ?? ''}:${context.key}`;
+		if (nextUndoContextKey !== undoContextKey) {
+			undoContextKey = nextUndoContextKey;
+			// untrack: canvasUndoTick++ both reads and writes — would infinite-loop the effect.
+			untrack(() => {
+				canvasUndo.clear();
+				canvasUndoTick++;
+				bumpRestore = null;
+			});
+		}
+		void loadContextCanvas(context.key, context.sessionId);
 	});
 
-	async function loadContextCanvas(key: string) {
+	async function loadContextCanvas(key: string, sessionId = opts.getSessionId?.() ?? null) {
+		if (opts.getSessionId && !sessionId) return;
 		const seq = ++canvasLoadSeq;
 		try {
-			const canvas = await getOrCreateFolderCanvas(key);
+			const canvas = await getOrCreateFolderCanvas(key, sessionId ?? undefined);
 			if (seq !== canvasLoadSeq) return;
 			activeCanvas = canvas;
 			let items = await getCanvasItems(canvas.id);
@@ -261,8 +298,9 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 				}
 				return item;
 			});
-			canvasEdges = await listCanvasEdges(canvas.id);
+			const edges = await listCanvasEdges(canvas.id);
 			if (seq !== canvasLoadSeq) return;
+			canvasEdges = edges;
 			if (expandedNoteId && !items.some((i) => i.noteId === expandedNoteId)) {
 				expandedNoteId = null;
 				expandFocus = null;
@@ -558,6 +596,40 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		await replaceCanvasEdges(activeCanvas.id, edges);
 	}
 
+	async function applyCanvasItemReceipt(
+		itemsBefore: CanvasItem[] | undefined,
+		itemsAfter: CanvasItem[] | undefined,
+		direction: 'before' | 'after'
+	) {
+		if (!activeCanvas || (!itemsBefore && !itemsAfter)) return;
+		// A membership-triggered reload may already be in flight. This receipt is
+		// newer user intent, so prevent that older read from overwriting it.
+		canvasLoadSeq++;
+		const affectedIds = [
+			...new Set([...(itemsBefore ?? []), ...(itemsAfter ?? [])].map((item) => item.id))
+		];
+		// Undo entries can originate from Svelte state. IndexedDB cannot clone
+		// reactive proxies, so receipts always cross persistence as plain records.
+		const desired = (direction === 'before' ? (itemsBefore ?? []) : (itemsAfter ?? [])).map(
+			(item) => ({ ...item })
+		);
+		await replaceCanvasItemSubset(activeCanvas.id, affectedIds, desired);
+		const affected = new Set(affectedIds);
+		canvasItems = [...canvasItems.filter((item) => !affected.has(item.id)), ...desired];
+	}
+
+	function applyDismissalReceipt(
+		dismissedBefore: string[] | undefined,
+		dismissedAfter: string[] | undefined,
+		direction: 'before' | 'after'
+	) {
+		if (!activeCanvas || (!dismissedBefore && !dismissedAfter)) return;
+		const affected = [...new Set([...(dismissedBefore ?? []), ...(dismissedAfter ?? [])])];
+		undismissNotesFromCanvas(activeCanvas.id, affected);
+		const desired = direction === 'before' ? (dismissedBefore ?? []) : (dismissedAfter ?? []);
+		for (const noteId of desired) dismissNoteFromCanvas(activeCanvas.id, noteId);
+	}
+
 	function pushCanvasUndo(
 		label: string,
 		before: CanvasLayoutSnapshot[],
@@ -584,11 +656,21 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		const entry = canvasUndo.undo();
 		canvasUndoTick++;
 		if (!entry) return;
+		await opts.applyNoteReceipt?.(entry.notesBefore, entry.notesAfter, 'before');
+		await applyCanvasItemReceipt(entry.itemsBefore, entry.itemsAfter, 'before');
 		if (entry.before.length > 0) {
 			await applyLayoutSnapshots(entry.before);
 		}
 		if (entry.edgesBefore) {
 			await applyEdgeSnapshots(entry.edgesBefore);
+		}
+		applyDismissalReceipt(entry.dismissedBefore, entry.dismissedAfter, 'before');
+		if (entry.operationId) {
+			await setOperationReverted(entry.operationId, entry.operationRevertedBefore ?? true);
+			await opts.onOperationChanged?.();
+		}
+		if (entry.selectionBefore) {
+			opts.setSelection(entry.selectionBefore, entry.selectionBefore[0] ?? null);
 		}
 		opts.flashToast(`Undo ${entry.label}`);
 	}
@@ -597,11 +679,21 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		const entry = canvasUndo.redo();
 		canvasUndoTick++;
 		if (!entry) return;
+		await opts.applyNoteReceipt?.(entry.notesBefore, entry.notesAfter, 'after');
+		await applyCanvasItemReceipt(entry.itemsBefore, entry.itemsAfter, 'after');
 		if (entry.after.length > 0) {
 			await applyLayoutSnapshots(entry.after);
 		}
 		if (entry.edgesAfter) {
 			await applyEdgeSnapshots(entry.edgesAfter);
+		}
+		applyDismissalReceipt(entry.dismissedBefore, entry.dismissedAfter, 'after');
+		if (entry.operationId) {
+			await setOperationReverted(entry.operationId, entry.operationRevertedAfter ?? false);
+			await opts.onOperationChanged?.();
+		}
+		if (entry.selectionAfter) {
+			opts.setSelection(entry.selectionAfter, entry.selectionAfter[0] ?? null);
 		}
 		opts.flashToast(`Redo ${entry.label}`);
 	}
@@ -622,8 +714,15 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 	async function handleCanvasMoveEnd(
 		moves: Array<{ itemId: string; x: number; y: number }>,
 		before?: Array<{ itemId: string; x: number; y: number }>,
-		moveOpts?: { recordUndo?: boolean }
+		moveOpts?: {
+			recordUndo?: boolean;
+			label?: string;
+			actionId?: string;
+			affectedNoteIds?: string[];
+		}
 	) {
+		// Layout operators and drag completion supersede any in-flight canvas read.
+		canvasLoadSeq++;
 		const beforeSnaps =
 			before?.map((b) => {
 				const cur = canvasItems.find((i) => i.id === b.itemId);
@@ -635,9 +734,370 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 			return { itemId: m.itemId, x: m.x, y: m.y, w: cur?.w, h: cur?.h };
 		});
 		if (moveOpts?.recordUndo !== false) {
-			pushCanvasUndo(moves.length > 1 ? 'Arrange' : 'Move', beforeSnaps, afterSnaps);
+			canvasUndo.push({
+				label: moveOpts?.label ?? (moves.length > 1 ? 'Arrange' : 'Move'),
+				actionId: moveOpts?.actionId,
+				mutation: moveOpts?.actionId ? 'layout' : undefined,
+				affectedNoteIds: moveOpts?.affectedNoteIds,
+				before: beforeSnaps,
+				after: afterSnaps
+			});
+			canvasUndoTick++;
 		}
 		await Promise.all(moves.map((m) => updateCanvasItemPosition(m.itemId, { x: m.x, y: m.y })));
+		opts.onMeaningfulActivity?.();
+	}
+
+	async function deduplicateCanvasSelection(
+		noteIds: string[],
+		notesById: Map<string, Note>
+	): Promise<{ removed: number; keepNoteIds: string[] }> {
+		if (!activeCanvas) return { removed: 0, keepNoteIds: noteIds };
+		const selected = new Set(noteIds);
+		const selectedItems = canvasItems.filter((item) => selected.has(item.noteId));
+		const result = deduplicateSet(selectedItems, notesById);
+		if (result.removeItemIds.length === 0) {
+			return { removed: 0, keepNoteIds: result.keepNoteIds };
+		}
+		// Keep a stale membership reload from resurrecting the pre-operator view.
+		canvasLoadSeq++;
+		const removeIds = new Set(result.removeItemIds);
+		const removedItems = canvasItems
+			.filter((item) => removeIds.has(item.id))
+			.map((item) => ({ ...item }));
+		const edgesBefore = canvasEdges.map((edge) => ({ ...edge }));
+		const edgesAfter = canvasEdges.filter(
+			(edge) => !removeIds.has(edge.fromItemId) && !removeIds.has(edge.toItemId)
+		);
+		await replaceCanvasItemSubset(activeCanvas.id, result.removeItemIds, []);
+		await replaceCanvasEdges(activeCanvas.id, edgesAfter);
+		canvasItems = canvasItems.filter((item) => !removeIds.has(item.id));
+		canvasEdges = edgesAfter;
+		canvasUndo.push({
+			label: 'Deduplicate',
+			actionId: 'deduplicate-selection',
+			mutation: 'content',
+			affectedNoteIds: removedItems.map((item) => item.noteId),
+			before: [],
+			after: [],
+			itemsBefore: removedItems,
+			itemsAfter: [],
+			edgesBefore,
+			edgesAfter
+		});
+		canvasUndoTick++;
+		opts.onMeaningfulActivity?.();
+		return { removed: removedItems.length, keepNoteIds: result.keepNoteIds };
+	}
+
+	/**
+	 * Replace links touching the selection with one spatial reading-order chain,
+	 * then pack it as a storyboard row. Edges and movement share one receipt.
+	 */
+	async function sequenceCanvasSelection(
+		noteIds: string[]
+	): Promise<{ sequenced: number; replacedLinks: number }> {
+		if (!activeCanvas) return { sequenced: 0, replacedLinks: 0 };
+		const selected = new Set(noteIds);
+		const ordered = spatialSetItems(canvasItems.filter((item) => selected.has(item.noteId)));
+		if (ordered.length < 2) return { sequenced: 0, replacedLinks: 0 };
+
+		canvasLoadSeq++;
+		const selectedItemIds = new Set(ordered.map((item) => item.id));
+		const edgesBefore = canvasEdges.map((edge) => ({ ...edge }));
+		const retainedEdges = edgesBefore.filter(
+			(edge) => !selectedItemIds.has(edge.fromItemId) && !selectedItemIds.has(edge.toItemId)
+		);
+		const now = Date.now();
+		const chainEdges: CanvasEdge[] = ordered.slice(0, -1).map((item, index) => ({
+			id: newId(),
+			canvasId: activeCanvas!.id,
+			fromItemId: item.id,
+			toItemId: ordered[index + 1]!.id,
+			created: now + index
+		}));
+		const edgesAfter = [...retainedEdges, ...chainEdges];
+		const layoutBeforeAll = snapshotItems(canvasItems.map((item) => item.id));
+
+		try {
+			await replaceCanvasEdges(activeCanvas.id, edgesAfter);
+			canvasEdges = edgesAfter;
+			const movedIds = await applyFlowLayout(ordered, { recordUndo: false });
+			const moved = new Set(movedIds);
+			canvasUndo.push({
+				label: 'Sequence',
+				actionId: 'sequence-selection',
+				mutation: 'layout',
+				affectedNoteIds: ordered.map((item) => item.noteId),
+				before: layoutBeforeAll.filter((snapshot) => moved.has(snapshot.itemId)),
+				after: snapshotItems(movedIds),
+				edgesBefore,
+				edgesAfter: edgesAfter.map((edge) => ({ ...edge }))
+			});
+			canvasUndoTick++;
+			opts.onMeaningfulActivity?.();
+			return {
+				sequenced: ordered.length,
+				replacedLinks: edgesBefore.length - retainedEdges.length
+			};
+		} catch (error) {
+			console.error('Failed to sequence selection', error);
+			await replaceCanvasEdges(activeCanvas.id, edgesBefore);
+			canvasEdges = edgesBefore;
+			await applyLayoutSnapshots(layoutBeforeAll);
+			return { sequenced: 0, replacedLinks: 0 };
+		}
+	}
+
+	/** Replace one source card with generated fragment cards and one complete content receipt. */
+	async function splitCanvasItem(
+		sourceNoteId: string,
+		outputNotes: Note[],
+		operationId: string
+	): Promise<boolean> {
+		if (!activeCanvas || outputNotes.length < 2) return false;
+		const sourceItem = canvasItems.find((item) => item.noteId === sourceNoteId);
+		if (!sourceItem) return false;
+		canvasLoadSeq++;
+		const itemsBefore = [{ ...sourceItem }];
+		const columns = Math.min(3, Math.ceil(Math.sqrt(outputNotes.length)));
+		const itemsAfter: CanvasItem[] = outputNotes.map((note, index) => ({
+			id: newId(),
+			canvasId: activeCanvas!.id,
+			noteId: note.id,
+			x: sourceItem.x + (index % columns) * 244,
+			y: sourceItem.y + Math.floor(index / columns) * 144,
+			w: COLLAPSED_CARD.w,
+			h: COLLAPSED_CARD.h
+		}));
+		const edgesBefore = canvasEdges.map((edge) => ({ ...edge }));
+		const edgesAfter = edgesBefore.filter(
+			(edge) => edge.fromItemId !== sourceItem.id && edge.toItemId !== sourceItem.id
+		);
+		try {
+			await replaceCanvasItemSubset(
+				activeCanvas.id,
+				[sourceItem.id, ...itemsAfter.map((item) => item.id)],
+				itemsAfter
+			);
+			await replaceCanvasEdges(activeCanvas.id, edgesAfter);
+			canvasItems = [...canvasItems.filter((item) => item.id !== sourceItem.id), ...itemsAfter];
+			canvasEdges = edgesAfter;
+			dismissNoteFromCanvas(activeCanvas.id, sourceNoteId);
+			const outputIds = outputNotes.map((note) => note.id);
+			canvasUndo.push({
+				label: 'Split',
+				actionId: 'split-selection',
+				operationId,
+				operationRevertedBefore: true,
+				operationRevertedAfter: false,
+				mutation: 'content',
+				affectedNoteIds: [sourceNoteId, ...outputIds],
+				before: [],
+				after: [],
+				itemsBefore,
+				itemsAfter: itemsAfter.map((item) => ({ ...item })),
+				notesBefore: [],
+				notesAfter: outputNotes.map(plainNoteSnapshot),
+				edgesBefore,
+				edgesAfter,
+				selectionBefore: [sourceNoteId],
+				selectionAfter: outputIds,
+				dismissedBefore: [],
+				dismissedAfter: [sourceNoteId]
+			});
+			canvasUndoTick++;
+			await opts.onOperationChanged?.();
+			opts.setSelection(outputIds, outputIds[0] ?? null);
+			opts.onMeaningfulActivity?.();
+			return true;
+		} catch (error) {
+			console.error('Failed to split canvas card', error);
+			await replaceCanvasItemSubset(
+				activeCanvas.id,
+				[sourceItem.id, ...itemsAfter.map((item) => item.id)],
+				itemsBefore
+			);
+			await replaceCanvasEdges(activeCanvas.id, edgesBefore);
+			canvasItems = [
+				...canvasItems.filter((item) => !itemsAfter.some((next) => next.id === item.id)),
+				sourceItem
+			];
+			canvasEdges = edgesBefore;
+			return false;
+		}
+	}
+
+	/** Replace source cards with one Mash result and record notes, cards, links, and visibility. */
+	async function mashCanvasItems(
+		sourceNoteIds: string[],
+		outputNote: Note,
+		operationId: string,
+		position: { x: number; y: number },
+		restrictItemIds?: string[]
+	): Promise<CanvasItem | null> {
+		if (!activeCanvas) return null;
+		const sourceSet = new Set(sourceNoteIds);
+		const restricted = restrictItemIds ? new Set(restrictItemIds) : null;
+		const itemsBefore = canvasItems
+			.filter((item) => sourceSet.has(item.noteId) && (!restricted || restricted.has(item.id)))
+			.map((item) => ({ ...item }));
+		if (itemsBefore.length < 2) return null;
+		canvasLoadSeq++;
+		const outputItem: CanvasItem = {
+			id: newId(),
+			canvasId: activeCanvas.id,
+			noteId: outputNote.id,
+			x: position.x,
+			y: position.y,
+			w: EXPANDED_CARD.w,
+			h: EXPANDED_CARD.h
+		};
+		const sourceItemIds = new Set(itemsBefore.map((item) => item.id));
+		const edgesBefore = canvasEdges.map((edge) => ({ ...edge }));
+		const edgesAfter = edgesBefore.filter(
+			(edge) => !sourceItemIds.has(edge.fromItemId) && !sourceItemIds.has(edge.toItemId)
+		);
+		const dismissedBefore = sourceNoteIds.filter((id) =>
+			getDismissedNoteIds(activeCanvas!.id).has(id)
+		);
+		try {
+			await replaceCanvasItemSubset(
+				activeCanvas.id,
+				[...sourceItemIds, outputItem.id],
+				[outputItem]
+			);
+			await replaceCanvasEdges(activeCanvas.id, edgesAfter);
+			canvasItems = [...canvasItems.filter((item) => !sourceItemIds.has(item.id)), outputItem];
+			canvasEdges = edgesAfter;
+			for (const noteId of sourceNoteIds) dismissNoteFromCanvas(activeCanvas.id, noteId);
+			canvasUndo.push({
+				label: 'Mash',
+				actionId: 'combine-selection',
+				operationId,
+				operationRevertedBefore: true,
+				operationRevertedAfter: false,
+				mutation: 'content',
+				affectedNoteIds: [...sourceNoteIds, outputNote.id],
+				before: [],
+				after: [],
+				itemsBefore,
+				itemsAfter: [{ ...outputItem }],
+				notesBefore: [],
+				notesAfter: [plainNoteSnapshot(outputNote)],
+				edgesBefore,
+				edgesAfter,
+				selectionBefore: sourceNoteIds,
+				selectionAfter: [outputNote.id],
+				dismissedBefore,
+				dismissedAfter: sourceNoteIds
+			});
+			canvasUndoTick++;
+			await opts.onOperationChanged?.();
+			opts.setSelection([outputNote.id], outputNote.id);
+			opts.onMeaningfulActivity?.();
+			return outputItem;
+		} catch (error) {
+			console.error('Failed to apply Mash receipt', error);
+			await replaceCanvasItemSubset(
+				activeCanvas.id,
+				[...sourceItemIds, outputItem.id],
+				itemsBefore
+			);
+			await replaceCanvasEdges(activeCanvas.id, edgesBefore);
+			canvasItems = [...canvasItems.filter((item) => item.id !== outputItem.id), ...itemsBefore];
+			canvasEdges = edgesBefore;
+			applyDismissalReceipt(dismissedBefore, sourceNoteIds, 'before');
+			return null;
+		}
+	}
+
+	/** Explicit Unmash is itself reversible and flips the original operation receipt state. */
+	async function unmashCanvasItem(
+		mashNote: Note,
+		sourceNotes: Note[]
+	): Promise<{ restored: number; missing: number; itemIds: string[] }> {
+		if (!activeCanvas || !opts.applyNoteReceipt) {
+			return { restored: 0, missing: mashNote.mashedFrom?.length ?? 0, itemIds: [] };
+		}
+		const mashItem = canvasItems.find((item) => item.noteId === mashNote.id);
+		if (!mashItem) return { restored: 0, missing: sourceNotes.length, itemIds: [] };
+		canvasLoadSeq++;
+		const sourceIds = mashNote.mashedFrom ?? [];
+		const dismissedBefore = sourceIds.filter((id) => getDismissedNoteIds(activeCanvas!.id).has(id));
+		const existingByNote = new Map(canvasItems.map((item) => [item.noteId, item]));
+		const sourceItems = sourceNotes.map((note, index) => {
+			const existing = existingByNote.get(note.id);
+			return existing
+				? { ...existing }
+				: {
+						id: newId(),
+						canvasId: activeCanvas!.id,
+						noteId: note.id,
+						x: mashItem.x + index * 24,
+						y: mashItem.y + index * 24,
+						w: COLLAPSED_CARD.w,
+						h: COLLAPSED_CARD.h
+					};
+		});
+		const preexistingSourceItems = sourceItems.filter((item) => existingByNote.has(item.noteId));
+		const itemsBefore = [{ ...mashItem }, ...preexistingSourceItems.map((item) => ({ ...item }))];
+		const affectedIds = [...new Set([...itemsBefore, ...sourceItems].map((item) => item.id))];
+		const edgesBefore = canvasEdges.map((edge) => ({ ...edge }));
+		const edgesAfter = edgesBefore.filter(
+			(edge) => edge.fromItemId !== mashItem.id && edge.toItemId !== mashItem.id
+		);
+		try {
+			await opts.applyNoteReceipt([mashNote], [], 'after');
+			await replaceCanvasItemSubset(activeCanvas.id, affectedIds, sourceItems);
+			await replaceCanvasEdges(activeCanvas.id, edgesAfter);
+			const affected = new Set(affectedIds);
+			canvasItems = [...canvasItems.filter((item) => !affected.has(item.id)), ...sourceItems];
+			canvasEdges = edgesAfter;
+			undismissNotesFromCanvas(activeCanvas.id, sourceIds);
+			if (mashNote.operationId) await setOperationReverted(mashNote.operationId, true);
+			canvasUndo.push({
+				label: 'Unmash',
+				actionId: 'unmash-selection',
+				operationId: mashNote.operationId,
+				operationRevertedBefore: false,
+				operationRevertedAfter: true,
+				mutation: 'content',
+				affectedNoteIds: [mashNote.id, ...sourceIds],
+				before: [],
+				after: [],
+				itemsBefore,
+				itemsAfter: sourceItems.map((item) => ({ ...item })),
+				notesBefore: [plainNoteSnapshot(mashNote)],
+				notesAfter: [],
+				edgesBefore,
+				edgesAfter,
+				selectionBefore: [mashNote.id],
+				selectionAfter: sourceNotes.map((note) => note.id),
+				dismissedBefore,
+				dismissedAfter: []
+			});
+			canvasUndoTick++;
+			await opts.onOperationChanged?.();
+			const selection = sourceNotes.map((note) => note.id);
+			opts.setSelection(selection, selection[0] ?? null);
+			opts.onMeaningfulActivity?.();
+			return {
+				restored: sourceNotes.length,
+				missing: sourceIds.length - sourceNotes.length,
+				itemIds: sourceItems.map((item) => item.id)
+			};
+		} catch (error) {
+			console.error('Failed to Unmash', error);
+			await opts.applyNoteReceipt([mashNote], [], 'before');
+			await replaceCanvasItemSubset(activeCanvas.id, affectedIds, itemsBefore);
+			await replaceCanvasEdges(activeCanvas.id, edgesBefore);
+			const affected = new Set(affectedIds);
+			canvasItems = [...canvasItems.filter((item) => !affected.has(item.id)), ...itemsBefore];
+			canvasEdges = edgesBefore;
+			applyDismissalReceipt(dismissedBefore, [], 'before');
+			return { restored: 0, missing: sourceIds.length, itemIds: [] };
+		}
 	}
 
 	function handleCanvasResize(itemId: string, w: number, h: number) {
@@ -662,6 +1122,7 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		canvasItems = canvasItems.map((i) => (i.id === itemId ? { ...i, w, h } : i));
 		pushCanvasUndo('Resize', [beforeSnap], [{ itemId, x: item.x, y: item.y, w, h }]);
 		await updateCanvasItemPosition(itemId, { x: item.x, y: item.y, w, h });
+		opts.onMeaningfulActivity?.();
 		if (expandedNoteId === item.noteId) {
 			void bumpNeighborsAround(itemId, { w, h });
 		}
@@ -697,6 +1158,7 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		const item = canvasItems.find((i) => i.id === itemId);
 		const note = item ? opts.getNotesById().get(item.noteId) : undefined;
 		await removeCanvasItem(itemId);
+		opts.onMeaningfulActivity?.();
 		canvasItems = canvasItems.filter((i) => i.id !== itemId);
 		canvasEdges = canvasEdges.filter((e) => e.fromItemId !== itemId && e.toItemId !== itemId);
 		// Drop only undo entries that referenced this card — keep the rest.
@@ -983,6 +1445,9 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		get canCanvasRedo() {
 			return canCanvasRedo;
 		},
+		get canvasUndoOperationId() {
+			return canvasUndoOperationId;
+		},
 		loadContextCanvas,
 		refreshCanvasItems,
 		connectFlowEdge,
@@ -1000,6 +1465,11 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		handleCanvasMove,
 		handleCanvasMoveMany,
 		handleCanvasMoveEnd,
+		deduplicateCanvasSelection,
+		sequenceCanvasSelection,
+		splitCanvasItem,
+		mashCanvasItems,
+		unmashCanvasItem,
 		handleCanvasResize,
 		handleCanvasResizeEnd,
 		handleCanvasSelectNotes,

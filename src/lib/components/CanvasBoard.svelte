@@ -2,7 +2,12 @@
 	import type { CanvasEdge, CanvasItem, Note } from '$lib/types';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { notePreview } from '$lib/format';
-	import { loadCanvasViewport, saveCanvasViewport, clearCanvasViewport } from '$lib/viewport';
+	import {
+		loadCanvasViewport,
+		saveCanvasViewport,
+		clearCanvasViewport,
+		mobileAutoFitKey
+	} from '$lib/viewport';
 	import {
 		GRID,
 		type AlignMode,
@@ -18,7 +23,18 @@
 		snapSize,
 		viewCenterPlacement
 	} from '$lib/canvas-geom';
-	import { Pin, Folder, Tag, Minimize2, Maximize2, X, FileUp, FileText } from 'lucide-svelte';
+	import {
+		Pin,
+		Folder,
+		Tag,
+		Minimize2,
+		Maximize2,
+		X,
+		FileUp,
+		FileText,
+		MoreHorizontal
+	} from 'lucide-svelte';
+	import { focusTrap } from '$lib/focus-trap';
 	import StickyEditor from '$lib/components/StickyEditor.svelte';
 	import { buildLinkSummaryMap } from '$lib/links';
 	import { isPermanentMashWelcomeNote, MASH_SPOON_LOGO } from '$lib/canvas-empty-state';
@@ -176,8 +192,8 @@
 			srcset: '/icons/mash-empty-mascot.png 1x, /icons/mash-empty-mascot@2x.png 2x',
 			width: 116,
 			height: 200,
-			title: 'Drop notes here',
-			copy: 'Drag notes from the tray onto the canvas. Double-click to open the large editor.'
+			title: 'Paste, drop, or type',
+			copy: 'Press ⌘/Ctrl+V for text, drop files, or use New note.'
 		},
 		showEmptyState,
 		onSelect,
@@ -223,7 +239,6 @@
 	let altHeld = $state(false);
 	let spaceHeld = $state(false);
 	let pointerOverBoard = $state(false);
-	let mashConfirmBtn: HTMLButtonElement | undefined = $state();
 	let titleInputEl: HTMLInputElement | undefined = $state();
 	let focusedExpandId: string | null = null;
 	/** Custom folder picker — native datalist mispositions under canvas transform. */
@@ -235,6 +250,11 @@
 	let panStart = { x: 0, y: 0, panX: 0, panY: 0 };
 	let viewportSaveTimer: ReturnType<typeof setTimeout> | null = null;
 	let appliedCanvasId: string | null = null;
+	let isMobileViewport = $state(false);
+	let mobileViewportEntry = $state(0);
+	let mobileViewportEntrySeed = 0;
+	let lastMobileAutoFitKey: string | null = null;
+	let mobileToolsOpen = $state(false);
 	let moveRaf = 0;
 	let pendingMoves: Array<{ itemId: string; x: number; y: number }> | null = null;
 
@@ -372,6 +392,22 @@
 		flowMode = false;
 		flowFromItemId = null;
 		flowConnecting = false;
+	}
+
+	function toggleFlowMode() {
+		if (flowMode) {
+			exitFlowMode();
+			return;
+		}
+		onClearSelection?.();
+		flowMode = true;
+		flowFromItemId = null;
+		if (edges.length > 0) {
+			void (async () => {
+				const moved = await onRelayoutFlow?.();
+				if (moved) onToast?.('Sequences packed in order');
+			})();
+		}
 	}
 
 	/** Prefer an explicit index; otherwise the first valid sequence. */
@@ -1221,7 +1257,7 @@
 		if (canvasId) clearCanvasViewport(canvasId);
 	}
 
-	function zoomToFit(selectionOnly = false) {
+	function zoomToFit(selectionOnly = false, minScale = MIN_SCALE) {
 		if (!boardEl) return;
 		const rects = items
 			.filter((i) => !selectionOnly || selectedIds.has(i.noteId))
@@ -1236,7 +1272,8 @@
 			{ minX: b.minX, minY: b.minY, width: b.width, height: b.height },
 			view.width,
 			view.height,
-			56
+			56,
+			{ min: minScale, max: MAX_SCALE }
 		);
 		panX = next.panX;
 		panY = next.panY;
@@ -1419,6 +1456,23 @@
 	});
 
 	$effect(() => {
+		if (typeof window === 'undefined') return;
+		const media = window.matchMedia('(max-width: 720px)');
+		let previous = media.matches;
+		isMobileViewport = previous;
+		if (previous) mobileViewportEntry = ++mobileViewportEntrySeed;
+		const onChange = () => {
+			const next = media.matches;
+			if (next && !previous) mobileViewportEntry = ++mobileViewportEntrySeed;
+			previous = next;
+			isMobileViewport = next;
+			if (!next) mobileToolsOpen = false;
+		};
+		media.addEventListener('change', onChange);
+		return () => media.removeEventListener('change', onChange);
+	});
+
+	$effect(() => {
 		if (!canvasId) {
 			if (appliedCanvasId) flushViewportSave(appliedCanvasId);
 			appliedCanvasId = null;
@@ -1440,6 +1494,23 @@
 	});
 
 	$effect(() => {
+		const key = mobileAutoFitKey({
+			isMobile: isMobileViewport,
+			canvasId,
+			itemCount: items.length,
+			boardWidth,
+			boardHeight,
+			entry: mobileViewportEntry,
+			lastAppliedKey: lastMobileAutoFitKey
+		});
+		if (!key) return;
+		lastMobileAutoFitKey = key;
+		requestAnimationFrame(() => {
+			if (isMobileViewport && key === lastMobileAutoFitKey) zoomToFit(false, 0.55);
+		});
+	});
+
+	$effect(() => {
 		if (!expandedNoteId || expandFocus !== 'title') {
 			if (!expandedNoteId) focusedExpandId = null;
 			return;
@@ -1454,35 +1525,12 @@
 
 	$effect(() => {
 		if (!pendingMash) return;
-		requestAnimationFrame(() => mashConfirmBtn?.focus());
-
 		function onConfirmKey(e: KeyboardEvent) {
 			if (e.key === 'Escape') {
 				e.preventDefault();
 				e.stopImmediatePropagation();
 				cancelPendingMash();
 				return;
-			}
-			if (e.key !== 'Tab') return;
-			const root = boardEl?.querySelector<HTMLElement>('[data-mash-confirm]');
-			if (!root) return;
-			const focusable = [
-				...root.querySelectorAll<HTMLElement>(
-					'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-				)
-			].filter((el) => !el.hasAttribute('disabled'));
-			if (focusable.length === 0) return;
-			const first = focusable[0];
-			const last = focusable[focusable.length - 1];
-			const active = document.activeElement as HTMLElement | null;
-			if (e.shiftKey) {
-				if (active === first || !root.contains(active)) {
-					e.preventDefault();
-					last.focus();
-				}
-			} else if (active === last || !root.contains(active)) {
-				e.preventDefault();
-				first.focus();
 			}
 		}
 		window.addEventListener('keydown', onConfirmKey, true);
@@ -1492,6 +1540,14 @@
 	$effect(() => {
 		function onKeyDown(e: KeyboardEvent) {
 			if (e.key === 'Alt') altHeld = true;
+			const eventTarget = e.target instanceof HTMLElement ? e.target : null;
+			// Modal controls own their keyboard events. Canvas shortcuts must never
+			// open cards, nudge selections, or consume radio/button activation behind them.
+			if (eventTarget?.closest('[aria-modal="true"]')) return;
+			if (e.key === 'Escape' && mobileToolsOpen) {
+				mobileToolsOpen = false;
+				return;
+			}
 			if (e.key === 'Escape' && (flowFromItemId || flowMode)) {
 				e.preventDefault();
 				if (flowFromItemId) {
@@ -1683,6 +1739,9 @@
 				{@const isPendingSource = pendingMash?.sourceId === item.id}
 				{@const isPendingPartner = pendingMash?.targetId === item.id}
 				{@const isMash = Boolean(note.mashedFrom?.length)}
+				{@const provenanceTitles = (note.mashedFrom ?? [])
+					.map((id) => notesById.get(id)?.title)
+					.filter((title): title is string => Boolean(title))}
 				{@const isPermanentWelcome = isPermanentMashWelcomeNote(note)}
 				{@const links = linkSummaries.get(note.id)!}
 				{@const pageBadge = flowBadges.get(item.id)}
@@ -1763,6 +1822,7 @@
 					{/if}
 					{#if isPendingSource}
 						<div
+							use:focusTrap={{ initialFocus: '[data-dialog-initial-focus]' }}
 							data-mash-confirm
 							role="alertdialog"
 							aria-modal="true"
@@ -1789,7 +1849,7 @@
 							</p>
 							<div class="flex items-center gap-2">
 								<button
-									bind:this={mashConfirmBtn}
+									data-dialog-initial-focus
 									type="button"
 									class="mash-btn rounded-lg px-3 py-1.5 text-xs font-semibold"
 									onclick={(e) => {
@@ -2074,6 +2134,17 @@
 								>
 									<FileText class="h-2.5 w-2.5 shrink-0" />
 									<span class="truncate">{note.source.title} · p. {note.source.page}</span>
+								</div>
+							{/if}
+							{#if note.mashedFrom?.length}
+								<div
+									class="mash-card-provenance mt-1.5 border-t pt-1 text-[9px]"
+									style="border-color: var(--mash-card-edge); color: var(--mash-accent);"
+									title={provenanceTitles.length > 0
+										? `Made from: ${provenanceTitles.join(', ')}`
+										: `Made from ${note.mashedFrom.length} source cards`}
+								>
+									Made from {note.mashedFrom.length} source{note.mashedFrom.length === 1 ? '' : 's'}
 								</div>
 							{/if}
 						</div>
@@ -2392,19 +2463,7 @@
 				: ''}"
 			onclick={(e) => {
 				e.stopPropagation();
-				if (flowMode) exitFlowMode();
-				else {
-					onClearSelection?.();
-					flowMode = true;
-					flowFromItemId = null;
-					// Relayout only when entering with existing links.
-					if (edges.length > 0) {
-						void (async () => {
-							const moved = await onRelayoutFlow?.();
-							if (moved) onToast?.('Sequences packed in order');
-						})();
-					}
-				}
+				toggleFlowMode();
 			}}
 			title={flowMode
 				? flowConnecting
@@ -2496,6 +2555,120 @@
 			>
 				?
 			</button>
+		{/if}
+	</div>
+
+	<div
+		data-canvas-chrome
+		class="mash-canvas-chrome-mobile pointer-events-none absolute top-3 right-3 z-20"
+	>
+		<div class="mash-board-chip pointer-events-auto flex items-center gap-1 rounded-xl p-1 shadow">
+			<button
+				type="button"
+				class="mash-mobile-chrome-btn"
+				onclick={(e) => {
+					e.stopPropagation();
+					zoomToFit(false);
+				}}
+				disabled={items.length === 0}
+			>
+				Fit
+			</button>
+			<button
+				type="button"
+				class="mash-mobile-chrome-btn"
+				onclick={(e) => {
+					e.stopPropagation();
+					organizeToSnap();
+				}}
+				disabled={items.length === 0}
+			>
+				Organize
+			</button>
+			<button
+				type="button"
+				class="mash-mobile-chrome-icon-btn"
+				aria-label="More canvas tools"
+				aria-haspopup="menu"
+				aria-expanded={mobileToolsOpen}
+				onclick={(e) => {
+					e.stopPropagation();
+					mobileToolsOpen = !mobileToolsOpen;
+				}}
+			>
+				<MoreHorizontal size={20} strokeWidth={2} aria-hidden="true" />
+			</button>
+		</div>
+
+		{#if mobileToolsOpen}
+			<div
+				class="mash-mobile-tools-menu pointer-events-auto mt-2 grid grid-cols-2 gap-1 rounded-2xl p-2 shadow-xl"
+			>
+				<button
+					type="button"
+					class:active={!snapEnabled}
+					onclick={() => {
+						if (snapEnabled) toggleSnap();
+						mobileToolsOpen = false;
+					}}>Free placement</button
+				>
+				<button
+					type="button"
+					class:active={snapEnabled}
+					onclick={() => {
+						if (!snapEnabled) toggleSnap();
+						mobileToolsOpen = false;
+					}}>Snap to grid</button
+				>
+				<button
+					type="button"
+					disabled={items.length === 0}
+					onclick={() => {
+						toggleSelectAllOnBoard();
+						mobileToolsOpen = false;
+					}}>{allBoardNotesSelected ? 'Deselect all' : 'Select all'}</button
+				>
+				<button
+					type="button"
+					class:active={flowMode}
+					onclick={() => {
+						toggleFlowMode();
+						mobileToolsOpen = false;
+					}}>{flowMode ? 'End sequence' : 'Sequence'}</button
+				>
+				<button
+					type="button"
+					disabled={!canUndo}
+					onclick={() => {
+						onUndo?.();
+						mobileToolsOpen = false;
+					}}>Undo</button
+				>
+				<button
+					type="button"
+					disabled={!canRedo}
+					onclick={() => {
+						onRedo?.();
+						mobileToolsOpen = false;
+					}}>Redo</button
+				>
+				<button
+					type="button"
+					onclick={() => {
+						resetView();
+						mobileToolsOpen = false;
+					}}>Reset view</button
+				>
+				{#if onOpenShortcuts}
+					<button
+						type="button"
+						onclick={() => {
+							onOpenShortcuts();
+							mobileToolsOpen = false;
+						}}>Shortcuts</button
+					>
+				{/if}
+			</div>
 		{/if}
 	</div>
 

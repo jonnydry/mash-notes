@@ -7,7 +7,8 @@ import {
 	db,
 	deleteNote,
 	getActiveNotes,
-	syncNoteUpdate,
+	KEPT_COLLECTION_SESSION_ID,
+	replaceNoteSubset,
 	syncNoteUpdateAsync
 } from '$lib/db';
 import {
@@ -123,6 +124,10 @@ export type CreateNoteLibraryOpts = {
 		action: () => void | Promise<void>;
 	}) => void;
 	getActiveCanvasId: () => string | null;
+	getActiveSessionId?: () => string | null;
+	getActiveSessionMode?: () => 'scratch' | 'kept';
+	shouldSeedWelcome?: () => boolean;
+	onMeaningfulActivity?: () => void;
 	onFolderDeleted: (folder: string) => Promise<void>;
 	clearExpandedIfNote?: (noteId: string) => void;
 	/** Ordered note ids for shift-click range selection (filtered peel list). */
@@ -143,12 +148,13 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 	let notes = $state<Note[]>([]);
 	let selectedId = $state<string | null>(null);
 	let selectionIds = $state<string[]>([]);
-	let bulkMenu = $state<'tag' | 'folder' | 'align' | null>(null);
+	let bulkMenu = $state<'tag' | 'folder' | 'align' | 'operators' | null>(null);
 	let bulkTagDraft = $state('');
 	let bulkFolderDraft = $state('');
 	let isLoading = $state(true);
 	let loadError = $state('');
 	let saveStatus = $state<'saved' | 'saving' | ''>('');
+	let writeError = $state('');
 
 	const stickySaveTimers = new Map<string, ReturnType<typeof setTimeout>>();
 	const stickyPendingPatches = new Map<string, Partial<Note>>();
@@ -161,12 +167,69 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 	const uniqueFolders = $derived(uniqueFoldersFrom(notes));
 	const uniqueTags = $derived(uniqueTagsFrom(notes));
 	const canUnmash = $derived(
-		selectedNotes.some((n) => Boolean(n.mashedFrom && n.mashedFrom.length > 0))
+		selectedNotes.some((n) =>
+			Boolean(n.tags.includes('mash') && n.mashedFrom && n.mashedFrom.length > 0)
+		)
 	);
+
+	function plainNoteSnapshot(note: Note): Note {
+		return {
+			...note,
+			tags: [...note.tags],
+			...(note.links ? { links: [...note.links] } : {}),
+			...(note.mashedFrom ? { mashedFrom: [...note.mashedFrom] } : {}),
+			...(note.source ? { source: { ...note.source } } : {})
+		};
+	}
 
 	function clearSelection() {
 		selectionIds = [];
 		bulkMenu = null;
+	}
+
+	/** Add already-persisted operation outputs to reactive library/search state. */
+	function adoptNotes(nextNotes: Note[]) {
+		if (nextNotes.length === 0) return;
+		const ids = new Set(nextNotes.map((note) => note.id));
+		for (const note of nextNotes) addNoteToSearch(note);
+		notes = [
+			...nextNotes.map((note) => ({ ...note })),
+			...notes.filter((note) => !ids.has(note.id))
+		];
+	}
+
+	/** Apply persisted scope/retention changes without disturbing selection or ordering. */
+	function applyPromotedNotes(promoted: Note[]) {
+		if (promoted.length === 0) return;
+		const byId = new Map(promoted.map((note) => [note.id, note]));
+		for (const note of promoted) updateNoteInSearch(note, note);
+		notes = notes.map((note) => byId.get(note.id) ?? note);
+	}
+
+	/** Restore/remove generated notes as part of a canvas content receipt. */
+	async function applyNoteReceipt(
+		notesBefore: Note[] | undefined,
+		notesAfter: Note[] | undefined,
+		direction: 'before' | 'after'
+	) {
+		if (!notesBefore && !notesAfter) return;
+		const affectedIds = [
+			...new Set([...(notesBefore ?? []), ...(notesAfter ?? [])].map((note) => note.id))
+		];
+		const desired = (direction === 'before' ? (notesBefore ?? []) : (notesAfter ?? [])).map(
+			plainNoteSnapshot
+		);
+		await replaceNoteSubset(affectedIds, desired);
+		for (const id of affectedIds) removeNoteFromSearch(id);
+		for (const note of desired) addNoteToSearch(note);
+		const desiredIds = new Set(desired.map((note) => note.id));
+		for (const id of affectedIds) {
+			if (!desiredIds.has(id)) opts.clearExpandedIfNote?.(id);
+		}
+		const affected = new Set(affectedIds);
+		notes = [...desired, ...notes.filter((note) => !affected.has(note.id))];
+		selectionIds = selectionIds.filter((id) => !affected.has(id));
+		if (selectedId && affected.has(selectedId)) selectedId = null;
 	}
 
 	function toggleSelection(id: string, selOpts?: { additive?: boolean; range?: boolean }) {
@@ -264,6 +327,26 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 		}, 1200);
 	}
 
+	function reportWriteFailure(noteId: string, patch: Partial<Note>, error: unknown) {
+		console.error('Mash note write failed', error);
+		stickyPendingPatches.set(noteId, {
+			...(stickyPendingPatches.get(noteId) ?? {}),
+			...patch
+		});
+		saveStatus = '';
+		writeError = 'Changes are still open in memory, but this browser could not save them locally.';
+	}
+
+	async function persistNotePatch(noteId: string, patch: Partial<Note>) {
+		try {
+			await syncNoteUpdateAsync(noteId, patch);
+			writeError = '';
+			markStickySaved();
+		} catch (error) {
+			reportWriteFailure(noteId, patch, error);
+		}
+	}
+
 	function scheduleStickyPersist(noteId: string, patch: Partial<Note>, updated: Note) {
 		markStickySaving();
 		const mergedPatch = { ...(stickyPendingPatches.get(noteId) ?? {}), ...patch };
@@ -277,9 +360,8 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 				const pending = stickyPendingPatches.get(noteId) ?? mergedPatch;
 				stickyPendingPatches.delete(noteId);
 				const latest = notes.find((n) => n.id === noteId) ?? updated;
-				syncNoteUpdate(noteId, pending);
+				void persistNotePatch(noteId, pending);
 				updateNoteInSearch({ id: noteId, ...pending }, latest);
-				markStickySaved();
 			}, 400)
 		);
 	}
@@ -290,6 +372,7 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 		const updated = { ...note, title, modified: Date.now() };
 		notes = notes.map((n) => (n.id === noteId ? updated : n));
 		opts.onNoteEdited?.(noteId);
+		opts.onMeaningfulActivity?.();
 		scheduleStickyPersist(noteId, { title }, updated);
 	}
 
@@ -300,6 +383,7 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 		const updated = { ...note, body, links, modified: Date.now() };
 		notes = notes.map((n) => (n.id === noteId ? updated : n));
 		opts.onNoteEdited?.(noteId);
+		opts.onMeaningfulActivity?.();
 		scheduleStickyPersist(noteId, { body, links }, updated);
 	}
 
@@ -317,6 +401,7 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 		const updated = { ...note, ...patch, modified: Date.now() };
 		notes = notes.map((n) => (n.id === noteId ? updated : n));
 		opts.onNoteEdited?.(noteId);
+		opts.onMeaningfulActivity?.();
 		scheduleStickyPersist(noteId, patch, updated);
 	}
 
@@ -325,16 +410,17 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 	}
 
 	async function flushPendingSaveAsync(): Promise<void> {
-		const pendingIds = [...stickySaveTimers.keys()];
-		const writes: Promise<void>[] = [];
+		const pendingIds = [...new Set([...stickySaveTimers.keys(), ...stickyPendingPatches.keys()])];
+		let failed = false;
 		for (const noteId of pendingIds) {
 			const timer = stickySaveTimers.get(noteId);
 			if (timer) clearTimeout(timer);
 			stickySaveTimers.delete(noteId);
+			const pending = stickyPendingPatches.get(noteId);
 			stickyPendingPatches.delete(noteId);
 			const note = notes.find((n) => n.id === noteId);
 			if (!note) continue;
-			const patch = {
+			const patch: Partial<Note> = pending ?? {
 				title: note.title,
 				body: note.body,
 				folder: note.folder,
@@ -344,7 +430,12 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 				textAlign: note.textAlign,
 				source: note.source
 			};
-			writes.push(syncNoteUpdateAsync(noteId, patch));
+			try {
+				await syncNoteUpdateAsync(noteId, patch);
+			} catch (error) {
+				failed = true;
+				reportWriteFailure(noteId, patch, error);
+			}
 			updateNoteInSearch(
 				{
 					id: noteId,
@@ -358,8 +449,15 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 				note
 			);
 		}
-		stickyPendingPatches.clear();
-		await Promise.all(writes);
+		if (!failed) {
+			writeError = '';
+			markStickySaved();
+		}
+	}
+
+	async function retryPendingWrites() {
+		markStickySaving();
+		await flushPendingSaveAsync();
 	}
 
 	function handleVisibilityChange(): void {
@@ -371,27 +469,39 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 		loadError = '';
 		try {
 			await initSearchIndex();
-			let loaded = await getActiveNotes({ limit: 10000 });
+			const sessionId = opts.getActiveSessionId?.() ?? undefined;
+			let loaded = await getActiveNotes({
+				limit: 10000,
+				sessionId,
+				keptCollection: sessionId === KEPT_COLLECTION_SESSION_ID
+			});
 
-			if (loaded.length === 0) {
+			if (loaded.length === 0 && (opts.shouldSeedWelcome?.() ?? true)) {
+				const scope = opts.getActiveSessionMode?.() === 'kept' ? 'kept' : 'session';
 				const seed1 = await createNote({
 					title: 'Welcome to Mash',
 					body: 'Mash is where notes go to become useful.\n\nDrag notes from the peel onto the desk. Select a few, then Mash, Copy, or Export.\n\nTry a [[Project ideas]] link in preview mode — missing links ask before creating.',
-					tags: ['welcome']
+					tags: ['welcome'],
+					sessionId,
+					scope
 				});
 				addNoteToSearch(seed1);
 				const seed2 = await createNote({
 					title: 'Project ideas',
 					body: '- Build the thing\n- Talk to users\n- Ship fast',
 					tags: ['project'],
-					folder: 'Ideas'
+					folder: 'Ideas',
+					sessionId,
+					scope
 				});
 				addNoteToSearch(seed2);
 				const seed3 = await createNote({
 					title: 'Meeting scraps',
 					body: 'Decide on the export format.\nFollow up with design on the workbench.',
 					tags: ['meeting'],
-					folder: 'Ideas'
+					folder: 'Ideas',
+					sessionId,
+					scope
 				});
 				addNoteToSearch(seed3);
 				loaded = [seed1, seed2, seed3];
@@ -447,16 +557,27 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 			await flushPendingSaveAsync();
 
 			const { notes: mergedNotes, summary } = mergeSyncBundle(notes, parsed.bundle);
+			const sessionId = opts.getActiveSessionId?.() ?? undefined;
+			const scope: NonNullable<Note['scope']> =
+				opts.getActiveSessionMode?.() === 'kept' ? 'kept' : 'session';
 			// Dexie can't structured-clone Svelte $state proxies — always put plain objects.
 			const plainNotes = mergedNotes.map((n) => ({
 				...n,
+				sessionId,
+				scope,
 				tags: [...n.tags],
 				...(n.links ? { links: [...n.links] } : {}),
 				...(n.mashedFrom ? { mashedFrom: [...n.mashedFrom] } : {})
 			}));
 			const knownNoteIds = new Set(plainNotes.map((n) => n.id));
 
-			const persisted = await persistMergedSync(plainNotes, parsed.bundle.desk, knownNoteIds);
+			const persisted = await persistMergedSync(
+				plainNotes,
+				parsed.bundle.desk,
+				knownNoteIds,
+				sessionId,
+				parsed.bundle.operations
+			);
 			if (persisted.desk) summary.desk = persisted.desk;
 
 			notes = plainNotes.filter((n) => n.deletedAt == null);
@@ -475,10 +596,15 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 
 			const conflictFields = [...new Set(summary.conflicts.map((c) => `${c.noteId}:${c.field}`))];
 			const removedPart = summary.removed > 0 ? ` · ${summary.removed} removed` : '';
+			const operationPart =
+				persisted.operationsUpserted > 0
+					? ` · ${persisted.operationsUpserted} result receipt${persisted.operationsUpserted === 1 ? '' : 's'}`
+					: '';
 			const message =
 				`Sync: ${summary.added} added · ${summary.updated} updated` +
 				removedPart +
 				deskPart +
+				operationPart +
 				(conflictFields.length ? ` · ${conflictFields.length} conflicts` : '');
 			opts.flashToast(message, 3200);
 
@@ -641,21 +767,26 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 			}
 			let added = 0;
 			for (const note of result.notes) {
-				const existing = notes.find((n) => n.id === note.id);
+				const scopedNote: Note = {
+					...note,
+					sessionId: opts.getActiveSessionId?.() ?? note.sessionId,
+					scope: opts.getActiveSessionMode?.() === 'kept' ? 'kept' : 'session'
+				};
+				const existing = notes.find((n) => n.id === scopedNote.id);
 				if (existing) {
 					const merged = {
 						...existing,
-						...note,
+						...scopedNote,
 						id: existing.id,
-						modified: Math.max(existing.modified, note.modified)
+						modified: Math.max(existing.modified, scopedNote.modified)
 					};
 					await db.notes.put(merged);
 					notes = notes.map((n) => (n.id === existing.id ? merged : n));
 					updateNoteInSearch(merged, merged);
 				} else {
-					await db.notes.put(note);
-					addNoteToSearch(note);
-					notes = [note, ...notes];
+					await db.notes.put(scopedNote);
+					addNoteToSearch(scopedNote);
+					notes = [scopedNote, ...notes];
 					added++;
 				}
 			}
@@ -664,6 +795,7 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 					? `Imported ${added} notes`
 					: `Imported ${result.notes.length} notes (${added} new)`;
 			if (!importOpts?.silent) opts.flashToast(message);
+			opts.onMeaningfulActivity?.();
 			return { ok: true, message, notes: result.notes };
 		} catch (err) {
 			console.error(err);
@@ -703,7 +835,11 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 
 			const CHUNK = 100;
 			for (let i = 0; i < result.notes.length; i += CHUNK) {
-				const chunk = result.notes.slice(i, i + CHUNK);
+				const chunk = result.notes.slice(i, i + CHUNK).map((note) => ({
+					...note,
+					sessionId: opts.getActiveSessionId?.() ?? note.sessionId,
+					scope: opts.getActiveSessionMode?.() === 'kept' ? ('kept' as const) : ('session' as const)
+				}));
 				await db.notes.bulkPut(chunk);
 				for (const note of chunk) addNoteToSearch(note);
 				notes = [...chunk, ...notes];
@@ -714,6 +850,7 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 			const skipHint = result.skipped > 0 ? ` (skipped ${result.skipped} non-markdown)` : '';
 			const message = `Imported ${result.notes.length} markdown notes${skipHint}`;
 			if (!importOpts?.silent) opts.flashToast(message);
+			opts.onMeaningfulActivity?.();
 			return { ok: true, message, notes: result.notes };
 		} catch (err) {
 			console.error(err);
@@ -765,7 +902,7 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 		if (!note) return;
 		const updated = { ...note, ...patch, modified: Date.now() };
 		notes = notes.map((n) => (n.id === id ? updated : n));
-		syncNoteUpdate(id, patch);
+		void persistNotePatch(id, patch);
 		updateNoteInSearch({ id, ...patch }, updated);
 	}
 
@@ -857,7 +994,7 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 		get bulkMenu() {
 			return bulkMenu;
 		},
-		set bulkMenu(v: 'tag' | 'folder' | 'align' | null) {
+		set bulkMenu(v: 'tag' | 'folder' | 'align' | 'operators' | null) {
 			bulkMenu = v;
 		},
 		get bulkTagDraft() {
@@ -890,6 +1027,9 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 		set saveStatus(v: 'saved' | 'saving' | '') {
 			saveStatus = v;
 		},
+		get writeError() {
+			return writeError;
+		},
 		get selectedNote() {
 			return selectedNote;
 		},
@@ -912,6 +1052,9 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 			return canUnmash;
 		},
 		clearSelection,
+		adoptNotes,
+		applyPromotedNotes,
+		applyNoteReceipt,
 		toggleSelection,
 		handleNoteClick,
 		selectNote,
@@ -933,6 +1076,7 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 		markStickySaved,
 		flushPendingSave,
 		flushPendingSaveAsync,
+		retryPendingWrites,
 		handleVisibilityChange,
 		handleImportFile,
 		importNotesText,

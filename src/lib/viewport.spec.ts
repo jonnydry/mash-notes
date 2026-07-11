@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { loadCanvasViewport, saveCanvasViewport, clearCanvasViewport } from './viewport';
+import {
+	loadCanvasViewport,
+	saveCanvasViewport,
+	clearCanvasViewport,
+	mobileAutoFitKey
+} from './viewport';
 
 class MemoryStorage {
 	private store = new Map<string, string>();
@@ -48,5 +53,37 @@ describe('canvas viewport persistence', () => {
 		saveCanvasViewport('c1', { panX: 1, panY: 2, scale: 1.1 });
 		clearCanvasViewport('c1');
 		expect(loadCanvasViewport('c1')).toEqual({ panX: 0, panY: 0, scale: 1 });
+	});
+
+	it('requests one mobile fit per desk entry after content and dimensions are ready', () => {
+		const ready = {
+			isMobile: true,
+			canvasId: 'c1',
+			itemCount: 2,
+			boardWidth: 390,
+			boardHeight: 700,
+			entry: 1,
+			lastAppliedKey: null
+		};
+		expect(mobileAutoFitKey(ready)).toBe('c1:1');
+		expect(mobileAutoFitKey({ ...ready, lastAppliedKey: 'c1:1' })).toBeNull();
+		expect(mobileAutoFitKey({ ...ready, canvasId: 'c2', lastAppliedKey: 'c1:1' })).toBe('c2:1');
+		expect(mobileAutoFitKey({ ...ready, entry: 2, lastAppliedKey: 'c1:1' })).toBe('c1:2');
+	});
+
+	it('waits to fit until a mobile desk has content and a measurable board', () => {
+		const input = {
+			isMobile: true,
+			canvasId: 'c1',
+			itemCount: 1,
+			boardWidth: 390,
+			boardHeight: 700,
+			entry: 1,
+			lastAppliedKey: null
+		};
+		expect(mobileAutoFitKey({ ...input, isMobile: false })).toBeNull();
+		expect(mobileAutoFitKey({ ...input, itemCount: 0 })).toBeNull();
+		expect(mobileAutoFitKey({ ...input, boardWidth: 0 })).toBeNull();
+		expect(mobileAutoFitKey({ ...input, canvasId: null })).toBeNull();
 	});
 });

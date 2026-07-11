@@ -17,6 +17,49 @@ describe('canvas-undo', () => {
 		expect(redone?.after[0].x).toBe(10);
 	});
 
+	it('stores reversible content-operation receipts', () => {
+		const stack = new CanvasUndoStack();
+		const removed = { id: 'i1', canvasId: 'c1', noteId: 'n1', x: 0, y: 0 };
+		stack.push({
+			label: 'Deduplicate',
+			actionId: 'deduplicate-selection',
+			mutation: 'content',
+			affectedNoteIds: ['n1'],
+			before: [],
+			after: [],
+			itemsBefore: [removed],
+			itemsAfter: []
+		});
+		expect(stack.canUndo).toBe(true);
+		expect(stack.undo()?.itemsBefore).toEqual([removed]);
+		expect(stack.redo()?.itemsAfter).toEqual([]);
+	});
+
+	it('treats generated note membership as a meaningful receipt', () => {
+		const stack = new CanvasUndoStack();
+		const generated = {
+			id: 'n2',
+			title: 'Fragment',
+			body: 'Body',
+			folder: '',
+			tags: [],
+			created: 1,
+			modified: 1,
+			pinned: 0 as const
+		};
+		stack.push({
+			label: 'Split',
+			operationId: 'op-1',
+			before: [],
+			after: [],
+			notesBefore: [],
+			notesAfter: [generated]
+		});
+		expect(stack.undoOperationId).toBe('op-1');
+		expect(stack.undo()?.notesAfter).toEqual([generated]);
+		expect(stack.undoOperationId).toBeNull();
+	});
+
 	it('ignores no-op pushes', () => {
 		const stack = new CanvasUndoStack();
 		stack.push({

@@ -1,15 +1,16 @@
 /**
  * File-based sync transport on top of LWW merge.
- * Bundle v3 includes notes + desk + soft-delete tombstones.
- * v2 (notes + desk) and v1 (notes only) still import.
+ * Bundle v4 includes notes + desk + tombstones + operation provenance.
+ * v3, v2, and v1 still import.
  */
-import type { Canvas, CanvasEdge, CanvasItem, Note } from './types';
+import type { Canvas, CanvasEdge, CanvasItem, Note, Operation } from './types';
 import { mergeNotesLww, hasConflicts, type MergeResult, type SyncConflict } from './sync-model';
 import { normalizeImportedNote } from './import-notes';
 import { db, getSyncTombstoneNotes, newId } from './db';
 import { exportAllDismissed, importDismissedMap, type DismissedByCanvas } from './canvas-dismiss';
 
-export const SYNC_BUNDLE_VERSION = 3 as const;
+export const SYNC_BUNDLE_VERSION = 4 as const;
+export const SYNC_BUNDLE_VERSION_V3 = 3 as const;
 export const SYNC_BUNDLE_VERSION_V2 = 2 as const;
 export const SYNC_BUNDLE_VERSION_V1 = 1 as const;
 
@@ -33,12 +34,15 @@ export type DeskSnapshot = {
 export type SyncBundle = {
 	version:
 		| typeof SYNC_BUNDLE_VERSION
+		| typeof SYNC_BUNDLE_VERSION_V3
 		| typeof SYNC_BUNDLE_VERSION_V2
 		| typeof SYNC_BUNDLE_VERSION_V1;
 	exportedAt: number;
 	notes: Note[];
 	desk?: DeskSnapshot;
 	tombstones?: SyncTombstone[];
+	/** Durable provenance receipts. Introduced in v4. */
+	operations?: Operation[];
 };
 
 export type DeskApplySummary = {
@@ -57,6 +61,7 @@ export type SyncMergeSummary = {
 	results: MergeResult[];
 	conflicts: SyncConflict[];
 	desk?: DeskApplySummary;
+	operationsUpserted?: number;
 };
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -170,20 +175,38 @@ function normalizeDesk(raw: unknown): DeskSnapshot | string {
 }
 
 /** Load current desk layout from IndexedDB + local dismissals. */
-export async function collectDeskSnapshot(): Promise<DeskSnapshot> {
-	const canvases = await db.canvases.toArray();
-	const items = await db.canvasItems.toArray();
-	const edges = await db.canvasEdges.toArray();
+export async function collectDeskSnapshot(sessionId?: string): Promise<DeskSnapshot> {
+	const canvases = sessionId
+		? await db.canvases.where('sessionId').equals(sessionId).toArray()
+		: await db.canvases.toArray();
+	const canvasIds = new Set(canvases.map((canvas) => canvas.id));
+	const allItems = await db.canvasItems.toArray();
+	const items = allItems.filter((item) => canvasIds.has(item.canvasId));
+	const allEdges = await db.canvasEdges.toArray();
+	const edges = allEdges.filter((edge) => canvasIds.has(edge.canvasId));
+	const allDismissed = exportAllDismissed();
+	const dismissed = Object.fromEntries(
+		Object.entries(allDismissed).filter(([canvasId]) => canvasIds.has(canvasId))
+	);
 	return {
 		canvases: canvases.map((c) => ({ ...c })),
 		items: items.map((i) => ({ ...i })),
 		edges: edges.map((e) => ({ ...e })),
-		dismissed: exportAllDismissed()
+		dismissed
 	};
 }
 
-export async function buildSyncBundle(notes: Note[]): Promise<SyncBundle> {
-	const desk = await collectDeskSnapshot();
+export async function buildSyncBundle(notes: Note[], sessionId?: string): Promise<SyncBundle> {
+	const desk = await collectDeskSnapshot(sessionId);
+	const operationRows = sessionId
+		? await db.operations.where('sessionId').equals(sessionId).toArray()
+		: await db.operations.toArray();
+	const operations = operationRows.map((operation) => ({
+		...operation,
+		inputNoteIds: [...operation.inputNoteIds],
+		outputNoteIds: [...operation.outputNoteIds],
+		...(operation.payload ? { payload: { ...operation.payload } } : {})
+	}));
 	const deleted = await getSyncTombstoneNotes(TOMBSTONE_RETENTION_MS);
 	const active = notes
 		.filter((n) => n.deletedAt == null)
@@ -193,14 +216,18 @@ export async function buildSyncBundle(notes: Note[]): Promise<SyncBundle> {
 			return { ...rest };
 		});
 	const tombstones: SyncTombstone[] = deleted
-		.filter((n) => typeof n.deletedAt === 'number')
+		.filter(
+			(n) =>
+				typeof n.deletedAt === 'number' && (!sessionId || !n.sessionId || n.sessionId === sessionId)
+		)
 		.map((n) => ({ id: n.id, deletedAt: n.deletedAt as number }));
 	return {
 		version: SYNC_BUNDLE_VERSION,
 		exportedAt: Date.now(),
 		notes: active,
 		desk,
-		tombstones
+		tombstones,
+		operations
 	};
 }
 
@@ -216,6 +243,41 @@ function normalizeTombstones(raw: unknown): SyncTombstone[] | string {
 		const deletedAt = asNumber(row.deletedAt, NaN);
 		if (!id || !Number.isFinite(deletedAt)) return `Tombstone ${i + 1} missing id/deletedAt`;
 		out.push({ id, deletedAt });
+	}
+	return out;
+}
+
+function normalizeOperations(raw: unknown): Operation[] | string {
+	if (raw == null) return [];
+	if (!Array.isArray(raw)) return 'Operations must be an array';
+	if (raw.length > 10_000) return 'Too many operations in sync bundle';
+	const out: Operation[] = [];
+	for (let index = 0; index < raw.length; index++) {
+		const row = raw[index];
+		if (!isRecord(row)) return `Operation ${index + 1} is not an object`;
+		const id = asString(row.id).trim();
+		const sessionId = asString(row.sessionId).trim();
+		const type = asString(row.type).trim().slice(0, 100);
+		const inputNoteIds = Array.isArray(row.inputNoteIds)
+			? row.inputNoteIds.filter((id): id is string => typeof id === 'string')
+			: [];
+		const outputNoteIds = Array.isArray(row.outputNoteIds)
+			? row.outputNoteIds.filter((id): id is string => typeof id === 'string')
+			: [];
+		if (!id || !type) return `Operation ${index + 1} missing id/type`;
+		const operation: Operation = {
+			id,
+			sessionId,
+			type,
+			inputNoteIds,
+			outputNoteIds,
+			created: asNumber(row.created, Date.now())
+		};
+		if (isRecord(row.payload)) operation.payload = { ...row.payload };
+		if (typeof row.revertedAt === 'number' && Number.isFinite(row.revertedAt)) {
+			operation.revertedAt = row.revertedAt;
+		}
+		out.push(operation);
 	}
 	return out;
 }
@@ -236,6 +298,7 @@ export function parseSyncBundle(
 	const version = obj.version;
 	if (
 		version !== SYNC_BUNDLE_VERSION &&
+		version !== SYNC_BUNDLE_VERSION_V3 &&
 		version !== SYNC_BUNDLE_VERSION_V2 &&
 		version !== SYNC_BUNDLE_VERSION_V1
 	) {
@@ -259,17 +322,28 @@ export function parseSyncBundle(
 	}
 
 	let desk: DeskSnapshot | undefined;
-	if (version === SYNC_BUNDLE_VERSION || version === SYNC_BUNDLE_VERSION_V2) {
+	if (
+		version === SYNC_BUNDLE_VERSION ||
+		version === SYNC_BUNDLE_VERSION_V3 ||
+		version === SYNC_BUNDLE_VERSION_V2
+	) {
 		const deskResult = normalizeDesk(obj.desk);
 		if (typeof deskResult === 'string') return { ok: false, error: deskResult };
 		desk = deskResult;
 	}
 
 	let tombstones: SyncTombstone[] | undefined;
-	if (version === SYNC_BUNDLE_VERSION) {
+	if (version === SYNC_BUNDLE_VERSION || version === SYNC_BUNDLE_VERSION_V3) {
 		const tombResult = normalizeTombstones(obj.tombstones);
 		if (typeof tombResult === 'string') return { ok: false, error: tombResult };
 		tombstones = tombResult;
+	}
+
+	let operations: Operation[] | undefined;
+	if (version === SYNC_BUNDLE_VERSION) {
+		const operationResult = normalizeOperations(obj.operations);
+		if (typeof operationResult === 'string') return { ok: false, error: operationResult };
+		operations = operationResult;
 	}
 
 	return {
@@ -279,7 +353,8 @@ export function parseSyncBundle(
 			exportedAt: typeof obj.exportedAt === 'number' ? obj.exportedAt : Date.now(),
 			notes,
 			desk,
-			tombstones
+			tombstones,
+			operations
 		}
 	};
 }
@@ -404,9 +479,12 @@ type DeskIdbApplyResult = DeskApplySummary & {
  */
 async function applyDeskIdbSnapshot(
 	desk: DeskSnapshot,
-	knownNoteIds: Set<string>
+	knownNoteIds: Set<string>,
+	sessionId?: string
 ): Promise<DeskIdbApplyResult> {
-	const localCanvases = await db.canvases.toArray();
+	const localCanvases = sessionId
+		? await db.canvases.where('sessionId').equals(sessionId).toArray()
+		: await db.canvases.toArray();
 	const localByFolder = new Map(localCanvases.map((c) => [c.folder, c]));
 	/** folder → effective modified used for LWW placement */
 	const folderModified = new Map(localCanvases.map((c) => [c.folder, c.modified]));
@@ -429,7 +507,8 @@ async function applyDeskIdbSnapshot(
 				folder: remote.folder,
 				title: remote.title,
 				created: remote.created,
-				modified: remote.modified
+				modified: remote.modified,
+				sessionId
 			};
 			await db.canvases.put(canvas);
 			idMap.set(remote.id, canvas.id);
@@ -546,9 +625,14 @@ async function applyDeskIdbSnapshot(
  */
 export async function applyDeskSnapshot(
 	desk: DeskSnapshot,
-	knownNoteIds: Set<string>
+	knownNoteIds: Set<string>,
+	sessionId?: string
 ): Promise<DeskApplySummary> {
-	const { remappedDismissed, ...summary } = await applyDeskIdbSnapshot(desk, knownNoteIds);
+	const { remappedDismissed, ...summary } = await applyDeskIdbSnapshot(
+		desk,
+		knownNoteIds,
+		sessionId
+	);
 	importDismissedMap(remappedDismissed);
 	return summary;
 }
@@ -561,35 +645,70 @@ export async function applyDeskSnapshot(
 export async function persistMergedSync(
 	plainNotes: Note[],
 	desk: DeskSnapshot | undefined,
-	knownNoteIds: Set<string>
-): Promise<{ desk?: DeskApplySummary }> {
+	knownNoteIds: Set<string>,
+	sessionId?: string,
+	operations: Operation[] = []
+): Promise<{ desk?: DeskApplySummary; operationsUpserted: number }> {
 	let deskSummary: DeskApplySummary | undefined;
 	let remappedDismissed: DismissedByCanvas = {};
+	let operationsUpserted = 0;
 	const deletedIds = plainNotes.filter((n) => n.deletedAt != null).map((n) => n.id);
 
-	await db.transaction('rw', db.notes, db.canvases, db.canvasItems, db.canvasEdges, async () => {
-		await db.notes.bulkPut(plainNotes);
-		for (const id of deletedIds) {
-			await stripCanvasForDeletedNote(id);
+	await db.transaction(
+		'rw',
+		[db.notes, db.canvases, db.canvasItems, db.canvasEdges, db.operations],
+		async () => {
+			const operationIdMap = new Map<string, string>();
+			for (const operation of operations) {
+				const existing = await db.operations.get(operation.id);
+				if (existing && sessionId && existing.sessionId !== sessionId) {
+					operationIdMap.set(operation.id, newId());
+				}
+			}
+			for (const note of plainNotes) {
+				if (note.operationId && operationIdMap.has(note.operationId)) {
+					note.operationId = operationIdMap.get(note.operationId);
+				}
+			}
+			await db.notes.bulkPut(plainNotes);
+			for (const operation of operations) {
+				const mapped: Operation = {
+					...operation,
+					id: operationIdMap.get(operation.id) ?? operation.id,
+					sessionId: sessionId ?? operation.sessionId,
+					inputNoteIds: [...operation.inputNoteIds],
+					outputNoteIds: [...operation.outputNoteIds],
+					...(operation.payload ? { payload: { ...operation.payload } } : {})
+				};
+				await db.operations.put(mapped);
+				operationsUpserted++;
+			}
+			for (const id of deletedIds) {
+				await stripCanvasForDeletedNote(id);
+			}
+			if (desk) {
+				const activeIds = new Set([...knownNoteIds].filter((id) => !deletedIds.includes(id)));
+				const result = await applyDeskIdbSnapshot(desk, activeIds, sessionId);
+				const { remappedDismissed: remapped, ...summary } = result;
+				deskSummary = summary;
+				remappedDismissed = remapped;
+			}
 		}
-		if (desk) {
-			const activeIds = new Set([...knownNoteIds].filter((id) => !deletedIds.includes(id)));
-			const result = await applyDeskIdbSnapshot(desk, activeIds);
-			const { remappedDismissed: remapped, ...summary } = result;
-			deskSummary = summary;
-			remappedDismissed = remapped;
-		}
-	});
+	);
 
 	if (Object.keys(remappedDismissed).length > 0) {
 		importDismissedMap(remappedDismissed);
 	}
 
-	return { desk: deskSummary };
+	return { desk: deskSummary, operationsUpserted };
 }
 
-export async function downloadSyncBundle(notes: Note[], filename = 'mash-sync-bundle.json') {
-	const bundle = await buildSyncBundle(notes);
+export async function downloadSyncBundle(
+	notes: Note[],
+	filename = 'mash-sync-bundle.json',
+	sessionId?: string
+) {
+	const bundle = await buildSyncBundle(notes, sessionId);
 	const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
 	const url = URL.createObjectURL(blob);
 	const a = document.createElement('a');

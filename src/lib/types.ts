@@ -8,6 +8,22 @@
 /** Body text alignment in the sticky editor / preview. */
 export type TextAlign = 'left' | 'center' | 'right';
 
+export type SessionMode = 'scratch' | 'kept';
+export type SessionStatus = 'active' | 'recovering';
+
+/** A local working desk. Scratch sessions expire; kept sessions do not. */
+export interface Session {
+	id: string;
+	title: string;
+	mode: SessionMode;
+	status: SessionStatus;
+	created: number;
+	modified: number;
+	lastMeaningfulActivityAt: number;
+	expiresAt?: number;
+	recoveryUntil?: number;
+}
+
 export type NoteSource = {
 	kind: 'pdf';
 	title: string;
@@ -26,12 +42,31 @@ export interface Note {
 	links?: string[];
 	/** Source note ids when this note was created by a Mash action. */
 	mashedFrom?: string[];
+	/** Durable receipt that produced this note, for chained provenance. */
+	operationId?: string;
 	/** Sticky body alignment (edit + preview). Defaults to left when unset. */
 	textAlign?: TextAlign;
 	/** Origin metadata for captured source material such as PDF excerpts. */
 	source?: NoteSource;
 	/** Soft-delete timestamp for sync tombstones. Active notes omit this. */
 	deletedAt?: number;
+	/** Desk that owns this note. Legacy/imported notes may omit until migration. */
+	sessionId?: string;
+	/** Session notes expire with a scratch desk; kept notes remain locally. */
+	scope?: 'session' | 'kept';
+	keptAt?: number;
+}
+
+/** A durable, local receipt for a deterministic set/content operation. */
+export interface Operation {
+	id: string;
+	sessionId: string;
+	type: string;
+	inputNoteIds: string[];
+	outputNoteIds: string[];
+	payload?: Record<string, unknown>;
+	created: number;
+	revertedAt?: number;
 }
 
 export interface Folder {
@@ -51,6 +86,8 @@ export interface Canvas {
 	title: string;
 	created: number;
 	modified: number;
+	/** Owning desk. Legacy canvas records may omit until migration. */
+	sessionId?: string;
 }
 
 /**
