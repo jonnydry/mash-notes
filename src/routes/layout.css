@@ -384,6 +384,10 @@ body {
 	}
 }
 
+.mash-empty-state {
+	gap: 0;
+	padding: 0.25rem;
+}
 .mash-empty-mascot {
 	display: block;
 	filter: drop-shadow(0 10px 18px rgba(44, 36, 24, 0.18));
@@ -398,15 +402,23 @@ body {
 
 .mash-empty-title {
 	color: var(--mash-ink);
+	line-height: 1.25;
+	letter-spacing: -0.02em;
 }
 .mash-empty-copy {
 	color: var(--mash-ink-muted);
+	line-height: 1.5;
+	letter-spacing: 0.005em;
+	opacity: 0.92;
 }
 
 .mash-note-card {
 	background: var(--mash-card);
 	color: var(--mash-card-ink);
-	box-shadow: var(--mash-shadow-card);
+	/* Soft paper stack: contact shadow + ambient lift + faint top edge */
+	box-shadow:
+		var(--mash-shadow-card),
+		inset 0 1px 0 color-mix(in srgb, var(--mash-card-ink) 5%, transparent);
 	border: 1px solid var(--mash-card-edge);
 	cursor: grab;
 	/* Visible so page badges can sit on the corner without clipping;
@@ -415,15 +427,37 @@ body {
 	transition:
 		box-shadow 160ms ease,
 		transform 160ms ease,
-		border-color 160ms ease;
+		border-color 160ms ease,
+		opacity 120ms ease;
+}
+.mash-note-card:hover:not(.is-selected):not(.is-dragging-card):not(.is-mash-target):not(
+		.is-flow-source
+	):not(.is-expanded) {
+	border-color: var(--mash-card-edge-strong);
+	box-shadow:
+		0 2px 4px color-mix(in srgb, #000 18%, transparent),
+		0 10px 28px color-mix(in srgb, #000 16%, transparent),
+		inset 0 1px 0 color-mix(in srgb, var(--mash-card-ink) 6%, transparent);
+}
+[data-theme='light']
+	.mash-note-card:hover:not(.is-selected):not(.is-dragging-card):not(.is-mash-target):not(
+		.is-flow-source
+	):not(.is-expanded) {
+	box-shadow:
+		0 2px 4px rgba(40, 28, 12, 0.1),
+		0 10px 26px rgba(40, 28, 12, 0.12),
+		inset 0 1px 0 color-mix(in srgb, var(--mash-card-ink) 4%, transparent);
 }
 .mash-note-card.is-selected {
 	/* Lift above overlapping unselected cards so the highlight is readable. */
 	z-index: 4;
 	border-color: var(--mash-accent-select);
+	/* Tight accent edge + soft wash ring — clear multi-select without shouting */
 	box-shadow:
 		var(--mash-shadow-card),
-		0 0 0 2px color-mix(in srgb, var(--mash-accent) 25%, transparent);
+		0 0 0 1.5px color-mix(in srgb, var(--mash-accent) 48%, transparent),
+		0 0 0 4px color-mix(in srgb, var(--mash-accent) 12%, transparent),
+		inset 0 1px 0 color-mix(in srgb, var(--mash-card-ink) 5%, transparent);
 }
 .mash-note-card:focus-visible {
 	outline: none;
@@ -435,7 +469,7 @@ body {
 .mash-note-card.is-selected:focus-visible {
 	box-shadow:
 		var(--mash-shadow-card),
-		0 0 0 2px color-mix(in srgb, var(--mash-accent) 25%, transparent),
+		0 0 0 1.5px color-mix(in srgb, var(--mash-accent) 48%, transparent),
 		0 0 0 4px var(--mash-accent-ring);
 }
 .mash-note-card.is-settling {
@@ -443,17 +477,22 @@ body {
 }
 .mash-note-card.is-expanded {
 	z-index: 5;
-	box-shadow: var(--mash-shadow-lift);
+	box-shadow:
+		var(--mash-shadow-lift),
+		inset 0 1px 0 color-mix(in srgb, var(--mash-card-ink) 5%, transparent);
 	border-color: color-mix(in srgb, var(--mash-accent) 40%, transparent);
 	overflow: visible;
 	min-width: 280px;
 	min-height: 220px;
 }
 .mash-note-card.is-dragging-card {
-	opacity: 0.92;
+	opacity: 0.94;
 	z-index: 8;
-	box-shadow: var(--mash-shadow-lift);
+	box-shadow:
+		var(--mash-shadow-lift),
+		0 0 0 1px color-mix(in srgb, var(--mash-accent) 18%, transparent);
 	cursor: grabbing;
+	transform: scale(1.015);
 }
 /* Stickies: slightly softer thumb so the bar sits on paper */
 .mash-card-preview,
@@ -461,6 +500,39 @@ body {
 .mash-sticky-preview {
 	--mash-scrollbar-thumb: var(--mash-card-edge-strong);
 	--mash-scrollbar-thumb-hover: color-mix(in srgb, var(--mash-card-ink) 28%, transparent);
+}
+
+/* Card chrome — title, meta, body hierarchy */
+.mash-card-title-row {
+	letter-spacing: -0.015em;
+	line-height: 1.3;
+	color: var(--mash-card-ink);
+}
+.mash-card-title-row > span {
+	color: var(--mash-card-ink);
+}
+.mash-card-header {
+	/* Expanded sticky drag chrome */
+	min-height: 2.25rem;
+}
+.mash-card-meta {
+	/* Folder / tags strip under expanded title */
+	min-height: 1.75rem;
+	color: var(--mash-card-muted);
+}
+.mash-card-meta input::placeholder {
+	color: color-mix(in srgb, var(--mash-card-muted) 72%, transparent);
+}
+.mash-card-preview {
+	line-height: 1.45;
+	/* Preview body is secondary to the title */
+	color: color-mix(in srgb, var(--mash-card-muted) 92%, var(--mash-card-ink));
+}
+.mash-card-source,
+.mash-card-provenance {
+	letter-spacing: 0.01em;
+	line-height: 1.35;
+	opacity: 0.92;
 }
 .mash-resize-handle {
 	position: absolute;
@@ -566,6 +638,37 @@ body {
 	opacity: 0.45;
 	cursor: not-allowed;
 }
+/* Canvas chrome — match header title-chip language (soft glass, compact type) */
+.mash-canvas-chrome-top {
+	gap: 0.35rem;
+}
+.mash-canvas-chrome-top .mash-board-chip,
+.mash-canvas-chrome-top .mash-board-chip-soft,
+.mash-canvas-chrome-pan .mash-board-chip,
+.mash-canvas-chrome-mobile .mash-board-chip {
+	box-shadow: inset 0 1px 0 var(--mash-glass-highlight);
+}
+.mash-canvas-chrome-top .mash-board-chip,
+.mash-canvas-chrome-top .mash-board-chip-soft {
+	border-radius: 999px;
+	font-size: 10px;
+	line-height: 1.2;
+}
+.mash-canvas-chrome-top .mash-board-chip-btn {
+	border-radius: 999px;
+	font-weight: 600;
+	letter-spacing: 0.01em;
+	transition:
+		background 120ms ease,
+		color 120ms ease;
+}
+.mash-canvas-chrome-top .mash-board-chip-btn:hover {
+	background: var(--mash-hover-fill-soft);
+	color: var(--mash-chrome-ink);
+}
+.mash-canvas-chrome-pan .mash-board-chip {
+	border-radius: 12px;
+}
 .mash-canvas-chrome-mobile {
 	display: none;
 }
@@ -628,7 +731,14 @@ body {
 	border-color: var(--mash-accent);
 	box-shadow:
 		var(--mash-shadow-card),
-		0 0 0 3px color-mix(in srgb, var(--mash-accent) 35%, transparent);
+		0 0 0 2px color-mix(in srgb, var(--mash-accent) 42%, transparent),
+		0 0 0 5px color-mix(in srgb, var(--mash-accent) 14%, transparent);
+}
+.mash-note-card.is-selected.is-dragging-card {
+	box-shadow:
+		var(--mash-shadow-lift),
+		0 0 0 1.5px color-mix(in srgb, var(--mash-accent) 48%, transparent),
+		0 0 0 4px color-mix(in srgb, var(--mash-accent) 12%, transparent);
 }
 .mash-note-card.is-flow-mode {
 	cursor: crosshair;
@@ -636,6 +746,16 @@ body {
 .mash-flow-edge-hit {
 	line-height: 1;
 	padding: 0;
+	box-shadow:
+		var(--mash-shadow-card),
+		0 0 0 1px color-mix(in srgb, var(--mash-accent) 18%, transparent);
+	transition:
+		transform 120ms ease,
+		box-shadow 120ms ease,
+		border-color 120ms ease;
+}
+.mash-flow-edge-hit:hover {
+	transform: translate(-50%, -50%) scale(1.08);
 }
 .mash-flow-edge-hit.is-invalid {
 	box-shadow: 0 0 0 2px color-mix(in srgb, var(--mash-danger) 35%, transparent);
@@ -770,12 +890,21 @@ body {
 @media (prefers-reduced-motion: reduce) {
 	.mash-note-card,
 	.mash-resize-handle,
-	.mash-flow-end-menu-trigger {
+	.mash-flow-end-menu-trigger,
+	.mash-flow-edge-hit,
+	.mash-canvas-chrome-top .mash-board-chip-btn {
 		transition: none;
 	}
 	.mash-note-card.is-settling,
+	.mash-note-card.is-dragging-card,
 	.mash-board-surface.is-drop-target {
 		animation: none;
+	}
+	.mash-note-card.is-dragging-card {
+		transform: none;
+	}
+	.mash-flow-edge-hit:hover {
+		transform: translate(-50%, -50%);
 	}
 }
 

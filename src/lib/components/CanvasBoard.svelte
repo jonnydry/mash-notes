@@ -1904,7 +1904,7 @@
 					{#if expanded}
 						<div
 							data-drag-handle
-							class="flex cursor-grab items-center gap-1 border-b border-[var(--mash-card-edge)] px-2 py-1.5 active:cursor-grabbing"
+							class="mash-card-header flex cursor-grab items-center gap-1 border-b border-[var(--mash-card-edge)] px-2.5 py-1.5 active:cursor-grabbing"
 						>
 							<input
 								bind:this={titleInputEl}
@@ -1969,7 +1969,7 @@
 							</button>
 						</div>
 						<div
-							class="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-[var(--mash-card-edge)] px-2 py-1"
+							class="mash-card-meta flex shrink-0 flex-wrap items-center gap-1.5 border-b border-[var(--mash-card-edge)] px-2.5 py-1"
 							data-no-drag
 							role="group"
 							aria-label="Note metadata"
@@ -2104,7 +2104,7 @@
 								noteId={note.id}
 								readOnly={isPermanentWelcome}
 								heroImage={isPermanentWelcome
-									? { src: MASH_SPOON_LOGO, alt: 'Spoon, the Mash mascot' }
+									? { src: MASH_SPOON_LOGO, alt: 'Scoop, the Mash mascot' }
 									: null}
 								textAlign={note.textAlign}
 								autofocus={expandFocus !== 'title'}
@@ -2115,7 +2115,7 @@
 						</div>
 					{:else}
 						<div
-							class="mash-card-title-row flex items-start justify-between gap-1 border-b border-[var(--mash-card-edge)] px-2.5 py-1.5"
+							class="mash-card-title-row flex items-start justify-between gap-1.5 border-b border-[var(--mash-card-edge)] px-2.5 py-2"
 						>
 							<span
 								class="flex min-w-0 items-center gap-1 truncate text-xs font-semibold tracking-tight"
@@ -2141,7 +2141,7 @@
 						</div>
 						<div
 							data-card-scroll
-							class="mash-card-preview min-h-0 flex-1 overflow-y-auto overscroll-contain px-2.5 py-2 text-[11px] leading-snug text-[var(--mash-card-muted)]"
+							class="mash-card-preview min-h-0 flex-1 overflow-y-auto overscroll-contain px-2.5 py-2.5 text-[11px] leading-snug text-[var(--mash-card-muted)]"
 							style="text-align: {note.textAlign === 'center' || note.textAlign === 'right'
 								? note.textAlign
 								: 'left'};"
@@ -2150,7 +2150,7 @@
 								<div class="flex items-center gap-2">
 									<img
 										src={MASH_SPOON_LOGO}
-										alt="Spoon, the Mash mascot"
+										alt="Scoop, the Mash mascot"
 										class="h-14 w-14 shrink-0 object-contain drop-shadow-sm"
 									/>
 									<span class="line-clamp-4">{notePreview(note.body, 140)}</span>
@@ -2175,7 +2175,7 @@
 							{/if}
 							{#if note.source?.kind === 'pdf'}
 								<div
-									class="mt-1.5 flex items-center gap-1 border-t pt-1 text-[9px]"
+									class="mash-card-source mt-2 flex items-center gap-1 border-t pt-1.5 text-[9px]"
 									style="border-color: var(--mash-card-edge); color: var(--mash-accent);"
 									title="Captured from {note.source.title}, page {note.source.page}"
 								>
@@ -2184,7 +2184,7 @@
 								</div>
 							{:else if note.source?.kind === 'docx'}
 								<div
-									class="mt-1.5 flex items-center gap-1 border-t pt-1 text-[9px]"
+									class="mash-card-source mt-2 flex items-center gap-1 border-t pt-1.5 text-[9px]"
 									style="border-color: var(--mash-card-edge); color: var(--mash-accent);"
 									title="Captured from {note.source.title}"
 								>
@@ -2194,7 +2194,7 @@
 							{/if}
 							{#if note.mashedFrom?.length}
 								<div
-									class="mash-card-provenance mt-1.5 border-t pt-1 text-[9px]"
+									class="mash-card-provenance mt-2 border-t pt-1.5 text-[9px]"
 									style="border-color: var(--mash-card-edge); color: var(--mash-accent);"
 									title={provenanceTitles.length > 0
 										? `Made from: ${provenanceTitles.join(', ')}`
@@ -2410,7 +2410,7 @@
 	</div>
 
 	{#if emptyStateVisible}
-		<div class="pointer-events-none absolute inset-0 flex items-center justify-center p-6">
+		<div class="pointer-events-none absolute inset-0 flex items-center justify-center p-6 sm:p-8">
 			<div
 				class="mash-empty-state flex max-w-sm flex-col items-center text-center transition-transform duration-200
 					{isExternalDragOver ? 'mash-empty-state-active scale-[1.03]' : ''}"
@@ -2424,7 +2424,7 @@
 					class="mash-empty-mascot h-40 w-auto select-none sm:h-44"
 					draggable="false"
 				/>
-				<p class="mash-display mash-empty-title mt-4 text-xl font-medium tracking-tight">
+				<p class="mash-display mash-empty-title mt-5 text-xl font-medium tracking-tight sm:text-[1.35rem]">
 					{isFileDragOver
 						? 'Drop files to import'
 						: isExternalDragOver
@@ -2432,11 +2432,11 @@
 							: emptyMascot.title}
 				</p>
 				{#if isFileDragOver}
-					<p class="mash-empty-copy mt-1.5 max-w-[18rem] text-sm">
+					<p class="mash-empty-copy mt-2 max-w-[18rem] text-sm leading-relaxed">
 						PDF, Markdown, text, note JSON, or a Mash sync bundle
 					</p>
 				{:else if !isExternalDragOver}
-					<p class="mash-empty-copy mt-1.5 max-w-[16rem] text-sm">
+					<p class="mash-empty-copy mt-2 max-w-[17rem] text-sm leading-relaxed">
 						{emptyMascot.copy}
 					</p>
 				{/if}
@@ -2462,10 +2462,10 @@
 		data-canvas-chrome
 		class="mash-canvas-chrome-top pointer-events-none absolute top-3 right-3 z-10 flex flex-wrap items-center justify-end gap-1.5"
 	>
-		<div class="mash-board-chip pointer-events-auto flex items-center rounded-md p-0.5 text-[10px]">
+		<div class="mash-board-chip pointer-events-auto flex items-center rounded-full p-0.5 text-[10px]">
 			<button
 				type="button"
-				class="mash-board-chip-btn rounded px-2 py-1 {!snapEnabled ? 'is-active' : ''}"
+				class="mash-board-chip-btn rounded-full px-2.5 py-1 {!snapEnabled ? 'is-active' : ''}"
 				onclick={(e) => {
 					e.stopPropagation();
 					if (snapEnabled) toggleSnap();
@@ -2476,7 +2476,7 @@
 			</button>
 			<button
 				type="button"
-				class="mash-board-chip-btn rounded px-2 py-1 {snapEnabled ? 'is-active' : ''}"
+				class="mash-board-chip-btn rounded-full px-2.5 py-1 {snapEnabled ? 'is-active' : ''}"
 				onclick={(e) => {
 					e.stopPropagation();
 					if (!snapEnabled) toggleSnap();
@@ -2488,7 +2488,7 @@
 		</div>
 		<button
 			type="button"
-			class="mash-board-chip mash-board-chip-btn pointer-events-auto rounded-md px-2 py-1 text-[10px]"
+			class="mash-board-chip mash-board-chip-btn pointer-events-auto rounded-full px-2.5 py-1 text-[10px]"
 			onclick={(e) => {
 				e.stopPropagation();
 				organizeToSnap();
@@ -2500,7 +2500,7 @@
 		</button>
 		<button
 			type="button"
-			class="mash-board-chip mash-board-chip-btn pointer-events-auto rounded-md px-2 py-1 text-[10px]"
+			class="mash-board-chip mash-board-chip-btn pointer-events-auto rounded-full px-2.5 py-1 text-[10px]"
 			onclick={(e) => {
 				e.stopPropagation();
 				toggleSelectAllOnBoard();
@@ -2514,7 +2514,7 @@
 		</button>
 		<button
 			type="button"
-			class="mash-board-chip mash-board-chip-btn pointer-events-auto rounded-md px-2 py-1 text-[10px] {flowMode
+			class="mash-board-chip mash-board-chip-btn pointer-events-auto rounded-full px-2.5 py-1 text-[10px] {flowMode
 				? 'is-active'
 				: ''}"
 			onclick={(e) => {
@@ -2537,12 +2537,12 @@
 						: 'Done'
 				: 'Sequence'}
 		</button>
-		<span class="mash-board-chip-soft rounded-md px-2 py-1 text-[10px]">
+		<span class="mash-board-chip-soft rounded-full px-2.5 py-1 text-[10px]">
 			{Math.round(scale * 100)}%{altHeld ? ' · Alt' : ''}
 		</span>
 		<button
 			type="button"
-			class="mash-board-chip mash-board-chip-btn pointer-events-auto rounded-md px-2 py-1 text-[10px]"
+			class="mash-board-chip mash-board-chip-btn pointer-events-auto rounded-full px-2.5 py-1 text-[10px]"
 			onclick={(e) => {
 				e.stopPropagation();
 				zoomToFit(false);
@@ -2554,7 +2554,7 @@
 		{#if selectedCount > 0}
 			<button
 				type="button"
-				class="mash-board-chip mash-board-chip-btn pointer-events-auto rounded-md px-2 py-1 text-[10px]"
+				class="mash-board-chip mash-board-chip-btn pointer-events-auto rounded-full px-2.5 py-1 text-[10px]"
 				onclick={(e) => {
 					e.stopPropagation();
 					zoomToFit(true);
@@ -2566,7 +2566,7 @@
 		{/if}
 		<button
 			type="button"
-			class="mash-board-chip mash-board-chip-btn pointer-events-auto rounded-md px-2 py-1 text-[10px] disabled:opacity-35"
+			class="mash-board-chip mash-board-chip-btn pointer-events-auto rounded-full px-2.5 py-1 text-[10px] disabled:opacity-35"
 			disabled={!canUndo}
 			onclick={(e) => {
 				e.stopPropagation();
@@ -2578,7 +2578,7 @@
 		</button>
 		<button
 			type="button"
-			class="mash-board-chip mash-board-chip-btn pointer-events-auto rounded-md px-2 py-1 text-[10px] disabled:opacity-35"
+			class="mash-board-chip mash-board-chip-btn pointer-events-auto rounded-full px-2.5 py-1 text-[10px] disabled:opacity-35"
 			disabled={!canRedo}
 			onclick={(e) => {
 				e.stopPropagation();
@@ -2590,7 +2590,7 @@
 		</button>
 		<button
 			type="button"
-			class="mash-board-chip mash-board-chip-btn pointer-events-auto rounded-md px-2 py-1 text-[10px]"
+			class="mash-board-chip mash-board-chip-btn pointer-events-auto rounded-full px-2.5 py-1 text-[10px]"
 			onclick={(e) => {
 				e.stopPropagation();
 				resetView();
@@ -2602,7 +2602,7 @@
 		{#if onOpenShortcuts}
 			<button
 				type="button"
-				class="mash-board-chip mash-board-chip-btn pointer-events-auto rounded-md px-2 py-1 text-[10px]"
+				class="mash-board-chip mash-board-chip-btn pointer-events-auto rounded-full px-2.5 py-1 text-[10px]"
 				onclick={(e) => {
 					e.stopPropagation();
 					onOpenShortcuts();
