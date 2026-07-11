@@ -77,6 +77,12 @@
 	--mash-font-display: 'Fraunces', ui-serif, Georgia, serif;
 	--mash-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(0, 0, 0, 0.28);
 	--mash-shadow-lift: 0 4px 8px rgba(0, 0, 0, 0.4), 0 16px 40px rgba(0, 0, 0, 0.45);
+
+	/* Narrow kitchen scrollbars (WebKit size + Firefox color) */
+	--mash-scrollbar-size: 3px;
+	--mash-scrollbar-thumb: rgba(240, 230, 210, 0.26);
+	--mash-scrollbar-thumb-hover: rgba(240, 230, 210, 0.44);
+	--mash-scrollbar-track: transparent;
 }
 
 [data-theme='light'] {
@@ -143,6 +149,10 @@
 
 	--mash-shadow-card: 0 1px 2px rgba(40, 28, 12, 0.1), 0 8px 22px rgba(40, 28, 12, 0.1);
 	--mash-shadow-lift: 0 4px 8px rgba(40, 28, 12, 0.14), 0 16px 36px rgba(40, 28, 12, 0.16);
+
+	--mash-scrollbar-thumb: rgba(80, 60, 30, 0.32);
+	--mash-scrollbar-thumb-hover: rgba(80, 60, 30, 0.5);
+	--mash-scrollbar-track: transparent;
 }
 
 html,
@@ -150,6 +160,32 @@ body {
 	font-family: var(--mash-font-ui);
 	background: var(--mash-bg);
 	color: var(--mash-ink);
+	/* Firefox: thin + kitchen thumb */
+	scrollbar-width: thin;
+	scrollbar-color: var(--mash-scrollbar-thumb) var(--mash-scrollbar-track);
+}
+
+/* Global narrow scrollbars (Chrome / Safari / Edge) */
+* {
+	scrollbar-width: thin;
+	scrollbar-color: var(--mash-scrollbar-thumb) var(--mash-scrollbar-track);
+}
+*::-webkit-scrollbar {
+	width: var(--mash-scrollbar-size);
+	height: var(--mash-scrollbar-size);
+}
+*::-webkit-scrollbar-track {
+	background: var(--mash-scrollbar-track);
+}
+*::-webkit-scrollbar-thumb {
+	border-radius: 999px;
+	background: var(--mash-scrollbar-thumb);
+}
+*::-webkit-scrollbar-thumb:hover {
+	background: var(--mash-scrollbar-thumb-hover);
+}
+*::-webkit-scrollbar-corner {
+	background: transparent;
 }
 
 .mash-display {
@@ -419,16 +455,12 @@ body {
 	box-shadow: var(--mash-shadow-lift);
 	cursor: grabbing;
 }
-.mash-card-preview {
-	scrollbar-width: thin;
-	scrollbar-color: var(--mash-card-edge-strong) transparent;
-}
-.mash-card-preview::-webkit-scrollbar {
-	width: 6px;
-}
-.mash-card-preview::-webkit-scrollbar-thumb {
-	border-radius: 999px;
-	background: var(--mash-card-edge-strong);
+/* Stickies: slightly softer thumb so the bar sits on paper */
+.mash-card-preview,
+.mash-sticky-body,
+.mash-sticky-preview {
+	--mash-scrollbar-thumb: var(--mash-card-edge-strong);
+	--mash-scrollbar-thumb-hover: color-mix(in srgb, var(--mash-card-ink) 28%, transparent);
 }
 .mash-resize-handle {
 	position: absolute;
