@@ -10,13 +10,21 @@ function file(name: string, type = ''): File {
 }
 
 describe('external file drops', () => {
-	it('recognizes note text, JSON, and unsupported files', () => {
+	it('recognizes note text, JSON, PDF, docx, and unsupported files', () => {
 		expect(externalImportKind(file('idea.md'))).toBe('note-text');
 		expect(externalImportKind(file('idea.MARKDOWN'))).toBe('note-text');
 		expect(externalImportKind(file('scratch.txt', 'text/plain'))).toBe('note-text');
 		expect(externalImportKind(file('notes.json'))).toBe('json');
 		expect(externalImportKind(file('export', 'application/json'))).toBe('json');
 		expect(externalImportKind(file('paper.pdf', 'application/pdf'))).toBe('pdf');
+		expect(externalImportKind(file('brief.docx'))).toBe('docx');
+		expect(externalImportKind(file('Brief.DOCX'))).toBe('docx');
+		expect(
+			externalImportKind(
+				file('memo', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+			)
+		).toBe('docx');
+		expect(externalImportKind(file('essay.pages'))).toBe('unsupported');
 		expect(externalImportKind(file('photo.png', 'image/png'))).toBe('unsupported');
 	});
 
@@ -25,10 +33,12 @@ describe('external file drops', () => {
 		const b = file('b.json');
 		const c = file('c.pdf');
 		const d = file('d.txt');
-		expect(splitExternalImportFiles([a, b, c, d])).toEqual({
+		const e = file('e.docx');
+		expect(splitExternalImportFiles([a, b, c, d, e])).toEqual({
 			noteTextFiles: [a, d],
 			jsonFiles: [b],
 			pdfFiles: [c],
+			docxFiles: [e],
 			unsupportedFiles: []
 		});
 	});
