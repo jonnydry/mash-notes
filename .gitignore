@@ -34,3 +34,6 @@ vite.config.ts.timestamp-*
 # Local Product Design QA evidence
 /.design-qa-*.png
 /design-qa.md
+
+# Git worktrees (local feature isolation)
+.worktrees/
