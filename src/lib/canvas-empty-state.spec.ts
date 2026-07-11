@@ -48,7 +48,7 @@ describe('canvas empty state', () => {
 		).toBe(false);
 	});
 
-	it('uses the Spoon mark only for the permanent welcome identity', () => {
+	it('uses the Scoop mark only for the permanent welcome identity', () => {
 		expect(
 			isPermanentMashWelcomeNote({
 				id: 'mash-team-welcome-v1',
