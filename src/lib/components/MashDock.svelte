@@ -86,7 +86,7 @@
 
 	const MAG_RADIUS = 80;
 	const MAG_PEAK = 0.32; // subtle swell — stays readable on the cream board
-	const ICON_SIZE = 42;
+	const ICON_SIZE = 42; // must match .mash-side-dock-item width/height
 
 	function iconFor(id: DockAction) {
 		switch (id) {

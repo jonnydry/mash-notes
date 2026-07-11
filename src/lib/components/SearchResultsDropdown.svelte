@@ -66,8 +66,8 @@
 						<GripVertical class="h-3.5 w-3.5" />
 					</button>
 					<button type="button" class="min-w-0 flex-1 text-left" onclick={() => onOpen(result.id)}>
-						<div class="flex items-center justify-between gap-2">
-							<span class="truncate text-sm font-medium" style="color: var(--mash-ink);">
+						<div class="flex items-center justify-between gap-1.5">
+							<span class="truncate text-[13px] font-medium leading-tight" style="color: var(--mash-ink);">
 								{result.title}
 							</span>
 							{#if result.pinned}
@@ -76,14 +76,14 @@
 						</div>
 						{#if note}
 							<div
-								class="mt-0.5 line-clamp-2 text-[11px] leading-snug"
+								class="mt-px line-clamp-1 text-[11px] leading-snug"
 								style="color: var(--mash-ink-muted);"
 							>
-								{notePreview(note.body, 72)}
+								{notePreview(note.body, 64)}
 							</div>
 						{/if}
 						<div
-							class="mt-1 flex items-center justify-between text-[9px] tabular-nums"
+							class="mt-0.5 flex items-center justify-between gap-2 text-[9px] tabular-nums"
 							style="color: var(--mash-ink-muted);"
 						>
 							<span class="truncate">{result.folder || '—'}</span>
