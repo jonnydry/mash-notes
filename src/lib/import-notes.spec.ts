@@ -88,4 +88,25 @@ describe('import-notes', () => {
 			expect(result.notes[0].source).toEqual({ kind: 'docx', title: 'brief.docx' });
 		}
 	});
+
+	it('preserves validated image provenance', () => {
+		const json = JSON.stringify([
+			{
+				id: 'image-note',
+				title: 'Screenshot',
+				body: '![Screenshot](data:image/png;base64,abc)',
+				folder: '',
+				tags: [],
+				created: 1,
+				modified: 2,
+				pinned: 0,
+				source: { kind: 'image', title: 'shot.png' }
+			}
+		]);
+		const result = parseNotesJson(json);
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(result.notes[0].source).toEqual({ kind: 'image', title: 'shot.png' });
+		}
+	});
 });

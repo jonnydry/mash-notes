@@ -1,14 +1,17 @@
-export type ExternalImportKind = 'note-text' | 'json' | 'pdf' | 'docx' | 'unsupported';
+export type ExternalImportKind = 'note-text' | 'json' | 'pdf' | 'docx' | 'image' | 'unsupported';
 
 export type ExternalImportBatch = {
 	noteTextFiles: File[];
 	jsonFiles: File[];
 	pdfFiles: File[];
 	docxFiles: File[];
+	imageFiles: File[];
 	unsupportedFiles: File[];
 };
 
 const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+const IMAGE_MIME = /^image\/(png|jpeg|webp|gif)$/i;
+const IMAGE_EXT = /\.(png|jpe?g|webp|gif)$/i;
 
 /** Formats Mash can safely turn into notes or an existing validated import. */
 export function externalImportKind(file: Pick<File, 'name' | 'type'>): ExternalImportKind {
@@ -18,6 +21,7 @@ export function externalImportKind(file: Pick<File, 'name' | 'type'>): ExternalI
 	if (/\.json$/.test(name) || type === 'application/json') return 'json';
 	if (/\.pdf$/.test(name) || type === 'application/pdf') return 'pdf';
 	if (/\.docx$/.test(name) || type === DOCX_MIME) return 'docx';
+	if (IMAGE_EXT.test(name) || IMAGE_MIME.test(type)) return 'image';
 	return 'unsupported';
 }
 
@@ -27,6 +31,7 @@ export function splitExternalImportFiles(files: File[]): ExternalImportBatch {
 		jsonFiles: [],
 		pdfFiles: [],
 		docxFiles: [],
+		imageFiles: [],
 		unsupportedFiles: []
 	};
 	for (const file of files) {
@@ -35,6 +40,7 @@ export function splitExternalImportFiles(files: File[]): ExternalImportBatch {
 		else if (kind === 'json') batch.jsonFiles.push(file);
 		else if (kind === 'pdf') batch.pdfFiles.push(file);
 		else if (kind === 'docx') batch.docxFiles.push(file);
+		else if (kind === 'image') batch.imageFiles.push(file);
 		else batch.unsupportedFiles.push(file);
 	}
 	return batch;

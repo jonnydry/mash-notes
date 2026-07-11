@@ -1,7 +1,7 @@
 # Image visual stickies (canvas drop, paste, open)
 
 **Date:** 2026-07-11  
-**Status:** Approved design (pending user review of written spec)  
+**Status:** Implemented on `feat/image-visual-stickies`  
 **Product:** Mash notes PWA  
 **Season:** Intake expansion — **Images → Links → Documents** (this doc is Images only)
 

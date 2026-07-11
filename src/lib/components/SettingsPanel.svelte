@@ -20,6 +20,7 @@
 		onImportSync: () => void;
 		onExportSync: () => void;
 		onOpenDocx?: () => void;
+		onOpenImage?: () => void;
 		conflictCount?: number;
 		onOpenConflicts?: () => void;
 	}
@@ -38,6 +39,7 @@
 		onImportSync,
 		onExportSync,
 		onOpenDocx,
+		onOpenImage,
 		conflictCount = 0,
 		onOpenConflicts
 	}: Props = $props();
@@ -222,6 +224,16 @@
 						onclick={onOpenDocx}
 					>
 						Open Word document…
+					</button>
+				{/if}
+				{#if onOpenImage}
+					<button
+						type="button"
+						class="mash-settings-action"
+						data-testid="settings-open-image"
+						onclick={onOpenImage}
+					>
+						Open image…
 					</button>
 				{/if}
 				<button type="button" class="mash-settings-action" onclick={onImportJson}>

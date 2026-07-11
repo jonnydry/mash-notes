@@ -33,6 +33,10 @@ export type NoteSource =
 	| {
 			kind: 'docx';
 			title: string;
+	  }
+	| {
+			kind: 'image';
+			title: string;
 	  };
 
 export interface Note {
