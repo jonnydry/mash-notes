@@ -131,8 +131,11 @@ describe('stores helpers', () => {
 	it('typography helpers validate suites and read storage', () => {
 		expect(isTypographySuiteId('kitchen')).toBe(true);
 		expect(isTypographySuiteId('napkin')).toBe(true);
+		expect(isTypographySuiteId('terminal')).toBe(true);
 		expect(isTypographySuiteId('comic')).toBe(false);
 		expect(suiteById('napkin').display).toContain('Excalifont');
+		expect(suiteById('terminal').ui).toContain('IBM Plex Mono');
+		expect(suiteById('terminal').display).toContain('IBM Plex Mono');
 		expect(suiteById('editor').ui).toContain('Source Sans 3');
 
 		localStorage.removeItem(TYPOGRAPHY_STORAGE_KEY);

@@ -3,7 +3,13 @@
  * Default "kitchen" matches the original Mash look (Plex + Fraunces).
  */
 
-export type TypographySuiteId = 'kitchen' | 'editor' | 'workshop' | 'atelier' | 'napkin';
+export type TypographySuiteId =
+	| 'kitchen'
+	| 'editor'
+	| 'workshop'
+	| 'atelier'
+	| 'napkin'
+	| 'terminal';
 
 export type TypographySuite = {
 	id: TypographySuiteId;
@@ -59,6 +65,14 @@ export const TYPOGRAPHY_SUITES: readonly TypographySuite[] = [
 		ui: "'Excalifont', 'Segoe Print', 'Comic Sans MS', cursive",
 		display: "'Excalifont', 'Segoe Print', 'Comic Sans MS', cursive",
 		sample: 'Sketch on a napkin · Mash'
+	},
+	{
+		id: 'terminal',
+		label: 'Terminal',
+		hint: 'All monospace — Plex Mono (typewriter / code desk)',
+		ui: "'IBM Plex Mono', ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, Consolas, monospace",
+		display: "'IBM Plex Mono', ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, Consolas, monospace",
+		sample: 'type notes on the wire · Mash'
 	}
 ] as const;
 

@@ -24,6 +24,7 @@
 		"@eslint/compat": "^2.0.4",
 		"@eslint/js": "^10.0.1",
 		"@fontsource/fraunces": "^5.2.9",
+		"@fontsource/ibm-plex-mono": "^5.2.7",
 		"@fontsource/ibm-plex-sans": "^5.2.8",
 		"@fontsource/inter": "^5.2.8",
 		"@fontsource/literata": "^5.2.8",
