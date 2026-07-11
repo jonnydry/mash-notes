@@ -23,6 +23,12 @@ import {
 	PINNED_CANVAS_KEY
 } from './note-library.svelte';
 import { THEME_STORAGE_KEY, isMashTheme, readStoredTheme, THEME_META_COLOR } from './theme.svelte';
+import {
+	TYPOGRAPHY_STORAGE_KEY,
+	isTypographySuiteId,
+	readStoredTypography,
+	suiteById
+} from './typography.svelte';
 import type { Note } from '$lib/types';
 
 const memory = new Map<string, string>();
@@ -120,6 +126,21 @@ describe('stores helpers', () => {
 		expect(readStoredTheme()).toBe('light');
 		localStorage.setItem(THEME_STORAGE_KEY, 'nope');
 		expect(readStoredTheme()).toBe('dark');
+	});
+
+	it('typography helpers validate suites and read storage', () => {
+		expect(isTypographySuiteId('kitchen')).toBe(true);
+		expect(isTypographySuiteId('napkin')).toBe(true);
+		expect(isTypographySuiteId('comic')).toBe(false);
+		expect(suiteById('napkin').display).toContain('Excalifont');
+		expect(suiteById('editor').ui).toContain('Source Sans 3');
+
+		localStorage.removeItem(TYPOGRAPHY_STORAGE_KEY);
+		expect(readStoredTypography()).toBe('kitchen');
+		localStorage.setItem(TYPOGRAPHY_STORAGE_KEY, 'atelier');
+		expect(readStoredTypography()).toBe('atelier');
+		localStorage.setItem(TYPOGRAPHY_STORAGE_KEY, 'nope');
+		expect(readStoredTypography()).toBe('kitchen');
 	});
 
 	it('dispatchDockAction toggles settings and closes peel', () => {

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { X } from 'lucide-svelte';
 	import { theme } from '$lib/stores/theme.svelte';
+	import { typography, type TypographySuiteId } from '$lib/stores/typography.svelte';
 	import { flatShortcutRows } from '$lib/keyboard-shortcuts';
 	import { formatNoteTimestamp } from '$lib/format';
 	import { syncBackupHint } from '$lib/sync-hygiene';
@@ -107,6 +108,42 @@
 				</div>
 			</div>
 			<p class="mash-settings-hint">Stickies and chrome both follow day / night.</p>
+
+			<div class="mash-settings-type-block">
+				<span class="mash-settings-label" id="mash-typography-label">Typography</span>
+				<div
+					class="mash-settings-type-list"
+					role="radiogroup"
+					aria-labelledby="mash-typography-label"
+					data-testid="typography-suite"
+				>
+					{#each typography.suites as suite (suite.id)}
+						<button
+							type="button"
+							role="radio"
+							class="mash-settings-type-option"
+							class:is-active={typography.suiteId === suite.id}
+							aria-checked={typography.suiteId === suite.id}
+							data-testid="typography-suite-{suite.id}"
+							onclick={() => typography.setSuite(suite.id as TypographySuiteId)}
+						>
+							<span class="mash-settings-type-meta">
+								<span class="mash-settings-type-name">{suite.label}</span>
+								<span class="mash-settings-type-hint">{suite.hint}</span>
+							</span>
+							<span
+								class="mash-settings-type-sample"
+								style="font-family: {suite.display};"
+							>
+								{suite.sample}
+							</span>
+						</button>
+					{/each}
+				</div>
+				<p class="mash-settings-hint">
+					Pairs UI + display faces across the desk. Napkin uses Excalifont (OFL) from Excalidraw.
+				</p>
+			</div>
 		</section>
 
 		<section class="mash-settings-section">

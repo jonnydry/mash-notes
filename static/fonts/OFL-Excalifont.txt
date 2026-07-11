@@ -1,0 +1,11 @@
+Excalifont
+Copyright (c) Excalidraw contributors and font authors.
+
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+https://scripts.sil.org/OFL
+
+Excalifont is freely available for personal and commercial use under OFL-1.1,
+aligned with Excalidraw’s open-source principles.
+
+Mash ships Excalifont-Regular.woff2 for the optional “Napkin” typography suite.
+No modifications to the font binaries have been made.

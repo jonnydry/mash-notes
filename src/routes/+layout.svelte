@@ -2,8 +2,12 @@
 	import './fonts.css';
 	import './layout.css';
 	import { theme } from '$lib/stores/theme.svelte';
+	import { typography } from '$lib/stores/typography.svelte';
 
 	let { children } = $props();
+
+	// Ensure suite tokens apply on first paint (store constructor also applies).
+	void typography.suiteId;
 </script>
 
 <svelte:head>
