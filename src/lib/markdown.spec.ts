@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { extractWikilinks, renderMarkdown, isSafeHref } from './markdown';
+import {
+	composeEmbeddedNoteImage,
+	extractWikilinks,
+	isSafeHref,
+	isSafeImageSrc,
+	parseEmbeddedNoteImage,
+	renderMarkdown
+} from './markdown';
 
 describe('markdown', () => {
 	it('extracts unique wikilinks', () => {
@@ -31,5 +38,30 @@ describe('markdown', () => {
 		expect(isSafeHref('data:text/html,hi')).toBe(false);
 		const html = renderMarkdown('[x](javascript:alert(1))');
 		expect(html).toContain('href="#"');
+	});
+
+	it('allows data-image clipping sources in markdown images', () => {
+		expect(isSafeImageSrc('data:image/png;base64,abc')).toBe(true);
+		expect(isSafeImageSrc('data:text/html,hi')).toBe(false);
+		const html = renderMarkdown('![clip](data:image/png;base64,abc)');
+		expect(html).toContain('src="data:image/png;base64,abc"');
+		expect(html).toContain('alt="clip"');
+		const blocked = renderMarkdown('![x](javascript:alert(1))');
+		expect(blocked).not.toContain('javascript:');
+	});
+
+	it('parses and rebuilds leading embedded note images', () => {
+		const body =
+			'![PDF clipping from page 3](data:image/png;base64,abc)\n\n_From Scales.pdf, page 3._';
+		expect(parseEmbeddedNoteImage(body)).toEqual({
+			alt: 'PDF clipping from page 3',
+			src: 'data:image/png;base64,abc',
+			caption: '_From Scales.pdf, page 3._'
+		});
+		expect(composeEmbeddedNoteImage('clip', 'data:image/png;base64,abc', 'note')).toBe(
+			'![clip](data:image/png;base64,abc)\n\nnote'
+		);
+		expect(parseEmbeddedNoteImage('just text')).toBeNull();
+		expect(parseEmbeddedNoteImage('![x](javascript:alert(1))')).toBeNull();
 	});
 });

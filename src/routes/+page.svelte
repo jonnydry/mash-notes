@@ -31,7 +31,10 @@
 		StretchVertical,
 		LayoutGrid,
 		Columns2,
-		BookOpen
+		BookOpen,
+		ChevronDown,
+		FileDown,
+		Printer
 	} from 'lucide-svelte';
 	import MashDock from '$lib/components/MashDock.svelte';
 	import PeelScanner from '$lib/components/PeelScanner.svelte';
@@ -88,7 +91,14 @@
 	import type { PeelConflictRow } from '$lib/components/PeelScanner.svelte';
 	import { shouldShowCanvasEmptyState } from '$lib/canvas-empty-state';
 	import { detectJsonImportKind, splitExternalImportFiles } from '$lib/external-file-drop';
-	import { normalizePdfExcerpt, pdfClippingTitle, type PdfClipping } from '$lib/pdf-clipping';
+	import {
+		normalizePdfExcerpt,
+		pdfClippingTitle,
+		pdfRegionClippingBody,
+		pdfRegionClippingTitle,
+		type PdfClipPayload,
+		type PdfClipping
+	} from '$lib/pdf-clipping';
 	import {
 		analyzePastedText,
 		draftsFromPastedText,
@@ -879,9 +889,41 @@
 		pdfReaderOpen = false;
 	}
 
-	async function savePdfClipping(excerpt: { text: string; page: number }) {
+	async function savePdfClipping(excerpt: PdfClipPayload) {
 		if (!pdfReaderFile) return;
-		const text = normalizePdfExcerpt(excerpt.text);
+		if (excerpt.imageDataUrl) {
+			const title = pdfRegionClippingTitle(pdfReaderFile.name, excerpt.page);
+			const body = pdfRegionClippingBody(excerpt.imageDataUrl, pdfReaderFile.name, excerpt.page);
+			const note = await createNote({
+				...activeNoteOwnership(),
+				title,
+				body,
+				folder: peel.canvasFolder,
+				tags: ['pdf-clipping'],
+				links: [],
+				source: {
+					kind: 'pdf',
+					title: pdfReaderFile.name,
+					page: excerpt.page
+				}
+			});
+			addNoteToSearch(note);
+			library.notes = [note, ...library.notes];
+			pdfClippings = [
+				...pdfClippings,
+				{
+					id: crypto.randomUUID(),
+					noteId: note.id,
+					text: title,
+					page: excerpt.page,
+					imageDataUrl: excerpt.imageDataUrl
+				}
+			];
+			flashToast(`Saved region from page ${excerpt.page}`);
+			return;
+		}
+
+		const text = normalizePdfExcerpt(excerpt.text ?? '');
 		if (!text) return;
 		const note = await createNote({
 			...activeNoteOwnership(),
@@ -1324,6 +1366,65 @@
 				await mashNotesIntoBubble(latest);
 			}
 		});
+	}
+
+	function selectionExportTitle(notes: Note[]): string {
+		if (notes.length === 1) return notes[0]?.title.trim() || 'Untitled';
+		return `Mash · ${notes.length} notes`;
+	}
+
+	function toggleMashMenu() {
+		library.bulkMenu = library.bulkMenu === 'mash' ? null : 'mash';
+	}
+
+	function onMashButtonClick() {
+		if (library.selectionIds.length >= 2) {
+			void invokeOperatorAction('combine-selection');
+			return;
+		}
+		toggleMashMenu();
+	}
+
+	async function exportSelectionPdf() {
+		const notes = library.selectedNotes;
+		if (notes.length === 0) return;
+		library.bulkMenu = null;
+		try {
+			const { exportSequencePdf } = await import('$lib/sequence-pdf');
+			const title = selectionExportTitle(notes);
+			const ok = await exportSequencePdf(notes, title);
+			if (!ok) {
+				flashToast('Could not export PDF');
+				return;
+			}
+			flashToast(
+				notes.length === 1 ? 'PDF downloaded' : `PDF downloaded · ${notes.length} notes`
+			);
+		} catch (cause) {
+			console.error(cause);
+			flashToast('Could not export PDF');
+		}
+	}
+
+	function printSelection() {
+		const notes = library.selectedNotes;
+		if (notes.length === 0) return;
+		library.bulkMenu = null;
+		const opened = printSequenceAsPdf(notes, selectionExportTitle(notes));
+		flashToast(
+			opened
+				? notes.length === 1
+					? 'Opened print dialog'
+					: `Opened print dialog · ${notes.length} notes`
+				: 'Could not prepare print view'
+		);
+	}
+
+	function downloadSelectionMarkdown() {
+		const notes = library.selectedNotes;
+		if (notes.length === 0) return;
+		library.bulkMenu = null;
+		library.exportSelectionMarkdown(notes);
 	}
 
 	/** Restore source notes with a reversible Unmash receipt. */
@@ -1781,6 +1882,33 @@
 			available: () => Boolean(splitCandidate('lines')),
 			undo: 'content',
 			action: () => splitSelection('lines')
+		},
+		{
+			id: 'export-selection-pdf',
+			label: 'Export selected as PDF',
+			shortcut: '',
+			mutation: 'none',
+			surfaces: ['palette'],
+			available: () => library.selectionIds.length >= 1,
+			action: () => void exportSelectionPdf()
+		},
+		{
+			id: 'print-selection',
+			label: 'Print selected notes',
+			shortcut: '',
+			mutation: 'none',
+			surfaces: ['palette'],
+			available: () => library.selectionIds.length >= 1,
+			action: printSelection
+		},
+		{
+			id: 'export-selection-markdown',
+			label: 'Download selected as Markdown',
+			shortcut: '',
+			mutation: 'none',
+			surfaces: ['palette'],
+			available: () => library.selectionIds.length >= 1,
+			action: downloadSelectionMarkdown
 		},
 		{
 			id: 'stack-selection',
@@ -2494,6 +2622,60 @@
 							{/each}
 						</div>
 					</div>
+				{:else if library.bulkMenu === 'mash'}
+					<div
+						class="grid w-64 grid-cols-1 gap-1 rounded-xl border p-2 shadow-xl"
+						style="border-color: var(--mash-panel-border); background: var(--mash-panel); backdrop-filter: blur(10px);"
+						aria-label="Mash and export"
+					>
+						{#if library.selectionIds.length >= 2}
+							<button
+								type="button"
+								class="mash-btn-ghost rounded-lg px-3 py-2 text-left text-xs"
+								onclick={() => {
+									library.bulkMenu = null;
+									void invokeOperatorAction('combine-selection');
+								}}
+							>
+								<strong class="block">Mash into one sticky</strong>
+								<small style="color: var(--mash-ink-muted);">Combine selected notes</small>
+							</button>
+						{/if}
+						<button
+							type="button"
+							class="mash-btn-ghost rounded-lg px-3 py-2 text-left text-xs"
+							onclick={() => void exportSelectionPdf()}
+						>
+							<strong class="flex items-center gap-1.5"
+								><FileDown class="h-3.5 w-3.5" /> Export PDF</strong
+							>
+							<small style="color: var(--mash-ink-muted);"
+								>{library.selectionIds.length === 1
+									? 'Download this note as a PDF'
+									: `Download ${library.selectionIds.length} notes as a PDF`}</small
+							>
+						</button>
+						<button
+							type="button"
+							class="mash-btn-ghost rounded-lg px-3 py-2 text-left text-xs"
+							onclick={printSelection}
+						>
+							<strong class="flex items-center gap-1.5"
+								><Printer class="h-3.5 w-3.5" /> Print</strong
+							>
+							<small style="color: var(--mash-ink-muted);">Open the system print dialog</small>
+						</button>
+						<button
+							type="button"
+							class="mash-btn-ghost rounded-lg px-3 py-2 text-left text-xs"
+							onclick={downloadSelectionMarkdown}
+						>
+							<strong class="flex items-center gap-1.5"
+								><Download class="h-3.5 w-3.5" /> Download Markdown</strong
+							>
+							<small style="color: var(--mash-ink-muted);">Save as a .md file</small>
+						</button>
+					</div>
 				{:else if library.bulkMenu === 'operators'}
 					<div
 						class="grid w-72 grid-cols-1 gap-1 rounded-xl border p-2 shadow-xl sm:grid-cols-2"
@@ -2505,15 +2687,20 @@
 								type="button"
 								class="mash-btn-ghost rounded-lg px-3 py-2 text-left text-xs"
 								data-action-id={operator.id}
-								onclick={() => void operator.action()}
+								onclick={() => {
+									library.bulkMenu = null;
+									void operator.action();
+								}}
 							>
 								<strong class="block">{operator.label.replace(' selected', '')}</strong>
 								<small style="color: var(--mash-ink-muted);"
 									>{operator.id.startsWith('split-selection-')
 										? 'Creates traced fragments · fully undoable'
-										: operator.undo === 'content'
-											? 'Cards only · notes stay in Library'
-											: 'Undoable layout'}</small
+										: operator.mutation === 'none'
+											? 'Leaves notes unchanged'
+											: operator.undo === 'content'
+												? 'Cards only · notes stay in Library'
+												: 'Undoable layout'}</small
 								>
 							</button>
 						{/each}
@@ -2630,16 +2817,31 @@
 					>
 						{library.selectionIds.length} selected
 					</span>
-					<button
-						type="button"
-						onclick={() => void invokeOperatorAction('combine-selection')}
-						class="mash-btn flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold"
-						disabled={library.selectionIds.length < 2}
-						title="Combine into one sticky — sources leave the desk until Unmash"
-					>
-						<Layers class="h-3.5 w-3.5" />
-						Mash
-					</button>
+					<div class="mash-btn-split flex items-stretch overflow-hidden rounded-xl">
+						<button
+							type="button"
+							onclick={onMashButtonClick}
+							class="mash-btn flex items-center gap-1.5 rounded-none px-3 py-1.5 text-xs font-semibold"
+							class:is-open={library.bulkMenu === 'mash' && library.selectionIds.length < 2}
+							title={library.selectionIds.length >= 2
+								? 'Combine into one sticky — sources leave the desk until Unmash'
+								: 'Export this note as PDF, print, or Markdown'}
+						>
+							<Layers class="h-3.5 w-3.5" />
+							Mash
+						</button>
+						<button
+							type="button"
+							onclick={toggleMashMenu}
+							class="mash-btn mash-btn-split-chevron flex items-center rounded-none px-1.5 py-1.5"
+							class:is-open={library.bulkMenu === 'mash'}
+							aria-label="Mash and export options"
+							aria-expanded={library.bulkMenu === 'mash'}
+							title="Export PDF, print, or Markdown"
+						>
+							<ChevronDown class="h-3.5 w-3.5" />
+						</button>
+					</div>
 					{#if actionsForSurface(operatorActions, 'selection').length > 0}
 						<button
 							type="button"

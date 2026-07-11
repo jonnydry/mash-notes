@@ -184,6 +184,12 @@ export function sequencePrintHtml(notes: Note[], docTitle = 'Page sequence'): st
     text-align: left;
   }
   .body code { font-size: 0.92em; }
+  .body img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: 0.75em 0;
+  }
   .empty { margin: 0; }
   @media print {
     .page { min-height: 0; }

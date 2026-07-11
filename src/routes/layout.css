@@ -182,6 +182,25 @@ body {
 	transform: translateY(1px);
 }
 
+.mash-btn-split {
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+.mash-btn-split .mash-btn {
+	box-shadow: none;
+}
+.mash-btn-split .mash-btn:first-child {
+	border-radius: 12px 0 0 12px;
+}
+.mash-btn-split-chevron {
+	border-left: 1px solid color-mix(in srgb, var(--mash-accent-ink) 28%, transparent);
+	border-radius: 0 12px 12px 0;
+	opacity: 0.95;
+}
+.mash-btn-split .mash-btn.is-open,
+.mash-btn-split-chevron.is-open {
+	background: var(--mash-accent-bright);
+}
+
 .mash-btn-ghost {
 	background: transparent;
 	color: var(--mash-ink-muted);

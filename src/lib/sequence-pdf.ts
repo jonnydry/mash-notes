@@ -1,7 +1,9 @@
 /**
  * Sequence → PDF — each note starts on its own page; long notes continue.
+ * Embedded data-URL images (PDF clippings) are drawn into the page.
  */
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
+import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFImage, type PDFPage } from 'pdf-lib';
+import { parseEmbeddedNoteImage } from './markdown';
 import type { Note } from './types';
 import { slugifyFilename } from './mash';
 
@@ -15,10 +17,31 @@ const TITLE_LEADING = 28;
 const BODY_LEADING = 16;
 const META_LEADING = 12;
 
+/** Decode a PNG/JPEG data URL into bytes pdf-lib can embed. */
+export function decodeDataUrlImage(
+	dataUrl: string
+): { bytes: Uint8Array; format: 'png' | 'jpg' } | null {
+	const match = dataUrl
+		.trim()
+		.match(/^data:(image\/(?:png|jpeg|jpg));base64,([a-z0-9+/=\s]+)$/i);
+	if (!match) return null;
+	const mime = match[1].toLowerCase();
+	const b64 = match[2].replace(/\s+/g, '');
+	try {
+		const binary = atob(b64);
+		const bytes = new Uint8Array(binary.length);
+		for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+		return { bytes, format: mime.includes('png') ? 'png' : 'jpg' };
+	} catch {
+		return null;
+	}
+}
+
 /** Strip markdown-ish syntax into readable plain lines for PDF layout. */
 export function noteBodyForPdf(body: string): string {
 	return sanitizePdfText(
 		body
+			.replace(/!\[[^\]]*\]\([^)]+\)/g, '')
 			.replace(/\[\[([^\]|#]+)(?:\|([^\]]+))?\]\]/g, (_m, target, label) =>
 				String(label ?? target).trim()
 			)
@@ -30,7 +53,8 @@ export function noteBodyForPdf(body: string): string {
 			.replace(/^\s*\d+\.\s+/gm, (m) => m.trimStart())
 			.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
 			.replace(/\r\n/g, '\n')
-			.trimEnd()
+			.replace(/\n{3,}/g, '\n\n')
+			.trim()
 	);
 }
 
@@ -116,6 +140,16 @@ function alignedX(
 	return MARGIN + Math.max(0, maxWidth - width);
 }
 
+function imageAlignedX(
+	imageWidth: number,
+	align: 'left' | 'center' | 'right',
+	maxWidth: number
+): number {
+	if (align === 'left') return MARGIN;
+	if (align === 'center') return MARGIN + Math.max(0, (maxWidth - imageWidth) / 2);
+	return MARGIN + Math.max(0, maxWidth - imageWidth);
+}
+
 function drawTextLines(
 	page: PDFPage,
 	lines: string[],
@@ -175,6 +209,34 @@ function drawNoteMeta(page: PDFPage, ctx: DrawCtx, label: string, y: number): nu
 	return y - META_LEADING - 8;
 }
 
+async function embedDataUrlImage(pdf: PDFDocument, src: string): Promise<PDFImage | null> {
+	const decoded = decodeDataUrlImage(src);
+	if (!decoded) return null;
+	try {
+		return decoded.format === 'png'
+			? await pdf.embedPng(decoded.bytes)
+			: await pdf.embedJpg(decoded.bytes);
+	} catch {
+		return null;
+	}
+}
+
+function fittedImageSize(
+	image: PDFImage,
+	maxWidth: number,
+	maxHeight: number
+): { width: number; height: number } {
+	const scale = Math.min(
+		maxWidth / Math.max(1, image.width),
+		maxHeight / Math.max(1, image.height),
+		1
+	);
+	return {
+		width: Math.max(1, image.width * scale),
+		height: Math.max(1, image.height * scale)
+	};
+}
+
 /**
  * Build a PDF document from a page sequence.
  * Each note starts on a fresh page. Notes that fit stay on one page;
@@ -216,6 +278,8 @@ export async function buildSequencePdf(
 			const noteLabel = `Note ${i + 1} of ${notes.length}`;
 			const align =
 				note.textAlign === 'center' || note.textAlign === 'right' ? note.textAlign : 'left';
+			const embedded = parseEmbeddedNoteImage(note.body);
+			const body = noteBodyForPdf(embedded ? embedded.caption : note.body);
 			let { page, y } = newContentPage(ctx);
 
 			y = drawNoteMeta(page, ctx, noteLabel, y);
@@ -233,7 +297,25 @@ export async function buildSequencePdf(
 			});
 			y -= 12;
 
-			const body = noteBodyForPdf(note.body);
+			if (embedded) {
+				const image = await embedDataUrlImage(pdf, embedded.src);
+				if (image) {
+					const maxImgHeight = Math.max(120, y - MARGIN - 48);
+					const size = fittedImageSize(image, ctx.maxWidth, maxImgHeight);
+					if (y - size.height < MARGIN) {
+						({ page, y } = newContentPage(ctx));
+						y = drawNoteMeta(page, ctx, `${noteLabel} · continued`, y);
+					}
+					page.drawImage(image, {
+						x: imageAlignedX(size.width, align, ctx.maxWidth),
+						y: y - size.height,
+						width: size.width,
+						height: size.height
+					});
+					y -= size.height + 16;
+				}
+			}
+
 			if (!body.trim()) continue;
 
 			const bodyLines = wrapParagraph(body, font, BODY_SIZE, ctx.maxWidth);

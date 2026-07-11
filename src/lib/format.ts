@@ -1,3 +1,5 @@
+import { parseEmbeddedNoteImage } from './markdown';
+
 const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
 
 export function formatNoteTimestamp(ms: number, now = Date.now()): string {
@@ -20,14 +22,20 @@ export function formatNoteTimestamp(ms: number, now = Date.now()): string {
 }
 
 export function notePreview(body: string, max = 92): string {
+	const embedded = parseEmbeddedNoteImage(body);
 	const flat = body
+		.replace(/!\[[^\]]*\]\([^)]+\)/g, ' ')
 		.replace(/\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g, '$1')
 		.replace(/^#+\s+/gm, '')
 		.replace(/```[\s\S]*?```/g, '')
 		.replace(/\s+/g, ' ')
 		.trim();
 
-	if (!flat) return 'No content yet…';
+	if (!flat) {
+		if (embedded?.alt.trim()) return embedded.alt.trim();
+		if (embedded) return 'Image';
+		return 'No content yet…';
+	}
 	return flat.length <= max ? flat : flat.slice(0, max).trimEnd() + '…';
 }
 

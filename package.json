@@ -5,10 +5,11 @@
 	"type": "module",
 	"description": "Mash — Cute, fast, minimal web notes. Mash your ideas together in a reliable place. Open source Obsidian-light PWA.",
 	"scripts": {
-		"dev": "vite dev",
-		"build": "vite build",
+		"dev": "node scripts/sync-pdfjs-assets.mjs && vite dev",
+		"build": "node scripts/sync-pdfjs-assets.mjs && vite build",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
+		"postinstall": "node scripts/sync-pdfjs-assets.mjs",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"lint": "prettier --check . && eslint .",

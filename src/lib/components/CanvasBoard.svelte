@@ -2,6 +2,7 @@
 	import type { CanvasEdge, CanvasItem, Note } from '$lib/types';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { notePreview } from '$lib/format';
+	import { parseEmbeddedNoteImage } from '$lib/markdown';
 	import {
 		loadCanvasViewport,
 		saveCanvasViewport,
@@ -2155,7 +2156,22 @@
 									<span class="line-clamp-4">{notePreview(note.body, 140)}</span>
 								</div>
 							{:else}
-								{notePreview(note.body, 220)}
+								{@const cardImage = parseEmbeddedNoteImage(note.body)}
+								{#if cardImage}
+									<div class="flex flex-col gap-1.5">
+										<img
+											src={cardImage.src}
+											alt={cardImage.alt || note.title}
+											class="max-h-36 w-full rounded-md object-contain"
+											style="background: color-mix(in srgb, var(--mash-card-hover) 70%, transparent);"
+										/>
+										{#if cardImage.caption.trim()}
+											<span class="line-clamp-2">{notePreview(cardImage.caption, 72)}</span>
+										{/if}
+									</div>
+								{:else}
+									{notePreview(note.body, 220)}
+								{/if}
 							{/if}
 							{#if note.source?.kind === 'pdf'}
 								<div

@@ -156,7 +156,7 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 	let notes = $state<Note[]>([]);
 	let selectedId = $state<string | null>(null);
 	let selectionIds = $state<string[]>([]);
-	let bulkMenu = $state<'tag' | 'folder' | 'align' | 'operators' | null>(null);
+	let bulkMenu = $state<'tag' | 'folder' | 'align' | 'operators' | 'mash' | null>(null);
 	let bulkTagDraft = $state('');
 	let bulkFolderDraft = $state('');
 	let isLoading = $state(true);
@@ -1021,7 +1021,7 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 		get bulkMenu() {
 			return bulkMenu;
 		},
-		set bulkMenu(v: 'tag' | 'folder' | 'align' | 'operators' | null) {
+		set bulkMenu(v: 'tag' | 'folder' | 'align' | 'operators' | 'mash' | null) {
 			bulkMenu = v;
 		},
 		get bulkTagDraft() {

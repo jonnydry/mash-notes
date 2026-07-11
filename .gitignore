@@ -28,6 +28,9 @@ vite.config.ts.timestamp-*
 /blob-report/
 /playwright/.cache/
 
+# Generated pdf.js binary assets (synced from node_modules)
+/static/pdfjs/
+
 # Local Product Design QA evidence
 /.design-qa-*.png
 /design-qa.md

@@ -58,6 +58,21 @@ export function isSafeHref(href: string | undefined | null): boolean {
 	);
 }
 
+/** Safe image sources for sticky preview — allows local data-URL clipping PNGs. */
+export function isSafeImageSrc(href: string | undefined | null): boolean {
+	if (!href) return false;
+	const lower = href.trim().toLowerCase();
+	if (
+		lower.startsWith('data:image/png;base64,') ||
+		lower.startsWith('data:image/jpeg;base64,') ||
+		lower.startsWith('data:image/webp;base64,') ||
+		lower.startsWith('data:image/gif;base64,')
+	) {
+		return true;
+	}
+	return isSafeHref(href);
+}
+
 /** Replace wikilinks with placeholders before markdown, restore as buttons after. */
 function protectWikilinks(src: string): {
 	text: string;
@@ -93,6 +108,12 @@ marked.use({
 			const safeHref = isSafeHref(href) ? href! : '#';
 			const t = title ? ` title="${escapeAttr(title)}"` : '';
 			return `<a href="${escapeAttr(safeHref)}"${t} rel="noopener noreferrer" target="_blank">${text}</a>`;
+		},
+		image({ href, title, text }: Tokens.Image) {
+			if (!isSafeImageSrc(href)) return '';
+			const t = title ? ` title="${escapeAttr(title)}"` : '';
+			const alt = escapeAttr(text || 'Image');
+			return `<img src="${escapeAttr(href!)}" alt="${alt}"${t} loading="lazy" />`;
 		}
 	}
 });
@@ -101,4 +122,30 @@ export function renderMarkdown(body: string): string {
 	const { text, links } = protectWikilinks(body);
 	const raw = marked.parse(text, { async: false }) as string;
 	return restoreWikilinks(raw, links);
+}
+
+/** Leading markdown image — used for PDF region clippings and similar visual notes. */
+export type EmbeddedNoteImage = {
+	alt: string;
+	src: string;
+	caption: string;
+};
+
+const LEADING_IMAGE_RE = /^!\[([^\]]*)\]\(([^)\s]+)\)/;
+
+export function parseEmbeddedNoteImage(body: string): EmbeddedNoteImage | null {
+	const trimmed = body.trimStart();
+	const match = trimmed.match(LEADING_IMAGE_RE);
+	if (!match) return null;
+	const alt = match[1] ?? '';
+	const src = (match[2] ?? '').trim();
+	if (!isSafeImageSrc(src)) return null;
+	const caption = trimmed.slice(match[0].length).replace(/^\s+/, '');
+	return { alt, src, caption };
+}
+
+export function composeEmbeddedNoteImage(alt: string, src: string, caption: string): string {
+	const img = `![${alt}](${src})`;
+	const cap = caption.trim();
+	return cap ? `${img}\n\n${cap}` : img;
 }

@@ -1,7 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { PDFDocument } from 'pdf-lib';
-import { buildSequencePdf, noteBodyForPdf } from './sequence-pdf';
+import { buildSequencePdf, decodeDataUrlImage, noteBodyForPdf } from './sequence-pdf';
 import type { Note } from './types';
+
+/** 1×1 red PNG */
+const TINY_PNG =
+	'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
 function note(partial: Partial<Note> & Pick<Note, 'id' | 'title'>): Note {
 	return {
@@ -22,9 +26,25 @@ describe('noteBodyForPdf', () => {
 		expect(noteBodyForPdf('- item')).toContain('- item');
 	});
 
+	it('strips markdown images instead of leaking alt/data URLs', () => {
+		expect(noteBodyForPdf(`![clip](${TINY_PNG})\n\nFrom page 3`)).toBe('From page 3');
+	});
+
 	it('sanitizes emoji and CJK so Helvetica can encode them', () => {
 		expect(noteBodyForPdf('Hello 😀 world')).toBe('Hello ? world');
 		expect(noteBodyForPdf('中文')).toBe('??');
+	});
+});
+
+describe('decodeDataUrlImage', () => {
+	it('decodes PNG data URLs', () => {
+		const decoded = decodeDataUrlImage(TINY_PNG);
+		expect(decoded?.format).toBe('png');
+		expect(decoded?.bytes.byteLength).toBeGreaterThan(10);
+	});
+
+	it('rejects non-image data URLs', () => {
+		expect(decodeDataUrlImage('data:text/plain;base64,YQ==')).toBeNull();
 	});
 });
 
@@ -69,5 +89,25 @@ describe('buildSequencePdf', () => {
 		const bytes = await buildSequencePdf([]);
 		const doc = await PDFDocument.load(bytes);
 		expect(doc.getPageCount()).toBe(1);
+	});
+
+	it('embeds leading image clippings into the PDF', async () => {
+		const withImage = await buildSequencePdf([
+			note({
+				id: '1',
+				title: 'Scales · p. 12',
+				body: `![PDF clipping from page 12](${TINY_PNG})\n\n_From Scales.pdf, page 12._`
+			})
+		]);
+		const textOnly = await buildSequencePdf([
+			note({
+				id: '1',
+				title: 'Scales · p. 12',
+				body: '_From Scales.pdf, page 12._'
+			})
+		]);
+		const doc = await PDFDocument.load(withImage);
+		expect(doc.getPageCount()).toBe(1);
+		expect(withImage.byteLength).toBeGreaterThan(textOnly.byteLength);
 	});
 });
