@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { convertDocxToHtml, docxTitleFromFileName, MAX_DOCX_BYTES } from './docx-import';
 
+/** 1×1 PNG used as an embedded media part in OOXML fixtures. */
+const TINY_PNG_BASE64 =
+	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
 /** Minimal OOXML package with one paragraph (zip of [Content_Types] + word/document.xml). */
 async function minimalDocxBuffer(paragraphText: string): Promise<ArrayBuffer> {
 	const JSZip = (await import('jszip')).default;
@@ -39,6 +43,89 @@ async function minimalDocxBuffer(paragraphText: string): Promise<ArrayBuffer> {
 	return bytes;
 }
 
+/** Minimal OOXML package with paragraph text plus an embedded inline PNG. */
+async function minimalDocxWithImageBuffer(paragraphText: string): Promise<ArrayBuffer> {
+	const JSZip = (await import('jszip')).default;
+	const zip = new JSZip();
+	zip.file(
+		'[Content_Types].xml',
+		`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Default Extension="png" ContentType="image/png"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>`
+	);
+	zip.folder('_rels')?.file(
+		'.rels',
+		`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>`
+	);
+	const escaped = paragraphText
+		.replace(/&/g, '&amp;')
+		.replace(/</g, '&lt;')
+		.replace(/>/g, '&gt;');
+	const word = zip.folder('word');
+	word?.file(
+		'document.xml',
+		`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+  xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+  xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+  xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+  xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">
+  <w:body>
+    <w:p><w:r><w:t>${escaped}</w:t></w:r></w:p>
+    <w:p>
+      <w:r>
+        <w:drawing>
+          <wp:inline>
+            <wp:extent cx="95250" cy="95250"/>
+            <wp:docPr id="1" name="Picture 1"/>
+            <a:graphic>
+              <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
+                <pic:pic>
+                  <pic:nvPicPr>
+                    <pic:cNvPr id="0" name="image1.png"/>
+                    <pic:cNvPicPr/>
+                  </pic:nvPicPr>
+                  <pic:blipFill>
+                    <a:blip r:embed="rIdImage"/>
+                    <a:stretch><a:fillRect/></a:stretch>
+                  </pic:blipFill>
+                  <pic:spPr>
+                    <a:xfrm>
+                      <a:off x="0" y="0"/>
+                      <a:ext cx="95250" cy="95250"/>
+                    </a:xfrm>
+                    <a:prstGeom prst="rect"/>
+                  </pic:spPr>
+                </pic:pic>
+              </a:graphicData>
+            </a:graphic>
+          </wp:inline>
+        </w:drawing>
+      </w:r>
+    </w:p>
+    <w:sectPr/>
+  </w:body>
+</w:document>`
+	);
+	word?.folder('_rels')?.file(
+		'document.xml.rels',
+		`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rIdImage" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image1.png"/>
+</Relationships>`
+	);
+	word?.folder('media')?.file('image1.png', Buffer.from(TINY_PNG_BASE64, 'base64'));
+	const bytes = await zip.generateAsync({ type: 'arraybuffer' });
+	return bytes;
+}
+
 describe('docx-import', () => {
 	it('derives a title from the filename', () => {
 		expect(docxTitleFromFileName('Brief Notes.DOCX')).toBe('Brief Notes');
@@ -52,6 +139,18 @@ describe('docx-import', () => {
 		if (result.ok) {
 			expect(result.title).toBe('hello');
 			expect(result.html).toContain('Hello from Word');
+		}
+	});
+
+	it('omits embedded images from converted HTML', async () => {
+		const buffer = await minimalDocxWithImageBuffer('Text beside image');
+		const result = await convertDocxToHtml(buffer, 'with-image.docx');
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(result.html).toContain('Text beside image');
+			// mammoth defaults to data: URI <img> tags; v1 must strip media.
+			expect(result.html).not.toMatch(/<img/i);
+			expect(result.html).not.toContain('data:image');
 		}
 	});
 

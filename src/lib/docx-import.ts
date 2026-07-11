@@ -42,7 +42,8 @@ export async function convertDocxToHtml(
 				: { arrayBuffer: buffer };
 		const result = await mammoth.convertToHtml(input, {
 			includeDefaultStyleMap: true,
-			// Omit embedded images in v1 (default would inline data: URIs).
+			// Omit embedded images in v1 (default mammoth.images.dataUri inlines data: URIs).
+			// mammoth brands ImageConverter; returning [] is intentional and not in public types.
 			convertImage: (() => Promise.resolve([])) as unknown as typeof mammoth.images.dataUri
 		});
 		const html = (result.value ?? '').trim();
