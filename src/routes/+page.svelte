@@ -100,6 +100,12 @@
 		type PdfClipping
 	} from '$lib/pdf-clipping';
 	import {
+		docxClippingTitle,
+		normalizeDocxExcerpt,
+		type DocxClipPayload,
+		type DocxClipping
+	} from '$lib/docx-clipping';
+	import {
 		analyzePastedText,
 		draftsFromPastedText,
 		type PasteAnalysis,
@@ -183,6 +189,7 @@
 	let markdownImportInputEl: HTMLInputElement | undefined = $state();
 	let syncInputEl: HTMLInputElement | undefined = $state();
 	let pdfInputEl: HTMLInputElement | undefined = $state();
+	let docxInputEl: HTMLInputElement | undefined = $state();
 	let pdfReaderFile: File | null = $state(null);
 	let pdfReaderOpen = $state(false);
 	let pdfReaderView = $state({ page: 1, zoom: 1 });
@@ -191,6 +198,14 @@
 	);
 	let pdfReaderModuleLoading = $state(false);
 	let pdfClippings = $state<PdfClipping[]>([]);
+	let docxReaderFile: File | null = $state(null);
+	let docxReaderOpen = $state(false);
+	let LazyDocxReader = $state<
+		(typeof import('$lib/components/DocxReader.svelte'))['default'] | null
+	>(null);
+	let docxReaderModuleLoading = $state(false);
+	let docxClippings = $state<DocxClipping[]>([]);
+	const documentReaderOpen = $derived(pdfReaderOpen || docxReaderOpen);
 
 	function flashToast(msg: string, ms = 1600) {
 		actionToast = msg;
@@ -860,9 +875,25 @@
 		}
 	}
 
+	async function ensureDocxReaderModule() {
+		if (LazyDocxReader || docxReaderModuleLoading) return;
+		docxReaderModuleLoading = true;
+		try {
+			const { loadDocxReader } = await import('$lib/lazy-docx-reader');
+			LazyDocxReader = await loadDocxReader();
+		} catch (error) {
+			console.error('Failed to load Word document tools', error);
+			docxReaderOpen = false;
+			flashToast('Couldn’t load Word document tools', 3600);
+		} finally {
+			docxReaderModuleLoading = false;
+		}
+	}
+
 	function openPdfReader(file: File) {
 		pdfReaderFile = file;
 		pdfReaderOpen = true;
+		docxReaderOpen = false;
 		pdfReaderView = { page: 1, zoom: 1 };
 		pdfClippings = [];
 		showPalette = false;
@@ -874,9 +905,24 @@
 		void ensurePdfReaderModule();
 	}
 
+	function openDocxReader(file: File) {
+		docxReaderFile = file;
+		docxReaderOpen = true;
+		pdfReaderOpen = false;
+		docxClippings = [];
+		showPalette = false;
+		settingsOpen = false;
+		peel.closePeel(true);
+		library.clearSelection();
+		if (canvas.expandedNoteId) canvas.collapseSticky();
+		if (editorStage.open) editorStage.dismissAll();
+		void ensureDocxReaderModule();
+	}
+
 	function resumePdfReader() {
 		if (!pdfReaderFile) return;
 		pdfReaderOpen = true;
+		docxReaderOpen = false;
 		settingsOpen = false;
 		peel.closePeel(true);
 		library.clearSelection();
@@ -885,8 +931,24 @@
 		void ensurePdfReaderModule();
 	}
 
+	function resumeDocxReader() {
+		if (!docxReaderFile) return;
+		docxReaderOpen = true;
+		pdfReaderOpen = false;
+		settingsOpen = false;
+		peel.closePeel(true);
+		library.clearSelection();
+		if (canvas.expandedNoteId) canvas.collapseSticky();
+		if (editorStage.open) editorStage.dismissAll();
+		void ensureDocxReaderModule();
+	}
+
 	function hidePdfReader() {
 		pdfReaderOpen = false;
+	}
+
+	function hideDocxReader() {
+		docxReaderOpen = false;
 	}
 
 	async function savePdfClipping(excerpt: PdfClipPayload) {
@@ -947,6 +1009,31 @@
 		flashToast(`Saved excerpt from page ${excerpt.page}`);
 	}
 
+	async function saveDocxClipping(excerpt: DocxClipPayload) {
+		if (!docxReaderFile) return;
+		const text = normalizeDocxExcerpt(excerpt.text ?? '');
+		if (!text) return;
+		const note = await createNote({
+			...activeNoteOwnership(),
+			title: docxClippingTitle(text),
+			body: text,
+			folder: peel.canvasFolder,
+			tags: ['docx-clipping'],
+			links: [],
+			source: {
+				kind: 'docx',
+				title: docxReaderFile.name
+			}
+		});
+		addNoteToSearch(note);
+		library.notes = [note, ...library.notes];
+		docxClippings = [
+			...docxClippings,
+			{ id: crypto.randomUUID(), noteId: note.id, text }
+		];
+		flashToast('Saved excerpt from Word document');
+	}
+
 	async function openPdfClippingsOnCanvas(noteIds: string[]) {
 		if (noteIds.length === 0) return;
 		const spawn = canvas.canvasBoard?.getSpawnPoint(COLLAPSED_CARD, canvas.canvasItems.length) ?? {
@@ -959,12 +1046,27 @@
 		flashToast(`Opened ${noteIds.length} clipping${noteIds.length === 1 ? '' : 's'} on canvas`);
 	}
 
+	async function openDocxClippingsOnCanvas(noteIds: string[]) {
+		if (noteIds.length === 0) return;
+		const spawn = canvas.canvasBoard?.getSpawnPoint(COLLAPSED_CARD, canvas.canvasItems.length) ?? {
+			x: 80,
+			y: 80
+		};
+		docxReaderOpen = false;
+		await tick();
+		await canvas.handleDropNotes(noteIds, spawn.x, spawn.y);
+		flashToast(`Opened ${noteIds.length} clipping${noteIds.length === 1 ? '' : 's'} on canvas`);
+	}
+
 	async function handleDroppedFiles(files: File[], x: number, y: number) {
 		const batch = splitExternalImportFiles(files);
 		const supportedCount =
-			batch.noteTextFiles.length + batch.jsonFiles.length + batch.pdfFiles.length;
+			batch.noteTextFiles.length +
+			batch.jsonFiles.length +
+			batch.pdfFiles.length +
+			batch.docxFiles.length;
 		if (supportedCount === 0) {
-			flashToast('Drop a PDF, text note, or Mash JSON file', 3000);
+			flashToast('Drop a PDF, Word (.docx), text note, or Mash JSON file', 3000);
 			return;
 		}
 
@@ -974,12 +1076,17 @@
 		let importedSyncCount = 0;
 		let failedCount = 0;
 		let waitingForConfirmation = false;
-		let openedPdfName = '';
+		let openedDocName = '';
 
 		if (batch.pdfFiles.length > 0) {
 			openPdfReader(batch.pdfFiles[0]!);
-			openedPdfName = batch.pdfFiles[0]!.name;
+			openedDocName = batch.pdfFiles[0]!.name;
 			if (batch.pdfFiles.length > 1) failedCount += batch.pdfFiles.length - 1;
+			if (batch.docxFiles.length > 0) failedCount += batch.docxFiles.length;
+		} else if (batch.docxFiles.length > 0) {
+			openDocxReader(batch.docxFiles[0]!);
+			openedDocName = batch.docxFiles[0]!.name;
+			if (batch.docxFiles.length > 1) failedCount += batch.docxFiles.length - 1;
 		}
 
 		if (batch.noteTextFiles.length > 0) {
@@ -1037,7 +1144,7 @@
 
 		const skippedCount = batch.unsupportedFiles.length + failedCount;
 		const parts: string[] = [];
-		if (openedPdfName) parts.push(`Opened ${openedPdfName}`);
+		if (openedDocName) parts.push(`Opened ${openedDocName}`);
 		if (uniqueNoteIds.length > 0) {
 			parts.push(
 				`Imported ${uniqueNoteIds.length} note${uniqueNoteIds.length === 1 ? '' : 's'} from ${importedFileCount} file${importedFileCount === 1 ? '' : 's'}`
@@ -1067,7 +1174,7 @@
 			spacesOverviewOpen ||
 			sessionPanelOpen ||
 			pasteDialogOpen ||
-			pdfReaderOpen ||
+			documentReaderOpen ||
 			editorStage.open
 		) {
 			return;
@@ -1628,6 +1735,10 @@
 				hidePdfReader();
 				return;
 			}
+			if (docxReaderOpen) {
+				hideDocxReader();
+				return;
+			}
 			if (confirmDialog) {
 				confirmDialog = null;
 				return;
@@ -1681,6 +1792,14 @@
 			action: () => {
 				showPalette = false;
 				pdfInputEl?.click();
+			},
+			shortcut: ''
+		},
+		{
+			label: 'Open Word document…',
+			action: () => {
+				showPalette = false;
+				docxInputEl?.click();
 			},
 			shortcut: ''
 		},
@@ -2256,7 +2375,7 @@
 	<!-- Full-bleed canvas stage -->
 	<div class="relative flex min-h-0 flex-1">
 		<div class="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-			{#if !pdfReaderOpen}
+			{#if !documentReaderOpen}
 				<div
 					class="mash-canvas-title-chip is-spaces-trigger absolute top-3 left-[4.75rem] z-10 rounded-full border px-3 py-1 text-[10px] backdrop-blur-sm"
 					class:pointer-events-none={spacesOverviewOpen}
@@ -2301,6 +2420,17 @@
 						<BookOpen class="h-4 w-4 shrink-0" strokeWidth={2} />
 						<span>Return to PDF</span>
 						<small>{pdfReaderFile.name}</small>
+					</button>
+				{:else if docxReaderFile && !docxReaderOpen}
+					<button
+						type="button"
+						class="mash-reader-return mash-focus"
+						onclick={resumeDocxReader}
+						title={`Return to ${docxReaderFile.name}`}
+					>
+						<BookOpen class="h-4 w-4 shrink-0" strokeWidth={2} />
+						<span>Return to Word</span>
+						<small>{docxReaderFile.name}</small>
 					</button>
 				{/if}
 				<CanvasBoard
@@ -2390,7 +2520,28 @@
 						</div>
 					</section>
 				{/if}
-				{#if !pdfReaderOpen}
+				{#if docxReaderFile && LazyDocxReader}
+					{#key docxReaderFile}
+						<LazyDocxReader
+							file={docxReaderFile}
+							clippings={docxClippings}
+							open={docxReaderOpen}
+							onClose={hideDocxReader}
+							onClip={saveDocxClipping}
+							onOpenClippings={openDocxClippingsOnCanvas}
+						/>
+					{/key}
+				{:else if docxReaderOpen && docxReaderModuleLoading}
+					<section class="mash-pdf-reader" aria-label="Word document reader">
+						<div
+							class="flex h-full items-center justify-center text-sm"
+							style="color: var(--mash-ink-muted);"
+						>
+							Loading Word document tools…
+						</div>
+					</section>
+				{/if}
+				{#if !documentReaderOpen}
 					<EditorStage
 						stage={editorStage}
 						notesById={library.notesById}
@@ -2448,6 +2599,10 @@
 					onImportSync={() => syncInputEl?.click()}
 					onExportSync={() => {
 						void exportSyncBundle();
+					}}
+					onOpenDocx={() => {
+						settingsOpen = false;
+						docxInputEl?.click();
 					}}
 					conflictCount={syncConflicts.count}
 					onOpenConflicts={() => {
@@ -2541,7 +2696,7 @@
 			</div>
 		{/if}
 
-		{#if library.selectionIds.length > 0 && !pdfReaderOpen}
+		{#if library.selectionIds.length > 0 && !documentReaderOpen}
 			<div
 				class="mash-selection-bar absolute bottom-5 left-1/2 z-20 flex -translate-x-1/2 flex-col items-center gap-2"
 				class:mash-selection-bar--peel={peel.peelOpen || settingsOpen}
@@ -3084,6 +3239,19 @@
 			const file = input.files?.[0];
 			input.value = '';
 			if (file) openPdfReader(file);
+		}}
+	/>
+	<input
+		bind:this={docxInputEl}
+		data-testid="docx-reader-input"
+		type="file"
+		accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+		class="hidden"
+		onchange={(e) => {
+			const input = e.currentTarget as HTMLInputElement;
+			const file = input.files?.[0];
+			input.value = '';
+			if (file) openDocxReader(file);
 		}}
 	/>
 	<input

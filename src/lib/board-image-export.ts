@@ -125,7 +125,11 @@ export function buildBoardImagePlan(input: BoardImageInput): BoardImagePlan | nu
 				note.textAlign === 'center' || note.textAlign === 'right' ? note.textAlign : 'left',
 			pinned: note.pinned === 1,
 			sourceLabel:
-				note.source?.kind === 'pdf' ? `${note.source.title} · p. ${note.source.page}` : undefined,
+				note.source?.kind === 'pdf'
+					? `${note.source.title} · p. ${note.source.page}`
+					: note.source?.kind === 'docx'
+						? note.source.title
+						: undefined,
 			provenanceCount: note.mashedFrom?.length ?? 0
 		};
 	});

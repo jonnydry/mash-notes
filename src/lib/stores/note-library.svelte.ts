@@ -746,7 +746,8 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 			field === 'source' &&
 			typeof localValue === 'object' &&
 			localValue !== null &&
-			(localValue as { kind?: unknown }).kind === 'pdf'
+			((localValue as { kind?: unknown }).kind === 'pdf' ||
+				(localValue as { kind?: unknown }).kind === 'docx')
 		) {
 			updated = { ...target, source: localValue as Note['source'], modified: Date.now() };
 		} else {

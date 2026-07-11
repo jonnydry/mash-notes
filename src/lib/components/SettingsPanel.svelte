@@ -18,6 +18,7 @@
 		onExportJson: () => void;
 		onImportSync: () => void;
 		onExportSync: () => void;
+		onOpenDocx?: () => void;
 		conflictCount?: number;
 		onOpenConflicts?: () => void;
 	}
@@ -35,6 +36,7 @@
 		onExportJson,
 		onImportSync,
 		onExportSync,
+		onOpenDocx,
 		conflictCount = 0,
 		onOpenConflicts
 	}: Props = $props();
@@ -177,6 +179,16 @@
 				<button type="button" class="mash-settings-action" onclick={onImportMarkdown}>
 					Import markdown vault…
 				</button>
+				{#if onOpenDocx}
+					<button
+						type="button"
+						class="mash-settings-action"
+						data-testid="settings-open-docx"
+						onclick={onOpenDocx}
+					>
+						Open Word document…
+					</button>
+				{/if}
 				<button type="button" class="mash-settings-action" onclick={onImportJson}>
 					Import notes from JSON…
 				</button>
