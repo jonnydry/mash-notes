@@ -137,17 +137,11 @@
 	];
 </script>
 
-<div class="flex min-h-0 flex-1 flex-col overflow-hidden">
-	<div data-testid="finish-scroll" class="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
-		<section aria-labelledby="mash-finish-takeaway-title">
+<div class="mash-finish">
+	<div data-testid="finish-scroll" class="mash-finish-scroll">
+		<section class="mash-finish-section" aria-labelledby="mash-finish-takeaway-title">
 			<div class="flex items-center justify-between gap-3">
-				<h3
-					id="mash-finish-takeaway-title"
-					class="text-[10px] font-semibold tracking-[0.12em] uppercase"
-					style="color: var(--mash-accent-bright);"
-				>
-					Takeaway
-				</h3>
+				<h3 id="mash-finish-takeaway-title" class="mash-finish-heading">Takeaway</h3>
 				{#if activeOption}
 					<span class="text-[11px]" style="color: var(--mash-ink-muted);">
 						{activeOption.count} card{activeOption.count === 1 ? '' : 's'}
@@ -155,19 +149,14 @@
 				{/if}
 			</div>
 
-			<fieldset class="mt-3">
+			<fieldset class="mt-0 border-0 p-0">
 				<legend class="sr-only">Choose what to take with you</legend>
-				<div
-					class="grid grid-cols-3 gap-1 rounded-xl border p-1"
-					style="border-color: var(--mash-divider);"
-				>
+				<div class="mash-finish-scope">
 					{#each options as option (option.scope)}
 						<label
-							class="mash-finish-choice relative flex min-h-11 cursor-pointer items-center justify-center rounded-lg px-2 text-center text-xs font-semibold"
+							class="mash-finish-choice"
+							class:is-selected={scope === option.scope}
 							class:opacity-45={!option.enabled}
-							style={scope === option.scope
-								? 'background: var(--mash-accent-wash); color: var(--mash-accent-bright);'
-								: 'color: var(--mash-ink-muted);'}
 						>
 							<input
 								class="sr-only"
@@ -192,19 +181,18 @@
 					: 'No takeaway cards'}
 			</p>
 
-			<p class="mt-2 min-h-5 truncate text-xs" style="color: var(--mash-ink-muted);">
+			<p class="mash-finish-preview truncate">
 				{activeOption?.preview || 'Add or import something first.'}
 			</p>
 
-			<div class="mt-4 grid gap-2 sm:grid-cols-2">
+			<div class="mash-finish-export-grid">
 				{#each exportActions as exportAction (exportAction.kind)}
 					{@const Icon = exportAction.icon}
 					<button
 						type="button"
 						class={exportAction.primary
-							? 'mash-btn flex min-h-14 items-center gap-3 rounded-xl px-3.5 py-3 text-left'
-							: 'mash-btn-ghost flex min-h-14 items-center gap-3 rounded-xl border px-3.5 py-3 text-left'}
-						style={exportAction.primary ? '' : 'border-color: var(--mash-divider);'}
+							? 'mash-btn mash-finish-export mash-finish-export--primary'
+							: 'mash-finish-export mash-finish-export--secondary'}
 						disabled={!hasTakeaway || busyKind !== null}
 						aria-busy={busyKind === exportAction.kind}
 						onclick={() => void runExport(exportAction.kind)}
@@ -225,10 +213,9 @@
 
 			{#if actionStatus}
 				<p
-					class="mt-3 rounded-lg px-3 py-2 text-xs"
-					style={actionStatus.ok
-						? 'background: var(--mash-accent-wash); color: var(--mash-accent-bright);'
-						: 'background: color-mix(in srgb, var(--mash-danger) 12%, transparent); color: var(--mash-danger);'}
+					class="mash-finish-status"
+					class:is-ok={actionStatus.ok}
+					class:is-error={!actionStatus.ok}
 					role="status"
 					aria-label="Takeaway export status"
 				>
@@ -238,22 +225,12 @@
 		</section>
 
 		<section
-			class="mt-5 border-t pt-5"
-			style="border-color: var(--mash-divider);"
+			class="mash-finish-section"
 			aria-labelledby="mash-finish-remain-title"
 		>
-			<h3
-				id="mash-finish-remain-title"
-				class="text-[10px] font-semibold tracking-[0.12em] uppercase"
-				style="color: var(--mash-accent-bright);"
-			>
-				What stays here?
-			</h3>
+			<h3 id="mash-finish-remain-title" class="mash-finish-heading">What stays here?</h3>
 			{#if activeSession?.mode === 'scratch' && scope !== 'desk' && hasTakeaway}
-				<label
-					class="mash-finish-choice mt-3 flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border px-3 py-2.5 text-xs"
-					style="border-color: var(--mash-divider); background: var(--mash-hover-fill-soft);"
-				>
+				<label class="mash-finish-keep-takeaway">
 					<input type="checkbox" bind:checked={keepTakeaway} />
 					<span class="min-w-0 flex-1">
 						<strong class="block text-sm">Keep this takeaway on this device</strong>
@@ -263,14 +240,12 @@
 				</label>
 			{/if}
 
-			<fieldset class="mt-3">
+			<fieldset class="mt-0 border-0 p-0">
 				<legend class="sr-only">Choose what happens to this desk</legend>
-				<div class="grid gap-2 sm:grid-cols-3">
+				<div class="mash-finish-disposition-grid">
 					<label
-						class="mash-finish-choice flex min-h-14 cursor-pointer items-center gap-2 rounded-xl border px-3 py-2.5 text-left text-xs"
-						style={disposition === 'leave'
-							? 'border-color: var(--mash-accent); background: var(--mash-accent-wash);'
-							: 'border-color: var(--mash-divider);'}
+						class="mash-finish-disposition"
+						class:is-selected={disposition === 'leave'}
 					>
 						<input
 							class="sr-only"
@@ -288,10 +263,8 @@
 					</label>
 					{#if activeSession?.mode === 'scratch'}
 						<label
-							class="mash-finish-choice flex min-h-14 cursor-pointer items-center gap-2 rounded-xl border px-3 py-2.5 text-left text-xs"
-							style={disposition === 'keep-desk'
-								? 'border-color: var(--mash-accent); background: var(--mash-accent-wash);'
-								: 'border-color: var(--mash-divider);'}
+							class="mash-finish-disposition"
+							class:is-selected={disposition === 'keep-desk'}
 						>
 							<input
 								class="sr-only"
@@ -305,10 +278,8 @@
 						</label>
 					{/if}
 					<label
-						class="mash-finish-choice flex min-h-14 cursor-pointer items-center gap-2 rounded-xl border px-3 py-2.5 text-left text-xs"
-						style={disposition === 'clear'
-							? 'border-color: var(--mash-danger); background: color-mix(in srgb, var(--mash-danger) 10%, transparent);'
-							: 'border-color: var(--mash-divider);'}
+						class="mash-finish-disposition is-danger"
+						class:is-selected={disposition === 'clear'}
 					>
 						<input
 							class="sr-only"
@@ -329,10 +300,9 @@
 			{/if}
 			{#if commitStatus}
 				<p
-					class="mt-3 rounded-lg px-3 py-2 text-xs"
-					style={commitStatus.ok
-						? 'background: var(--mash-accent-wash); color: var(--mash-accent-bright);'
-						: 'background: color-mix(in srgb, var(--mash-danger) 12%, transparent); color: var(--mash-danger);'}
+					class="mash-finish-status"
+					class:is-ok={commitStatus.ok}
+					class:is-error={!commitStatus.ok}
 					role="status"
 					aria-label="Finish lifecycle status"
 				>
@@ -342,48 +312,22 @@
 		</section>
 	</div>
 
-	<div
-		data-testid="finish-footer"
-		class="flex shrink-0 flex-wrap items-center gap-3 border-t px-4 pt-3 sm:px-6 sm:pb-4"
-		style="border-color: var(--mash-divider); padding-bottom: max(1rem, env(safe-area-inset-bottom)); background: var(--mash-panel-strong);"
-	>
+	<div data-testid="finish-footer" class="mash-finish-footer">
 		<button
 			type="button"
-			class="mash-btn-ghost min-h-11 rounded-xl px-4 py-2.5 text-xs"
+			class="mash-btn-ghost mash-finish-footer-secondary"
 			onclick={onLeave}>Back to desk</button
 		>
 		<button
 			type="button"
-			class="mash-btn ml-auto min-h-11 rounded-xl px-5 py-2.5 text-xs font-semibold"
+			class="mash-btn mash-finish-footer-primary"
 			aria-disabled={commitBusy}
 			onclick={() => void commitFinish()}
 		>
 			{commitBusy ? 'Finishing…' : disposition === 'clear' ? 'Finish and clear' : 'Finish'}
 		</button>
-		<button
-			type="button"
-			class="min-h-11 w-full text-left text-xs underline-offset-4 hover:underline sm:w-auto"
-			style="color: var(--mash-ink-muted);"
-			onclick={onViewDesks}
-		>
+		<button type="button" class="mash-finish-footer-link" onclick={onViewDesks}>
 			View all desks
 		</button>
 	</div>
 </div>
-
-<style>
-	.mash-finish-choice:has(input:focus-visible) {
-		outline: 2px solid var(--mash-accent-bright);
-		outline-offset: 2px;
-	}
-
-	@media (forced-colors: active) {
-		.mash-finish-choice {
-			border-color: CanvasText !important;
-			forced-color-adjust: auto;
-		}
-		.mash-finish-choice:has(input:checked) {
-			outline: 2px solid Highlight;
-		}
-	}
-</style>

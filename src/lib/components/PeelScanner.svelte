@@ -171,22 +171,20 @@
 	<aside class="mash-peel" aria-label="Note scanner">
 		<div class="mash-peel-header">
 			<div class="min-w-0 flex-1">
-				<div class="truncate text-xs font-semibold tracking-tight" style="color: var(--mash-ink);">
-					{title}
-				</div>
+				<div class="mash-peel-title truncate">{title}</div>
 				{#if mode === 'notes'}
-					<div class="text-[10px]" style="color: var(--mash-ink-muted);">
+					<div class="mash-peel-subtitle">
 						{notes.length} note{notes.length === 1 ? '' : 's'}
 						{#if saveStatus}
 							· {saveStatus === 'saving' ? 'Saving' : 'Saved'}
 						{/if}
 					</div>
 				{:else if mode === 'linked'}
-					<div class="text-[10px]" style="color: var(--mash-ink-muted);">
+					<div class="mash-peel-subtitle">
 						{linkedFocusTitle || 'Links'}
 					</div>
 				{:else if mode === 'conflicts'}
-					<div class="text-[10px]" style="color: var(--mash-ink-muted);">
+					<div class="mash-peel-subtitle">
 						{conflictRows.length} pending
 					</div>
 				{/if}
@@ -399,17 +397,14 @@
 					{/if}
 				</div>
 			{:else}
-				<VirtualList items={notes} itemHeight={80}>
+				<VirtualList items={notes} itemHeight={84}>
 					{#snippet children(note)}
 						{@const isSelected = selectedIds.has(note.id)}
 						{@const isPermanentWelcome = isPermanentMashWelcomeNote(note)}
 						<div
-							class="mash-tray-chip group flex h-full w-full border-b px-2.5 py-2 text-left
+							class="mash-tray-chip group flex h-full w-full text-left
 								{draggingId === note.id ? 'is-dragging' : ''}
-								{isSelected
-								? 'mash-row-active border-l-2 border-l-[var(--mash-accent)]'
-								: 'mash-row-hover border-l-2 border-l-transparent'}"
-							style="border-color: var(--mash-tray-edge);"
+								{isSelected ? 'mash-row-active' : 'mash-row-hover'}"
 							role="option"
 							aria-selected={isSelected}
 						>
@@ -433,7 +428,7 @@
 							{#if isPermanentWelcome}
 								<img
 									src={MASH_SPOON_LOGO}
-									alt="Spoon, the Mash mascot"
+									alt="Scoop, the Mash mascot"
 									class="h-12 w-12 shrink-0 self-center object-contain drop-shadow-sm"
 								/>
 							{/if}

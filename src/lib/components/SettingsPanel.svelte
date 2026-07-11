@@ -55,10 +55,8 @@
 <aside class="mash-peel mash-settings" aria-label="Settings">
 	<div class="mash-peel-header">
 		<div class="min-w-0 flex-1">
-			<div class="truncate text-xs font-semibold tracking-tight" style="color: var(--mash-ink);">
-				Settings
-			</div>
-			<div class="text-[10px]" style="color: var(--mash-ink-muted);">Local preferences & data</div>
+			<div class="mash-peel-title truncate">Settings</div>
+			<div class="mash-peel-subtitle">Local preferences & data</div>
 		</div>
 		<button type="button" class="mash-peel-icon-btn" onclick={onClose} aria-label="Close settings">
 			<X class="h-3.5 w-3.5" strokeWidth={2} />

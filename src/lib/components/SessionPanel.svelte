@@ -84,26 +84,19 @@
 	>
 		<div
 			use:focusTrap={{ initialFocus: '[data-dialog-initial-focus]' }}
-			class="flex max-h-[100dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl border shadow-2xl sm:max-h-[calc(100dvh-2rem)] sm:rounded-2xl"
-			style="border-color: var(--mash-panel-border); background: var(--mash-panel-strong); color: var(--mash-ink);"
+			class="mash-session-dialog flex max-h-[100dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl sm:max-h-[calc(100dvh-2rem)] sm:rounded-2xl"
+			style="background: var(--mash-panel-strong); color: var(--mash-ink);"
 			role="dialog"
 			aria-modal="true"
 			aria-labelledby="mash-session-panel-title"
 			aria-describedby="mash-session-panel-description"
 		>
-			<header
-				class="flex items-center gap-3 border-b px-5 py-4"
-				style="border-color: var(--mash-divider);"
-			>
+			<header class="mash-session-header">
 				<div class="min-w-0 flex-1">
 					<h2 id="mash-session-panel-title" class="mash-display text-lg font-semibold">
 						{view === 'finish' ? 'Finish this desk' : 'Your desks'}
 					</h2>
-					<p
-						id="mash-session-panel-description"
-						class="mt-0.5 text-xs"
-						style="color: var(--mash-ink-muted);"
-					>
+					<p id="mash-session-panel-description" class="mash-session-header-desc">
 						{view === 'finish'
 							? 'Take the useful part with you, then decide what stays.'
 							: 'Scratch desks clear themselves. Kept desks stay on this device.'}
@@ -131,41 +124,31 @@
 					onViewDesks={() => (view = 'desks')}
 				/>
 			{:else}
-				<div class="max-h-[70vh] overflow-y-auto p-5">
+				<div class="mash-session-body">
 					<div class="flex items-center justify-between gap-3">
 						<div>
-							<div
-								class="text-[10px] font-semibold tracking-[0.12em] uppercase"
-								style="color: var(--mash-accent-bright);"
-							>
-								Active desks
-							</div>
-							<p class="mt-1 text-[11px]" style="color: var(--mash-ink-muted);">
-								Work stays local to this browser.
-							</p>
+							<div class="mash-session-section-label">Active desks</div>
+							<p class="mash-session-section-hint">Work stays local to this browser.</p>
 						</div>
 						<button
 							type="button"
-							class="mash-btn flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold"
+							class="mash-btn flex items-center gap-1.5 rounded-[9px] px-3 py-2 text-xs font-semibold"
 							onclick={onNewScratch}
 						>
 							<Plus class="h-3.5 w-3.5" /> New scratch desk
 						</button>
 					</div>
 
-					<div class="mt-4 space-y-2">
+					<div class="mash-session-list">
 						{#each activeSessions as session (session.id)}
 							<button
 								type="button"
-								class="mash-row-hover flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left"
+								class="mash-session-row"
+								class:is-active={session.id === activeSession?.id}
 								class:mash-row-active={session.id === activeSession?.id}
-								style="border-color: var(--mash-divider);"
 								onclick={() => onSwitch(session.id)}
 							>
-								<span
-									class="flex h-9 w-9 items-center justify-center rounded-lg"
-									style="background: var(--mash-accent-wash); color: var(--mash-accent-bright);"
-								>
+								<span class="mash-session-row-icon">
 									{#if session.mode === 'scratch'}<Clock3 class="h-4 w-4" />{:else}<Check
 											class="h-4 w-4"
 										/>{/if}
@@ -176,28 +159,19 @@
 										>{sessionLifecycleLabel(session, Date.now())}</small
 									>
 								</span>
-								{#if session.id === activeSession?.id}<span
-										class="text-[10px] font-semibold uppercase"
-										style="color: var(--mash-accent-bright);">Open</span
+								{#if session.id === activeSession?.id}<span class="mash-session-row-badge"
+										>Open</span
 									>{/if}
 							</button>
 						{/each}
 					</div>
 
 					{#if recoveringSessions.length > 0}
-						<div class="mt-6 border-t pt-4" style="border-color: var(--mash-divider);">
-							<div
-								class="text-[10px] font-semibold tracking-[0.12em] uppercase"
-								style="color: var(--mash-ink-muted);"
-							>
-								Recently cleared
-							</div>
-							<div class="mt-2 space-y-2">
+						<div class="mash-session-recover-block">
+							<div class="mash-session-section-label">Recently cleared</div>
+							<div class="mash-session-list" style="margin-top: 10px;">
 								{#each recoveringSessions as session (session.id)}
-									<div
-										class="flex items-center gap-3 rounded-xl border px-3 py-3"
-										style="border-color: var(--mash-divider);"
-									>
+									<div class="mash-session-recover-row">
 										<RotateCcw class="h-4 w-4 shrink-0" style="color: var(--mash-ink-muted);" />
 										<span class="min-w-0 flex-1">
 											<strong class="block truncate text-sm">{session.title}</strong>
@@ -207,7 +181,7 @@
 										</span>
 										<button
 											type="button"
-											class="mash-btn-ghost rounded-lg px-3 py-1.5 text-xs"
+											class="mash-btn-ghost rounded-[9px] px-3 py-1.5 text-xs"
 											onclick={() => onRestore(session.id)}>Restore</button
 										>
 									</div>
@@ -216,10 +190,7 @@
 						</div>
 					{/if}
 
-					<div
-						class="mt-6 flex items-center justify-between gap-4 rounded-xl border px-3 py-3"
-						style="border-color: var(--mash-divider);"
-					>
+					<div class="mash-session-retention">
 						<div>
 							<strong class="block text-xs">Scratch retention</strong>
 							<small style="color: var(--mash-ink-muted);"
@@ -227,8 +198,8 @@
 							>
 						</div>
 						<select
-							class="mash-focus rounded-lg border bg-transparent px-2 py-1.5 text-xs"
-							style="border-color: var(--mash-tray-edge);"
+							class="mash-focus rounded-[9px] border bg-transparent px-2.5 py-1.5 text-xs"
+							style="border-color: var(--mash-divider);"
 							value={retentionDays}
 							onchange={(event) => onRetentionChange(Number(event.currentTarget.value))}
 						>
@@ -240,10 +211,7 @@
 				</div>
 			{/if}
 			{#if storageHealth?.supported && view === 'desks'}
-				<div
-					class="flex flex-wrap items-center gap-3 border-t px-5 py-3 text-[11px]"
-					style="border-color: var(--mash-divider); color: var(--mash-ink-muted);"
-				>
+				<div class="mash-session-storage">
 					<span class="min-w-0 flex-1">
 						<strong class="block text-xs" style="color: var(--mash-ink);">Local storage</strong>
 						{formatStorageBytes(storageHealth.usage)} used of {formatStorageBytes(
@@ -257,7 +225,7 @@
 					</span>
 					<button
 						type="button"
-						class="mash-btn-ghost rounded-lg px-2.5 py-1.5 text-xs"
+						class="mash-btn-ghost rounded-[9px] px-2.5 py-1.5 text-xs"
 						onclick={() => void onRefreshStorage?.()}
 					>
 						Refresh
