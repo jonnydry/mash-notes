@@ -39,7 +39,9 @@ export async function wipeIndexedDb(page: Page) {
 	// Wait for initial loadNotes (seed welcome notes) so later imports aren't raced.
 	await page.getByRole('button', { name: 'Desk' }).click();
 	const peel = page.getByRole('complementary', { name: 'Note scanner' });
-	await expect(peel.getByText('Welcome to Mash')).toBeVisible({ timeout: 15_000 });
+	await expect(peel.getByText('A quick welcome from the Mash team')).toBeVisible({
+		timeout: 15_000
+	});
 }
 
 /** New note opens in the stage editor (primary surface). */

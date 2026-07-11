@@ -99,7 +99,7 @@ export function addNoteToSearch(note: Note): void {
 
 export function updateNoteInSearch(partial: Partial<Note> & { id: string }, fullNote?: Note): void {
 	if (!isInitialized) return;
-	miniSearch.discard(partial.id);
+	if (miniSearch.has(partial.id)) miniSearch.discard(partial.id);
 	// Prefer the full note — partial-only updates (e.g. pinned/folder) would
 	// otherwise discard the doc and fail to re-add without title/body.
 	const docToAdd = fullNote ?? (partial.title != null || partial.body != null ? partial : null);

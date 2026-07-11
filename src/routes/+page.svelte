@@ -1136,6 +1136,9 @@
 	/** Screenplay mode: any open folder/pinned board besides root Desk. */
 	let screenplayActive = $derived(spaces.openKeys.length > 1);
 	let screenplayChipTitle = $derived(screenplayActive ? 'Screenplay' : peel.canvasTitle);
+	let canvasPlaceCount = $derived(
+		canvas.canvasItems.filter((item) => library.notesById.has(item.noteId)).length
+	);
 	let headerSearchResults = $derived(
 		peel.searchQuery.trim()
 			? searchNotes(peel.searchQuery).filter((result) => library.notesById.has(result.id))
@@ -2148,7 +2151,7 @@
 						>{screenplayChipTitle}</span
 					>
 					<span class="mx-1.5 opacity-40">·</span>
-					{canvas.canvasItems.length} on canvas
+					{canvasPlaceCount} on canvas
 					{#if spaces.openKeys.length > 1}
 						<span class="mash-spaces-dots" aria-hidden="true">
 							{#each spaces.openKeys as key (key === '' ? '__desk__' : key)}

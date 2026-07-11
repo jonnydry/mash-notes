@@ -224,6 +224,9 @@ export async function getActiveNotes(opts?: {
 
 	notes = notes.filter((n) => n.deletedAt == null);
 	notes.sort((a, b) => {
+		const aSystem = a.system === 'mash-team-welcome';
+		const bSystem = b.system === 'mash-team-welcome';
+		if (aSystem !== bSystem) return aSystem ? -1 : 1;
 		if (a.pinned !== b.pinned) return b.pinned - a.pinned;
 		return b.modified - a.modified;
 	});
@@ -383,6 +386,8 @@ export async function replaceNoteSubset(
  * Updates a note by ID. Returns the full updated Note.
  */
 export async function updateNote(id: string, changes: Partial<Note>): Promise<Note> {
+	const existing = await db.notes.get(id);
+	if (existing?.system === 'mash-team-welcome') return existing;
 	await db.notes.update(id, { ...changes, modified: Date.now() });
 	const updated = await db.notes.get(id);
 	if (!updated) throw new Error(`Note not found after update: ${id}`);
@@ -396,6 +401,7 @@ export async function updateNote(id: string, changes: Partial<Note>): Promise<No
 export async function deleteNote(id: string): Promise<void> {
 	const existing = await db.notes.get(id);
 	if (!existing) return;
+	if (existing.system === 'mash-team-welcome') return;
 	const deletedAt = Date.now();
 	await db.notes.put({ ...existing, deletedAt, modified: Math.max(existing.modified, deletedAt) });
 	// Drop canvas placements + incident flow edges for this note
@@ -427,6 +433,8 @@ export function syncNoteUpdate(id: string, partial: Partial<Note>): void {
 
 /** Awaitable sticky persist — used when flushing before sync import. */
 export async function syncNoteUpdateAsync(id: string, partial: Partial<Note>): Promise<void> {
+	const existing = await db.notes.get(id);
+	if (existing?.system === 'mash-team-welcome') return;
 	await db.notes.update(id, { ...partial, modified: Date.now() });
 }
 

@@ -1,18 +1,20 @@
 import type { CanvasItem, Note } from './types';
+import {
+	isMashTeamWelcomeCandidate,
+	isMashTeamWelcomeNote,
+	MASH_TEAM_WELCOME_IMAGE
+} from './system-notes';
 
-const TEAM_WELCOME_ID = 'mash-team-welcome-v1';
-const TEAM_WELCOME_SYSTEM = 'mash-team-welcome';
-export const MASH_SPOON_LOGO = '/icons/New%20Icons/Mashed%20potato%20character@2x.png';
+export const MASH_SPOON_LOGO = MASH_TEAM_WELCOME_IMAGE;
 
 type WelcomeIdentityNote = Pick<Note, 'id' | 'title' | 'tags'> & {
 	system?: string;
+	body?: string;
 };
 
 /** Exact identity check for the product-owned permanent welcome note. */
 export function isPermanentMashWelcomeNote(note: WelcomeIdentityNote): boolean {
-	if (note.id === TEAM_WELCOME_ID || note.system === TEAM_WELCOME_SYSTEM) return true;
-	const tags = new Set(note.tags.map((tag) => tag.trim().toLowerCase()));
-	return tags.has('welcome') && tags.has('mash-team');
+	return isMashTeamWelcomeNote(note);
 }
 
 /**
@@ -21,9 +23,7 @@ export function isPermanentMashWelcomeNote(note: WelcomeIdentityNote): boolean {
  * visible before, during, and after that migration.
  */
 export function isMashWelcomeForPinnedEmptyState(note: WelcomeIdentityNote): boolean {
-	if (isPermanentMashWelcomeNote(note)) return true;
-	const tags = new Set(note.tags.map((tag) => tag.trim().toLowerCase()));
-	return note.title.trim().toLowerCase() === 'welcome to mash' && tags.has('welcome');
+	return isMashTeamWelcomeCandidate(note);
 }
 
 /**
@@ -36,8 +36,9 @@ export function shouldShowCanvasEmptyState(
 	notesById: Map<string, Note>,
 	isPinnedBoard: boolean
 ): boolean {
-	if (items.length === 0) return true;
-	if (!isPinnedBoard || items.length !== 1) return false;
-	const note = notesById.get(items[0]!.noteId);
+	const present = items.filter((item) => notesById.has(item.noteId));
+	if (present.length === 0) return true;
+	if (!isPinnedBoard || present.length !== 1) return false;
+	const note = notesById.get(present[0]!.noteId);
 	return Boolean(note && isMashWelcomeForPinnedEmptyState(note));
 }

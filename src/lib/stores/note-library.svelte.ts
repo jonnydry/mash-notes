@@ -38,6 +38,11 @@ import {
 } from '$lib/sync-file';
 import type { SyncConflict } from '$lib/sync-model';
 import { isStaleSyncBundle, recordSyncImport } from '$lib/sync-hygiene';
+import {
+	ensureMashTeamWelcomeNote,
+	isMashTeamWelcomeCandidate,
+	isMashTeamWelcomeNote
+} from '$lib/system-notes';
 
 export function filterNotes(notes: Note[], currentFilter: NavFilter, searchQuery: string): Note[] {
 	let list = [...notes];
@@ -63,6 +68,9 @@ export function filterNotes(notes: Note[], currentFilter: NavFilter, searchQuery
 	}
 
 	list.sort((a, b) => {
+		const aSystem = a.system === 'mash-team-welcome';
+		const bSystem = b.system === 'mash-team-welcome';
+		if (aSystem !== bSystem) return aSystem ? -1 : 1;
 		if (a.pinned !== b.pinned) return b.pinned - a.pinned;
 		return b.modified - a.modified;
 	});
@@ -369,6 +377,7 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 	function handleStickyTitleChange(noteId: string, title: string) {
 		const note = notes.find((n) => n.id === noteId);
 		if (!note) return;
+		if (isMashTeamWelcomeNote(note)) return;
 		const updated = { ...note, title, modified: Date.now() };
 		notes = notes.map((n) => (n.id === noteId ? updated : n));
 		opts.onNoteEdited?.(noteId);
@@ -379,6 +388,7 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 	function handleStickyBodyChange(noteId: string, body: string) {
 		const note = notes.find((n) => n.id === noteId);
 		if (!note) return;
+		if (isMashTeamWelcomeNote(note)) return;
 		const links = extractWikilinks(body);
 		const updated = { ...note, body, links, modified: Date.now() };
 		notes = notes.map((n) => (n.id === noteId ? updated : n));
@@ -398,6 +408,7 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 	) {
 		const note = notes.find((n) => n.id === noteId);
 		if (!note) return;
+		if (isMashTeamWelcomeNote(note)) return;
 		const updated = { ...note, ...patch, modified: Date.now() };
 		notes = notes.map((n) => (n.id === noteId ? updated : n));
 		opts.onNoteEdited?.(noteId);
@@ -475,17 +486,13 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 				sessionId,
 				keptCollection: sessionId === KEPT_COLLECTION_SESSION_ID
 			});
+			const wasEmpty = loaded.length === 0;
+			const teamNote = await ensureMashTeamWelcomeNote();
+			updateNoteInSearch(teamNote, teamNote);
+			loaded = [teamNote, ...loaded.filter((note) => !isMashTeamWelcomeCandidate(note))];
 
-			if (loaded.length === 0 && (opts.shouldSeedWelcome?.() ?? true)) {
+			if (wasEmpty && (opts.shouldSeedWelcome?.() ?? true)) {
 				const scope = opts.getActiveSessionMode?.() === 'kept' ? 'kept' : 'session';
-				const seed1 = await createNote({
-					title: 'Welcome to Mash',
-					body: 'Mash is where notes go to become useful.\n\nDrag notes from the peel onto the desk. Select a few, then Mash, Copy, or Export.\n\nTry a [[Project ideas]] link in preview mode — missing links ask before creating.',
-					tags: ['welcome'],
-					sessionId,
-					scope
-				});
-				addNoteToSearch(seed1);
 				const seed2 = await createNote({
 					title: 'Project ideas',
 					body: '- Build the thing\n- Talk to users\n- Ship fast',
@@ -504,7 +511,7 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 					scope
 				});
 				addNoteToSearch(seed3);
-				loaded = [seed1, seed2, seed3];
+				loaded = [teamNote, seed2, seed3];
 			}
 
 			notes = loaded.map((n) => ({
@@ -580,8 +587,13 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 			);
 			if (persisted.desk) summary.desk = persisted.desk;
 
-			notes = plainNotes.filter((n) => n.deletedAt == null);
-			for (const n of plainNotes) {
+			const teamNote = await ensureMashTeamWelcomeNote();
+			const effectiveNotes = [
+				teamNote,
+				...plainNotes.filter((note) => !isMashTeamWelcomeCandidate(note))
+			];
+			notes = effectiveNotes.filter((n) => n.deletedAt == null);
+			for (const n of effectiveNotes) {
 				removeNoteFromSearch(n.id);
 				if (n.deletedAt == null) addNoteToSearch(n);
 			}
@@ -688,6 +700,10 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 	): Promise<boolean> {
 		const target = notes.find((n) => n.id === noteId);
 		if (!target) return false;
+		if (isMashTeamWelcomeNote(target)) {
+			opts.flashToast('The Mash team welcome is maintained in-house');
+			return false;
+		}
 
 		let updated: Note;
 		if (field === 'body' && typeof localValue === 'string') {
@@ -790,6 +806,9 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 					added++;
 				}
 			}
+			const teamNote = await ensureMashTeamWelcomeNote();
+			notes = [teamNote, ...notes.filter((note) => !isMashTeamWelcomeCandidate(note))];
+			updateNoteInSearch(teamNote, teamNote);
 			const message =
 				added === result.notes.length
 					? `Imported ${added} notes`
@@ -869,8 +888,16 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 	}
 
 	async function handleDelete() {
-		const ids = selectionIds.length > 0 ? [...selectionIds] : selectedId ? [selectedId] : [];
-		if (ids.length === 0) return;
+		const ids = (selectionIds.length > 0 ? [...selectionIds] : selectedId ? [selectedId] : []).filter(
+			(id) => {
+				const note = notes.find((n) => n.id === id);
+				return !note || !isMashTeamWelcomeNote(note);
+			}
+		);
+		if (ids.length === 0) {
+			opts.flashToast('The Mash team welcome is maintained in-house');
+			return;
+		}
 		opts.askConfirm({
 			title: ids.length === 1 ? 'Delete note' : `Delete ${ids.length} notes`,
 			message:

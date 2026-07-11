@@ -50,6 +50,8 @@ export interface Note {
 	source?: NoteSource;
 	/** Soft-delete timestamp for sync tombstones. Active notes omit this. */
 	deletedAt?: number;
+	/** Product-owned system note marker (e.g. permanent Mash team welcome). */
+	system?: string;
 	/** Desk that owns this note. Legacy/imported notes may omit until migration. */
 	sessionId?: string;
 	/** Session notes expire with a scratch desk; kept notes remain locally. */

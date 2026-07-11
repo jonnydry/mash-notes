@@ -82,4 +82,9 @@ describe('canvas empty state', () => {
 		);
 		expect(shouldShowCanvasEmptyState([item(welcome.id)], notes, false)).toBe(false);
 	});
+
+	it('treats orphan placements as empty', () => {
+		const notes = new Map<string, Note>();
+		expect(shouldShowCanvasEmptyState([item('missing')], notes, false)).toBe(true);
+	});
 });

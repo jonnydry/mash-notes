@@ -12,6 +12,7 @@
 		Eye,
 		Link2,
 		List,
+		Lock,
 		Pencil
 	} from 'lucide-svelte';
 	import { renderMarkdown } from '$lib/markdown';
@@ -24,6 +25,7 @@
 		autofocus?: boolean;
 		mode?: 'edit' | 'preview';
 		heroImage?: { src: string; alt: string } | null;
+		readOnly?: boolean;
 		onBodyChange: (body: string) => void;
 		onTextAlignChange?: (align: TextAlign) => void;
 		onModeChange?: (mode: 'edit' | 'preview') => void;
@@ -37,6 +39,7 @@
 		autofocus = true,
 		mode = $bindable<'edit' | 'preview'>('edit'),
 		heroImage = null,
+		readOnly = false,
 		onBodyChange,
 		onTextAlignChange,
 		onModeChange,
@@ -48,6 +51,13 @@
 
 	let previewHtml = $derived(mode === 'preview' ? renderMarkdown(body || '') : '');
 	let align = $derived(textAlign === 'center' || textAlign === 'right' ? textAlign : 'left');
+
+	$effect(() => {
+		if (readOnly && mode !== 'preview') {
+			mode = 'preview';
+			onModeChange?.('preview');
+		}
+	});
 
 	$effect(() => {
 		if (autofocus && mode === 'edit' && noteId !== focusedNoteId) {
@@ -146,7 +156,7 @@
 	<div
 		class="flex shrink-0 items-center justify-between gap-0.5 border-b border-[var(--mash-card-edge)] px-1.5 py-0.5"
 	>
-		{#if mode === 'edit'}
+		{#if mode === 'edit' && !readOnly}
 			<div class="flex items-center gap-0.5">
 				<button
 					type="button"
@@ -228,23 +238,31 @@
 					<AlignRight class="h-3 w-3" />
 				</button>
 			</div>
+		{:else if readOnly}
+			<span
+				class="flex items-center gap-1 px-1 text-[9px] font-medium text-[var(--mash-card-muted)]"
+			>
+				<Lock class="h-2.5 w-2.5" /> From the Mash team · permanent
+			</span>
 		{:else}
-			<span class="px-1 text-[9px] text-[var(--mash-card-muted)]">Preview</span>
+			<span class="px-1 text-[9px] font-medium text-[var(--mash-card-muted)]">Preview</span>
 		{/if}
 		<div class="flex items-center gap-0.5">
-			<button
-				type="button"
-				class="mash-sticky-mode-btn"
-				class:is-active={mode === 'edit'}
-				onclick={(e) => {
-					e.stopPropagation();
-					setMode('edit');
-				}}
-				aria-label="Edit"
-				title="Edit"
-			>
-				<Pencil class="h-3 w-3" />
-			</button>
+			{#if !readOnly}
+				<button
+					type="button"
+					class="mash-sticky-mode-btn"
+					class:is-active={mode === 'edit'}
+					onclick={(e) => {
+						e.stopPropagation();
+						setMode('edit');
+					}}
+					aria-label="Edit"
+					title="Edit"
+				>
+					<Pencil class="h-3 w-3" />
+				</button>
+			{/if}
 			<button
 				type="button"
 				class="mash-sticky-mode-btn"

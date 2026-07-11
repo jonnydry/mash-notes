@@ -254,6 +254,7 @@
 	let mobileViewportEntry = $state(0);
 	let mobileViewportEntrySeed = 0;
 	let lastMobileAutoFitKey: string | null = null;
+	let lastOffscreenFitKey: string | null = null;
 	let mobileToolsOpen = $state(false);
 	let moveRaf = 0;
 	let pendingMoves: Array<{ itemId: string; x: number; y: number }> | null = null;
@@ -280,7 +281,9 @@
 	let marqueeAdditive = false;
 
 	let snapEffective = $derived(altHeld ? !snapEnabled : snapEnabled);
-	let emptyStateVisible = $derived(showEmptyState ?? items.length === 0);
+	let emptyStateVisible = $derived(
+		showEmptyState ?? items.every((item) => !notesById.has(item.noteId))
+	);
 	let linkSummaries = $derived(buildLinkSummaryMap([...notesById.values()]));
 	let pendingMashCopy = $derived.by(() => {
 		if (!pendingMash) return null;
@@ -1510,6 +1513,30 @@
 		});
 	});
 
+	/** Desktop: if a restored viewport left every card off-screen, fit once. */
+	$effect(() => {
+		if (isMobileViewport || !canvasId || !boardEl || boardWidth <= 0 || boardHeight <= 0) return;
+		if (appliedCanvasId !== canvasId) return;
+		const present = items.filter((item) => notesById.has(item.noteId));
+		if (present.length === 0) return;
+		const pad = 24;
+		const left = (-panX - pad) / scale;
+		const top = (-panY - pad) / scale;
+		const right = (-panX + boardWidth + pad) / scale;
+		const bottom = (-panY + boardHeight + pad) / scale;
+		const anyInView = present.some((item) => {
+			const size = cardSize(item, item.noteId);
+			return item.x < right && item.x + size.w > left && item.y < bottom && item.y + size.h > top;
+		});
+		if (anyInView) return;
+		const key = `${canvasId}:${present.map((i) => i.id).join(',')}`;
+		if (key === lastOffscreenFitKey) return;
+		lastOffscreenFitKey = key;
+		requestAnimationFrame(() => {
+			if (lastOffscreenFitKey === key) zoomToFit(false);
+		});
+	});
+
 	$effect(() => {
 		if (!expandedNoteId || expandFocus !== 'title') {
 			if (!expandedNoteId) focusedExpandId = null;
@@ -1882,26 +1909,29 @@
 								bind:this={titleInputEl}
 								type="text"
 								value={note.title}
+								readonly={isPermanentWelcome}
 								class="mash-focus min-w-0 flex-1 bg-transparent text-sm font-semibold tracking-tight outline-none"
 								style="color: var(--mash-card-ink);"
 								onpointerdown={(e) => e.stopPropagation()}
 								oninput={(e) => onTitleChange(note.id, (e.currentTarget as HTMLInputElement).value)}
 							/>
-							<button
-								type="button"
-								class="shrink-0 rounded p-1 text-[var(--mash-card-muted)] hover:bg-[var(--mash-card-hover)] {note.pinned ===
-								1
-									? 'text-[var(--mash-accent)]'
-									: ''}"
-								onclick={(e) => {
-									e.stopPropagation();
-									onMetaChange?.(note.id, { pinned: note.pinned === 1 ? 0 : 1 });
-								}}
-								aria-label={note.pinned === 1 ? 'Unpin note' : 'Pin note'}
-								title={note.pinned === 1 ? 'Unpin' : 'Pin'}
-							>
-								<Pin class="h-3.5 w-3.5" />
-							</button>
+							{#if !isPermanentWelcome}
+								<button
+									type="button"
+									class="shrink-0 rounded p-1 text-[var(--mash-card-muted)] hover:bg-[var(--mash-card-hover)] {note.pinned ===
+									1
+										? 'text-[var(--mash-accent)]'
+										: ''}"
+									onclick={(e) => {
+										e.stopPropagation();
+										onMetaChange?.(note.id, { pinned: note.pinned === 1 ? 0 : 1 });
+									}}
+									aria-label={note.pinned === 1 ? 'Unpin note' : 'Pin note'}
+									title={note.pinned === 1 ? 'Unpin' : 'Pin'}
+								>
+									<Pin class="h-3.5 w-3.5" />
+								</button>
+							{/if}
 							<button
 								type="button"
 								class="shrink-0 rounded p-1 text-[var(--mash-card-muted)] hover:bg-[var(--mash-card-hover)]"
@@ -2071,6 +2101,7 @@
 							<StickyEditor
 								body={note.body}
 								noteId={note.id}
+								readOnly={isPermanentWelcome}
 								heroImage={isPermanentWelcome
 									? { src: MASH_SPOON_LOGO, alt: 'Spoon, the Mash mascot' }
 									: null}

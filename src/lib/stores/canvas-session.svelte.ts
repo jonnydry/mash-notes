@@ -252,6 +252,19 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 			let items = await getCanvasItems(canvas.id);
 			if (seq !== canvasLoadSeq) return;
 
+			// Drop placements whose notes are gone from the active library (session
+			// switch / kept scope / soft-delete). Prevents blank boards with a
+			// non-zero "on canvas" count.
+			const libraryIds = new Set(opts.getNotes().map((n) => n.id));
+			const orphanNoteIds = [
+				...new Set(items.filter((i) => !libraryIds.has(i.noteId)).map((i) => i.noteId))
+			];
+			if (orphanNoteIds.length > 0) {
+				await removeNotesFromCanvas(canvas.id, orphanNoteIds);
+				if (seq !== canvasLoadSeq) return;
+				items = items.filter((i) => libraryIds.has(i.noteId));
+			}
+
 			// Mirrored canvases: add missing members, prune leavers.
 			// Notes the user removed from the board stay dismissed until dropped back.
 			if (key) {

@@ -328,24 +328,27 @@
 						<input
 							type="text"
 							value={note.title}
+							readonly={isPermanentWelcome}
 							class="mash-focus min-w-0 flex-1 bg-transparent text-sm font-semibold tracking-tight outline-none"
 							style="color: var(--mash-card-ink);"
 							onpointerdown={(e) => e.stopPropagation()}
 							oninput={(e) => onTitleChange(note.id, (e.currentTarget as HTMLInputElement).value)}
 							onfocus={() => stage.focusNote(note.id)}
 						/>
-						<button
-							type="button"
-							class="mash-pane-btn {note.pinned === 1 ? 'is-accent' : ''}"
-							onclick={(e) => {
-								e.stopPropagation();
-								onMetaChange?.(note.id, { pinned: note.pinned === 1 ? 0 : 1 });
-							}}
-							aria-label={note.pinned === 1 ? 'Unpin note' : 'Pin note'}
-							title={note.pinned === 1 ? 'Unpin' : 'Pin'}
-						>
-							<Pin class="h-3.5 w-3.5" />
-						</button>
+						{#if !isPermanentWelcome}
+							<button
+								type="button"
+								class="mash-pane-btn {note.pinned === 1 ? 'is-accent' : ''}"
+								onclick={(e) => {
+									e.stopPropagation();
+									onMetaChange?.(note.id, { pinned: note.pinned === 1 ? 0 : 1 });
+								}}
+								aria-label={note.pinned === 1 ? 'Unpin note' : 'Pin note'}
+								title={note.pinned === 1 ? 'Unpin' : 'Pin'}
+							>
+								<Pin class="h-3.5 w-3.5" />
+							</button>
+						{/if}
 						<button
 							type="button"
 							class="mash-pane-btn"
@@ -456,6 +459,7 @@
 						<StickyEditor
 							body={note.body}
 							noteId={note.id}
+							readOnly={isPermanentWelcome}
 							heroImage={isPermanentWelcome
 								? { src: MASH_SPOON_LOGO, alt: 'Spoon, the Mash mascot' }
 								: null}
