@@ -2009,75 +2009,62 @@
 			</div>
 		</div>
 
-		<div class="flex items-center gap-2">
+		<div class="flex items-center gap-1.5">
 			{#if sessionManager.activeSession}
 				<button
 					type="button"
-					class="mash-focus hidden rounded-lg border px-2.5 py-2 text-left sm:block"
-					style="border-color: var(--mash-tray-edge); background: var(--mash-hover-fill-soft);"
-					onclick={() => openSessionPanel('desks')}
-					aria-label="Open session manager"
-					title="Open desks and retention settings"
-				>
-					<span class="block text-[10px] font-semibold" style="color: var(--mash-ink);">
-						{sessionManager.activeSession.title}
-					</span>
-					<span class="block text-[9px]" style="color: var(--mash-ink-muted);">
-						{sessionLifecycleLabel(sessionManager.activeSession, Date.now())}
-					</span>
-				</button>
-				<button
-					type="button"
-					class="mash-btn mash-focus rounded-lg px-3 py-2 text-xs font-semibold"
+					class="mash-btn mash-focus inline-flex h-[38px] items-center rounded-[11px] px-3.5 text-xs font-semibold"
 					onclick={() => openSessionPanel('finish')}
 				>
 					Finish
 				</button>
 			{/if}
-			<button
-				type="button"
-				class="mash-reader-launch mash-focus"
-				class:is-active={pdfReaderOpen}
-				class:has-session={Boolean(pdfReaderFile) && !pdfReaderOpen}
-				onclick={() => (pdfReaderFile ? resumePdfReader() : pdfInputEl?.click())}
-				aria-label={pdfReaderFile ? 'Return to PDF reader' : 'Open PDF reader'}
-				title={pdfReaderFile
-					? `Return to ${pdfReaderFile.name}`
-					: 'Open a PDF and capture excerpts'}
-			>
-				<BookOpen class="h-[18px] w-[18px]" strokeWidth={1.9} />
-			</button>
-			<button
-				type="button"
-				class="mash-theme-toggle mash-focus"
-				onclick={() => theme.toggle()}
-				aria-label={theme.mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-				title={theme.mode === 'dark'
-					? 'Night kitchen — switch to day'
-					: 'Day kitchen — switch to night'}
-			>
-				{#if theme.mode === 'dark'}
-					<img
-						src="/icons/mash-flame-night.png"
-						srcset="/icons/mash-flame-night.png 1x, /icons/mash-flame-night@2x.png 2x"
-						alt=""
-						width="40"
-						height="40"
-						class="mash-theme-flame"
-						draggable="false"
-					/>
-				{:else}
-					<img
-						src="/icons/mash-flame-day.png"
-						srcset="/icons/mash-flame-day.png 1x, /icons/mash-flame-day@2x.png 2x"
-						alt=""
-						width="40"
-						height="40"
-						class="mash-theme-flame"
-						draggable="false"
-					/>
-				{/if}
-			</button>
+			<div class="mash-header-utils">
+				<button
+					type="button"
+					class="mash-reader-launch mash-focus"
+					class:is-active={pdfReaderOpen}
+					class:has-session={Boolean(pdfReaderFile) && !pdfReaderOpen}
+					onclick={() => (pdfReaderFile ? resumePdfReader() : pdfInputEl?.click())}
+					aria-label={pdfReaderFile ? 'Return to PDF reader' : 'Open PDF reader'}
+					title={pdfReaderFile
+						? `Return to ${pdfReaderFile.name}`
+						: 'Open a PDF and capture excerpts'}
+				>
+					<BookOpen class="h-[18px] w-[18px]" strokeWidth={1.9} />
+				</button>
+				<button
+					type="button"
+					class="mash-theme-toggle mash-focus"
+					onclick={() => theme.toggle()}
+					aria-label={theme.mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+					title={theme.mode === 'dark'
+						? 'Night kitchen — switch to day'
+						: 'Day kitchen — switch to night'}
+				>
+					{#if theme.mode === 'dark'}
+						<img
+							src="/icons/mash-flame-night.png"
+							srcset="/icons/mash-flame-night.png 1x, /icons/mash-flame-night@2x.png 2x"
+							alt=""
+							width="32"
+							height="32"
+							class="mash-theme-flame"
+							draggable="false"
+						/>
+					{:else}
+						<img
+							src="/icons/mash-flame-day.png"
+							srcset="/icons/mash-flame-day.png 1x, /icons/mash-flame-day@2x.png 2x"
+							alt=""
+							width="32"
+							height="32"
+							class="mash-theme-flame"
+							draggable="false"
+						/>
+					{/if}
+				</button>
+			</div>
 			<div class="hidden items-center gap-1 text-xs lg:flex" style="color: var(--mash-ink-muted);">
 				<kbd
 					class="flex items-center gap-0.5 rounded border px-1.5 py-0.5 text-[10px] font-medium"

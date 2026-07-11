@@ -203,6 +203,12 @@ body {
 	color: var(--mash-ink-muted);
 }
 
+.mash-header-utils {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
 .mash-focus:focus-visible {
 	outline: none;
 	box-shadow:
@@ -1592,9 +1598,9 @@ body {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	width: 46px;
-	height: 46px;
-	border-radius: 13px;
+	width: 38px;
+	height: 38px;
+	border-radius: 11px;
 	border: 1px solid var(--mash-tray-edge);
 	background: transparent;
 	color: var(--mash-ink-muted);
@@ -1614,8 +1620,8 @@ body {
 }
 .mash-theme-flame {
 	display: block;
-	width: 40px;
-	height: 40px;
+	width: 32px;
+	height: 32px;
 	object-fit: contain;
 	pointer-events: none;
 	user-select: none;
