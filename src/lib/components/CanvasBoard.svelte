@@ -2067,6 +2067,15 @@
 									<FileText class="h-2.5 w-2.5 shrink-0" />
 									<span class="truncate">{note.source.title}</span>
 								</div>
+							{:else if note.source?.kind === 'url'}
+								<div
+									class="mash-card-source mt-2 flex items-center gap-1 border-t pt-1.5 text-[9px]"
+									style="border-color: var(--mash-card-edge); color: var(--mash-accent);"
+									title={note.source.url}
+								>
+									<FileText class="h-2.5 w-2.5 shrink-0" />
+									<span class="truncate">{note.source.title}</span>
+								</div>
 							{/if}
 							{#if note.mashedFrom?.length}
 								<div

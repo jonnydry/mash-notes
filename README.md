@@ -24,6 +24,7 @@ Fast, cute, minimal web notes — a canvas-first, local-only PWA. Open in any br
 - Mobile / coarse-pointer desk: bottom dock, peel + selection bar above it, long-press place from peel
 - Drop or open **Word (.docx)** documents in a read-only reader and clip text to stickies (PDF reader remains for PDFs)
 - Drop, paste, or open **images** (PNG, JPEG, WebP, GIF) as visual stickies on the desk
+- Paste **http(s) URLs** (one per line) as link source cards — local hostname titles, no cloud fetch
 - PWA install + offline static assets
 
 ## Quick start

@@ -37,6 +37,11 @@ export type NoteSource =
 	| {
 			kind: 'image';
 			title: string;
+	  }
+	| {
+			kind: 'url';
+			title: string;
+			url: string;
 	  };
 
 export interface Note {

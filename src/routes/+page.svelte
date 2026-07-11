@@ -118,6 +118,7 @@
 		imageNoteSource,
 		prepareDeskImage
 	} from '$lib/desk-image';
+	import { draftsFromUrlOnlyText, URL_SOURCE_MAX_PER_PASTE } from '$lib/url-source';
 	import {
 		splitNoteFragments,
 		type ContentSplitMode,
@@ -1336,6 +1337,27 @@
 					if (prepared.compacted) bits.push('Image resized for the desk');
 					flashToast(bits.join(' · '));
 				}
+			})();
+			return;
+		}
+		const urlDrafts = draftsFromUrlOnlyText(text);
+		if (urlDrafts) {
+			event.preventDefault();
+			void (async () => {
+				const notes = await placeNoteDraftsOnDesk(urlDrafts);
+				if (notes.length === 0) return;
+				const totalLines = text
+					.replace(/\r\n?/g, '\n')
+					.split('\n')
+					.map((l) => l.trim())
+					.filter(Boolean).length;
+				const parts = [
+					notes.length === 1 ? 'Pasted 1 link card' : `Pasted ${notes.length} link cards`
+				];
+				if (totalLines > URL_SOURCE_MAX_PER_PASTE) {
+					parts.push(`Imported ${URL_SOURCE_MAX_PER_PASTE} of ${totalLines} links`);
+				}
+				flashToast(parts.join(' · '));
 			})();
 			return;
 		}

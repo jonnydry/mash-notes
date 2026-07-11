@@ -109,4 +109,29 @@ describe('import-notes', () => {
 			expect(result.notes[0].source).toEqual({ kind: 'image', title: 'shot.png' });
 		}
 	});
+
+	it('preserves validated url provenance', () => {
+		const json = JSON.stringify([
+			{
+				id: 'url-note',
+				title: 'example.com',
+				body: '[example.com](https://example.com/)',
+				folder: '',
+				tags: [],
+				created: 1,
+				modified: 2,
+				pinned: 0,
+				source: { kind: 'url', title: 'example.com', url: 'https://example.com/' }
+			}
+		]);
+		const result = parseNotesJson(json);
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(result.notes[0].source).toEqual({
+				kind: 'url',
+				title: 'example.com',
+				url: 'https://example.com/'
+			});
+		}
+	});
 });
