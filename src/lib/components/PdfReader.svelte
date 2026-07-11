@@ -12,7 +12,6 @@
 	} from 'lucide-svelte';
 	import type { PDFDocumentLoadingTask, PDFDocumentProxy, RenderTask } from 'pdfjs-dist';
 	import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
-	import 'pdfjs-dist/web/pdf_viewer.css';
 	import type { PdfClipping } from '$lib/pdf-clipping';
 	import { normalizePdfExcerpt } from '$lib/pdf-clipping';
 
@@ -452,8 +451,48 @@
 		display: block;
 	}
 	.mash-pdf-page :global(.textLayer) {
+		position: absolute;
 		inset: 0;
+		overflow: clip;
+		line-height: 1;
+		letter-spacing: normal;
+		word-spacing: normal;
+		text-align: initial;
+		text-size-adjust: none;
+		forced-color-adjust: none;
+		transform-origin: 0 0;
+		caret-color: CanvasText;
 		user-select: text;
+		--min-font-size: 1;
+		--text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+		--min-font-size-inv: calc(1 / var(--min-font-size));
+	}
+	.mash-pdf-page :global(.textLayer :is(span, br)) {
+		position: absolute;
+		color: transparent;
+		white-space: pre;
+		cursor: text;
+		transform-origin: 0% 0%;
+		user-select: text;
+	}
+	.mash-pdf-page :global(.textLayer > :not(.markedContent)),
+	.mash-pdf-page :global(.textLayer .markedContent span:not(.markedContent)) {
+		z-index: 1;
+		font-size: calc(var(--text-scale-factor) * var(--font-height, 0));
+		transform: rotate(var(--rotate, 0deg)) scaleX(var(--scale-x, 1)) scale(var(--min-font-size-inv));
+	}
+	.mash-pdf-page :global(.textLayer .markedContent) {
+		display: contents;
+	}
+	.mash-pdf-page :global(.textLayer .endOfContent) {
+		position: absolute;
+		inset: 100% 0 0;
+		display: block;
+		cursor: default;
+		user-select: none;
+	}
+	.mash-pdf-page :global(.textLayer.selecting .endOfContent) {
+		top: 0;
 	}
 	.mash-pdf-page :global(.textLayer ::selection) {
 		background: color-mix(in srgb, var(--mash-accent) 42%, transparent);

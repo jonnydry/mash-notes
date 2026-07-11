@@ -8,7 +8,16 @@ import type { Note } from './types';
 
 export type SyncConflictField = keyof Pick<
 	Note,
-	'title' | 'body' | 'folder' | 'tags' | 'pinned' | 'links' | 'mashedFrom' | 'textAlign' | 'source'
+	| 'title'
+	| 'body'
+	| 'folder'
+	| 'tags'
+	| 'pinned'
+	| 'links'
+	| 'mashedFrom'
+	| 'operationId'
+	| 'textAlign'
+	| 'source'
 >;
 
 export type SyncConflict = {
@@ -51,6 +60,7 @@ export function mergeNotesLww(local: Note, remote: Note, base?: Note | null): Me
 		'pinned',
 		'links',
 		'mashedFrom',
+		'operationId',
 		'textAlign',
 		'source'
 	];

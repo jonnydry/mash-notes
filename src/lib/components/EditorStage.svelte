@@ -33,6 +33,9 @@
 			}
 		) => void;
 		onWikilink?: (target: string) => void;
+		onOpenSource?: (noteId: string) => void;
+		onUndoOperation?: () => void | Promise<void>;
+		undoOperationId?: string | null;
 	}
 
 	let {
@@ -43,7 +46,10 @@
 		onTitleChange,
 		onBodyChange,
 		onMetaChange,
-		onWikilink
+		onWikilink,
+		onOpenSource,
+		onUndoOperation,
+		undoOperationId = null
 	}: Props = $props();
 
 	let stageEl: HTMLDivElement | undefined = $state();
@@ -301,6 +307,9 @@
 			{@const note = paneNote(pane)}
 			{#if note}
 				{@const isPermanentWelcome = isPermanentMashWelcomeNote(note)}
+				{@const provenanceSources = (note.mashedFrom ?? [])
+					.map((id) => notesById.get(id))
+					.filter((source): source is Note => Boolean(source))}
 				<section
 					class="mash-editor-pane"
 					class:is-active={stage.activeNoteId === note.id}
@@ -413,6 +422,35 @@
 							/>
 						</label>
 					</div>
+
+					{#if note.mashedFrom?.length}
+						<div class="mash-editor-provenance" aria-label="Result provenance">
+							<span>Made from</span>
+							{#each provenanceSources as source (source.id)}
+								<button
+									type="button"
+									class="mash-focus"
+									onclick={() => onOpenSource?.(source.id)}
+									title="Open source beside this result"
+								>
+									{source.title || 'Untitled'}
+								</button>
+							{/each}
+							{#if provenanceSources.length < note.mashedFrom.length}
+								<small>{note.mashedFrom.length - provenanceSources.length} unavailable</small>
+							{/if}
+							{#if onUndoOperation && note.operationId === undoOperationId}
+								<button
+									type="button"
+									class="mash-focus ml-auto"
+									onclick={() => void onUndoOperation?.()}
+									title="Restore the inputs and remove this generated result"
+								>
+									Undo result
+								</button>
+							{/if}
+						</div>
+					{/if}
 
 					<div class="mash-editor-pane-body">
 						<StickyEditor

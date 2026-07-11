@@ -4,8 +4,36 @@
 
 export type CanvasViewport = { panX: number; panY: number; scale: number };
 
+export type MobileAutoFitInput = {
+	isMobile: boolean;
+	canvasId: string | null;
+	itemCount: number;
+	boardWidth: number;
+	boardHeight: number;
+	entry: number;
+	lastAppliedKey: string | null;
+};
+
 const PREFIX = 'mash.canvasViewport.';
 const DEFAULT_VIEWPORT: CanvasViewport = { panX: 0, panY: 0, scale: 1 };
+
+/**
+ * Mobile desks get one content fit per desk entry (and once when crossing the
+ * mobile breakpoint). Subsequent edits keep the user's chosen pan and zoom.
+ */
+export function mobileAutoFitKey(input: MobileAutoFitInput): string | null {
+	if (
+		!input.isMobile ||
+		!input.canvasId ||
+		input.itemCount === 0 ||
+		input.boardWidth <= 0 ||
+		input.boardHeight <= 0
+	) {
+		return null;
+	}
+	const key = `${input.canvasId}:${input.entry}`;
+	return key === input.lastAppliedKey ? null : key;
+}
 
 export function loadCanvasViewport(canvasId: string): CanvasViewport {
 	try {

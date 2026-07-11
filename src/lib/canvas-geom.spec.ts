@@ -129,6 +129,14 @@ describe('canvas-geom', () => {
 		expect(v.panY).toBe(100);
 	});
 
+	it('can preserve a readable minimum scale while centering oversized content', () => {
+		const v = fitViewport({ minX: 0, minY: 0, width: 800, height: 200 }, 390, 700, 40, {
+			min: 0.55
+		});
+		expect(v.scale).toBe(0.55);
+		expect(v.panX).toBeCloseTo(-25);
+	});
+
 	it('places cards at the view center with cascade', () => {
 		const base = viewCenterPlacement({
 			panX: 0,

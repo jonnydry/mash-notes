@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { focusTrap } from '$lib/focus-trap';
 	import { untrack } from 'svelte';
 	import { X } from 'lucide-svelte';
 	import { getCanvasItems, getOrCreateFolderCanvas } from '$lib/db';
@@ -14,6 +15,7 @@
 	};
 
 	interface Props {
+		sessionId?: string;
 		openKeys: string[];
 		activeKey: string;
 		/** Live items for the active canvas (avoids a redundant fetch). */
@@ -23,11 +25,11 @@
 		onCloseSpace: (key: string) => void;
 	}
 
-	let { openKeys, activeKey, activeItems, onClose, onSwitch, onCloseSpace }: Props = $props();
+	let { sessionId, openKeys, activeKey, activeItems, onClose, onSwitch, onCloseSpace }: Props =
+		$props();
 
 	let previews = $state<Record<string, SpacePreviewRect[]>>({});
 	let loading = $state(false);
-	let closeBtn: HTMLButtonElement | undefined = $state();
 
 	function rectsFromItems(items: CanvasItem[]): SpacePreviewRect[] {
 		return items.map((item) => ({
@@ -73,7 +75,7 @@
 					.filter((key) => key !== current)
 					.map(async (key) => {
 						try {
-							const canvas = await getOrCreateFolderCanvas(key);
+							const canvas = await getOrCreateFolderCanvas(key, sessionId);
 							const canvasItems = await getCanvasItems(canvas.id);
 							next[key] = rectsFromItems(canvasItems);
 						} catch {
@@ -89,7 +91,6 @@
 
 	$effect(() => {
 		void loadPreviews();
-		requestAnimationFrame(() => closeBtn?.focus());
 		function onKey(e: KeyboardEvent) {
 			if (e.key === 'Escape') {
 				e.preventDefault();
@@ -110,6 +111,7 @@
 	}}
 >
 	<div
+		use:focusTrap={{ initialFocus: '[data-dialog-initial-focus]' }}
 		class="mash-spaces-dialog"
 		role="dialog"
 		aria-modal="true"
@@ -142,7 +144,7 @@
 				</p>
 			</div>
 			<button
-				bind:this={closeBtn}
+				data-dialog-initial-focus
 				type="button"
 				class="mash-peel-icon-btn"
 				onclick={onClose}

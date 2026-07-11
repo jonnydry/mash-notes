@@ -1,5 +1,16 @@
 <script lang="ts">
-	import { LayoutGrid, Pin, Folder, Hash, Link2, Plus, Search, Settings } from 'lucide-svelte';
+	import {
+		LayoutGrid,
+		Pin,
+		Folder,
+		Hash,
+		Link2,
+		Plus,
+		Search,
+		Settings,
+		MoreHorizontal,
+		Clock3
+	} from 'lucide-svelte';
 	import type { NavFilter } from '$lib/note-ui';
 	import { isNavActive } from '$lib/note-ui';
 	import type { DockAction } from '$lib/dock';
@@ -12,6 +23,7 @@
 		settingsOpen?: boolean;
 		/** Callback for dock button presses (avoid `on*` — Svelte 5 treats those as events). */
 		dockSelect: (action: DockAction) => void;
+		openDesks?: () => void;
 	}
 
 	let {
@@ -20,7 +32,8 @@
 		tagsOpen = false,
 		linkedOpen = false,
 		settingsOpen = false,
-		dockSelect
+		dockSelect,
+		openDesks
 	}: Props = $props();
 
 	type DockItem = {
@@ -69,6 +82,7 @@
 	let dockEl: HTMLElement | undefined = $state();
 	let magRaf = 0;
 	let leaveTimer = 0;
+	let mobileMoreOpen = $state(false);
 
 	const MAG_RADIUS = 80;
 	const MAG_PEAK = 0.32; // subtle swell — stays readable on the cream board
@@ -171,6 +185,11 @@
 			leaveTimer = 0;
 		}, 220);
 	}
+
+	function choose(action: DockAction) {
+		mobileMoreOpen = false;
+		dockSelect(action);
+	}
 </script>
 
 <nav
@@ -189,12 +208,13 @@
 			type="button"
 			data-dock-item={item.id}
 			class="mash-side-dock-item"
+			class:mash-dock-secondary={!['all', 'new', 'search'].includes(item.id)}
 			class:is-accent={item.accent}
 			class:is-active={item.active}
 			title={item.label}
 			aria-label={item.label}
 			aria-pressed={item.active}
-			onclick={() => dockSelect(item.id)}
+			onclick={() => choose(item.id)}
 		>
 			<span class="mash-side-dock-icon" aria-hidden="true">
 				<Icon class="h-[18px] w-[18px]" strokeWidth={2} />
@@ -205,4 +225,41 @@
 			{/if}
 		</button>
 	{/each}
+	<button
+		type="button"
+		class="mash-side-dock-item mash-dock-more"
+		class:is-active={mobileMoreOpen || items.some((item) => item.active && item.id !== 'all')}
+		aria-label="More navigation"
+		aria-haspopup="menu"
+		aria-expanded={mobileMoreOpen}
+		title="More"
+		onclick={() => (mobileMoreOpen = !mobileMoreOpen)}
+	>
+		<span class="mash-side-dock-icon" aria-hidden="true">
+			<MoreHorizontal class="h-[20px] w-[20px]" strokeWidth={2} />
+		</span>
+	</button>
+	{#if mobileMoreOpen}
+		<div class="mash-dock-more-menu">
+			{#if openDesks}
+				<button
+					type="button"
+					onclick={() => {
+						mobileMoreOpen = false;
+						openDesks();
+					}}
+				>
+					<Clock3 size={18} strokeWidth={2} aria-hidden="true" />
+					<span>Desks</span>
+				</button>
+			{/if}
+			{#each items.filter((item) => !['all', 'new', 'search'].includes(item.id)) as item (item.id)}
+				{@const MenuIcon = iconFor(item.id)}
+				<button type="button" class:is-active={item.active} onclick={() => choose(item.id)}>
+					<MenuIcon size={18} strokeWidth={2} aria-hidden="true" />
+					<span>{item.label}</span>
+				</button>
+			{/each}
+		</div>
+	{/if}
 </nav>

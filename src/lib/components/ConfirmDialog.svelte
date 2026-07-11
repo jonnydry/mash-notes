@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { focusTrap } from '$lib/focus-trap';
 	interface Props {
 		open: boolean;
 		title: string;
@@ -21,12 +22,8 @@
 		onCancel
 	}: Props = $props();
 
-	let dialogEl: HTMLDivElement | undefined = $state();
-	let confirmBtn: HTMLButtonElement | undefined = $state();
-
 	$effect(() => {
 		if (!open) return;
-		requestAnimationFrame(() => confirmBtn?.focus());
 		function onKey(e: KeyboardEvent) {
 			if (e.key === 'Escape') {
 				e.preventDefault();
@@ -54,7 +51,7 @@
 		}}
 	>
 		<div
-			bind:this={dialogEl}
+			use:focusTrap={{ initialFocus: '[data-dialog-initial-focus]' }}
 			class="mash-confirm-dialog"
 			role="alertdialog"
 			aria-modal="true"
@@ -80,7 +77,7 @@
 					{cancelLabel}
 				</button>
 				<button
-					bind:this={confirmBtn}
+					data-dialog-initial-focus
 					type="button"
 					class="rounded-lg px-3 py-1.5 text-xs font-semibold {danger
 						? 'mash-btn-danger'
