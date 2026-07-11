@@ -67,4 +67,25 @@ describe('import-notes', () => {
 			expect(result.notes[0].source).toEqual({ kind: 'pdf', title: 'paper.pdf', page: 12 });
 		}
 	});
+
+	it('preserves validated docx provenance', () => {
+		const json = JSON.stringify([
+			{
+				id: 'docx-note',
+				title: 'Useful excerpt',
+				body: 'Selected text',
+				folder: '',
+				tags: ['docx-clipping'],
+				created: 1,
+				modified: 2,
+				pinned: 0,
+				source: { kind: 'docx', title: 'brief.docx' }
+			}
+		]);
+		const result = parseNotesJson(json);
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(result.notes[0].source).toEqual({ kind: 'docx', title: 'brief.docx' });
+		}
+	});
 });

@@ -52,17 +52,24 @@ export function normalizeImportedNote(raw: unknown, index: number): Note | strin
 			? textAlignRaw
 			: undefined;
 	const sourceRaw = isRecord(raw.source) ? raw.source : null;
-	const source =
+	let source: Note['source'] | undefined;
+	if (
 		sourceRaw?.kind === 'pdf' &&
 		typeof sourceRaw.title === 'string' &&
 		typeof sourceRaw.page === 'number' &&
 		Number.isFinite(sourceRaw.page)
-			? {
-					kind: 'pdf' as const,
-					title: sourceRaw.title.trim().slice(0, 300),
-					page: Math.max(1, Math.floor(sourceRaw.page))
-				}
-			: undefined;
+	) {
+		source = {
+			kind: 'pdf',
+			title: sourceRaw.title.trim().slice(0, 300),
+			page: Math.max(1, Math.floor(sourceRaw.page))
+		};
+	} else if (sourceRaw?.kind === 'docx' && typeof sourceRaw.title === 'string') {
+		source = {
+			kind: 'docx',
+			title: sourceRaw.title.trim().slice(0, 300) || 'Untitled document'
+		};
+	}
 	return {
 		id,
 		title,

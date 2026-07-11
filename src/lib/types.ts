@@ -24,11 +24,16 @@ export interface Session {
 	recoveryUntil?: number;
 }
 
-export type NoteSource = {
-	kind: 'pdf';
-	title: string;
-	page: number;
-};
+export type NoteSource =
+	| {
+			kind: 'pdf';
+			title: string;
+			page: number;
+	  }
+	| {
+			kind: 'docx';
+			title: string;
+	  };
 
 export interface Note {
 	id: string;
