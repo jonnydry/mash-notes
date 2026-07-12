@@ -102,6 +102,13 @@
 		sortNotesForPeel,
 		type PeelScopeFilter
 	} from '$lib/peel-hygiene';
+	import {
+		dismissTryAMash,
+		isTryAMashDismissed,
+		shouldOfferTryAMash,
+		tryAMashDrafts,
+		tryAMashSuccessToast
+	} from '$lib/try-a-mash';
 	import { createPeelNav, windowPeelNotes } from '$lib/stores/peel-nav.svelte';
 	import { createOpenSpaces } from '$lib/stores/spaces.svelte';
 	import { theme } from '$lib/stores/theme.svelte';
@@ -1227,7 +1234,7 @@
 	}
 
 	async function placeNoteDraftsOnDesk(
-		drafts: Array<{ title: string; body: string; source?: Note['source'] }>,
+		drafts: Array<{ title: string; body: string; source?: Note['source']; tags?: string[] }>,
 		origin?: { x: number; y: number }
 	): Promise<Note[]> {
 		if (!canvas.activeCanvas) {
@@ -1251,6 +1258,7 @@
 				title: draft.title,
 				body: draft.body,
 				folder: peel.canvasFolder,
+				tags: draft.tags ?? [],
 				links: extractWikilinks(draft.body),
 				...(draft.source ? { source: draft.source } : {})
 			});
@@ -1738,6 +1746,28 @@
 			peel.currentFilter.type === 'pinned'
 		)
 	);
+	let tryAMashDismissed = $state(
+		typeof localStorage !== 'undefined' ? isTryAMashDismissed(localStorage) : false
+	);
+	let showTryAMash = $derived(
+		shouldOfferTryAMash({
+			dismissed: tryAMashDismissed,
+			emptyStateVisible: showCanvasEmptyState,
+			isPinnedBoard: peel.currentFilter.type === 'pinned'
+		})
+	);
+
+	function dismissTryAMashForever() {
+		dismissTryAMash(localStorage);
+		tryAMashDismissed = true;
+	}
+
+	async function runTryAMash() {
+		const notes = await placeNoteDraftsOnDesk(tryAMashDrafts());
+		if (notes.length === 0) return;
+		dismissTryAMashForever();
+		flashToast(tryAMashSuccessToast(), 4200);
+	}
 	let peelScopeStats = $derived(peelScopeCounts(filteredNotes));
 	let peelNotes = $derived(
 		sortNotesForPeel(
@@ -2991,6 +3021,9 @@
 							}
 						: undefined}
 					showEmptyState={showCanvasEmptyState}
+					showTryAMash={showTryAMash}
+					tryAMash={runTryAMash}
+					dismissTryAMash={dismissTryAMashForever}
 					onSelect={canvas.handleCanvasSelect}
 					onSelectNotes={canvas.handleCanvasSelectNotes}
 					onMove={canvas.handleCanvasMove}
