@@ -11,6 +11,12 @@ async function pasteText(page: Page, text: string) {
 	await page.keyboard.press(`${modKey()}+V`);
 }
 
+/** Redo lives under View after quiet board chrome. */
+async function redoLayout(page: Page) {
+	await page.getByTestId('board-view-toggle').click();
+	await page.getByTestId('board-view-menu').getByRole('menuitem', { name: 'Redo layout' }).click();
+}
+
 test.describe('Set operators', () => {
 	test('splits one card into traced fragments and restores notes on undo and redo', async ({
 		page
@@ -38,7 +44,7 @@ test.describe('Set operators', () => {
 		await expect(page.locator('.mash-note-card')).toHaveCount(1);
 		await expect(page.getByTestId('action-status')).toHaveText('Undo Split');
 
-		await page.getByRole('button', { name: 'Redo', exact: true }).click();
+		await redoLayout(page);
 		await expect(page.locator('.mash-note-card')).toHaveCount(3);
 		await expect(page.getByTestId('action-status')).toHaveText('Redo Split');
 	});
@@ -87,7 +93,7 @@ test.describe('Set operators', () => {
 		await expect(page.locator('.mash-note-card')).toHaveCount(4);
 		await expect(page.getByTestId('action-status')).toHaveText('Undo Deduplicate');
 
-		await page.getByRole('button', { name: 'Redo', exact: true }).click();
+		await redoLayout(page);
 		await expect(page.locator('.mash-note-card')).toHaveCount(3);
 		await expect(page.getByTestId('action-status')).toHaveText('Redo Deduplicate');
 
@@ -119,7 +125,7 @@ test.describe('Set operators', () => {
 		await page.getByRole('button', { name: 'Undo', exact: true }).click();
 		await expect(page.locator('.mash-flow-page-badge')).toHaveCount(0);
 		await expect(page.getByTestId('action-status')).toHaveText('Undo Sequence');
-		await page.getByRole('button', { name: 'Redo', exact: true }).click();
+		await redoLayout(page);
 		await expect(page.locator('.mash-flow-page-badge')).toHaveCount(3);
 		await expect(page.getByTestId('action-status')).toHaveText('Redo Sequence');
 	});
