@@ -257,6 +257,11 @@ body {
 	border: 1px solid var(--mash-tray-edge);
 	color: var(--mash-ink-muted);
 }
+.mash-chip.is-active {
+	background: color-mix(in srgb, var(--mash-accent) 16%, transparent);
+	border-color: color-mix(in srgb, var(--mash-accent) 45%, transparent);
+	color: var(--mash-accent-bright);
+}
 
 .mash-header-utils {
 	display: flex;

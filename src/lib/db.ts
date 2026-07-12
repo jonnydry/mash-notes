@@ -215,6 +215,8 @@ export async function getActiveNotes(opts?: {
 	limit?: number;
 	sessionId?: string;
 	keptCollection?: boolean;
+	/** When loading a session desk, also include kept-scope pantry notes. */
+	includeKeptPantry?: boolean;
 }): Promise<Note[]> {
 	let notes = opts?.keptCollection
 		? await db.notes.where('scope').equals('kept').toArray()
@@ -222,11 +224,26 @@ export async function getActiveNotes(opts?: {
 			? await db.notes.where('sessionId').equals(opts.sessionId).toArray()
 			: await db.notes.orderBy('modified').reverse().toArray();
 
+	if (opts?.includeKeptPantry && opts.sessionId && !opts.keptCollection) {
+		const pantry = await db.notes.where('scope').equals('kept').toArray();
+		const byId = new Map<string, Note>();
+		for (const note of pantry) {
+			if (note.deletedAt == null) byId.set(note.id, note);
+		}
+		for (const note of notes) {
+			if (note.deletedAt == null) byId.set(note.id, note);
+		}
+		notes = [...byId.values()];
+	}
+
 	notes = notes.filter((n) => n.deletedAt == null);
 	notes.sort((a, b) => {
 		const aSystem = a.system === 'mash-team-welcome';
 		const bSystem = b.system === 'mash-team-welcome';
 		if (aSystem !== bSystem) return aSystem ? -1 : 1;
+		const aKept = a.scope === 'kept' ? 1 : 0;
+		const bKept = b.scope === 'kept' ? 1 : 0;
+		if (aKept !== bKept) return aKept - bKept;
 		if (a.pinned !== b.pinned) return b.pinned - a.pinned;
 		return b.modified - a.modified;
 	});

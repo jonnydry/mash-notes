@@ -94,6 +94,14 @@
 	import { loadSnapPref, saveSnapPref } from '$lib/canvas-geom';
 	import { COLLAPSED_CARD, createCanvasSession } from '$lib/stores/canvas-session.svelte';
 	import { createNoteLibrary, filterNotes, filterPeelNotes } from '$lib/stores/note-library.svelte';
+	import {
+		filterNotesByPeelScope,
+		peelScopeCounts,
+		peelScopeSubtitle,
+		rankSearchIdsForPeel,
+		sortNotesForPeel,
+		type PeelScopeFilter
+	} from '$lib/peel-hygiene';
 	import { createPeelNav, windowPeelNotes } from '$lib/stores/peel-nav.svelte';
 	import { createOpenSpaces } from '$lib/stores/spaces.svelte';
 	import { theme } from '$lib/stores/theme.svelte';
@@ -1720,6 +1728,8 @@
 		editorStage.openBeside(id);
 	}
 
+	/** Ingredients tray: All / Desk / Kept — not a permanent library browser. */
+	let peelScopeFilter = $state<PeelScopeFilter>('ingredients');
 	let filteredNotes = $derived(filterNotes(library.notes, peel.currentFilter, ''));
 	let showCanvasEmptyState = $derived(
 		shouldShowCanvasEmptyState(
@@ -1728,18 +1738,38 @@
 			peel.currentFilter.type === 'pinned'
 		)
 	);
-	let peelNotes = $derived(filterPeelNotes(filteredNotes, peel.peelFilterText));
+	let peelScopeStats = $derived(peelScopeCounts(filteredNotes));
+	let peelNotes = $derived(
+		sortNotesForPeel(
+			filterPeelNotes(
+				filterNotesByPeelScope(filteredNotes, peelScopeFilter),
+				peel.peelFilterText
+			)
+		)
+	);
+	let peelNotesSubtitle = $derived(
+		peel.peelMode === 'notes' && peel.currentFilter.type === null
+			? peelScopeSubtitle(peelScopeStats, peelScopeFilter)
+			: undefined
+	);
 	/** Screenplay mode: any open folder/pinned board besides root Desk. */
 	let screenplayActive = $derived(spaces.openKeys.length > 1);
 	let screenplayChipTitle = $derived(screenplayActive ? 'Screenplay' : peel.canvasTitle);
 	let canvasPlaceCount = $derived(
 		canvas.canvasItems.filter((item) => library.notesById.has(item.noteId)).length
 	);
-	let headerSearchResults = $derived(
-		peel.searchQuery.trim()
-			? searchNotes(peel.searchQuery).filter((result) => library.notesById.has(result.id))
-			: []
-	);
+	let headerSearchResults = $derived.by(() => {
+		if (!peel.searchQuery.trim()) return [];
+		const hits = searchNotes(peel.searchQuery).filter((result) =>
+			library.notesById.has(result.id)
+		);
+		const rankedIds = rankSearchIdsForPeel(
+			hits.map((h) => h.id),
+			library.notesById
+		);
+		const byId = new Map(hits.map((h) => [h.id, h]));
+		return rankedIds.map((id) => byId.get(id)!).filter(Boolean);
+	});
 	let linkedFocusNote = $derived(
 		peel.linkedFocusId
 			? (library.notes.find((n) => n.id === peel.linkedFocusId) ?? null)
@@ -3151,6 +3181,7 @@
 					pinned={peel.peelPinned}
 					mode={peel.peelMode}
 					title={peel.peelTitle}
+					subtitle={peelNotesSubtitle}
 					notes={peelNotesWindowed}
 					outgoingNotes={linkedOutgoing}
 					backlinkNotes={linkedBacklinks}
@@ -3162,6 +3193,15 @@
 					saveStatus={library.saveStatus}
 					filterText={peel.peelFilterText}
 					isLoading={library.isLoading}
+					scopeFilter={peel.currentFilter.type === null ? peelScopeFilter : undefined}
+					scopeCounts={peel.currentFilter.type === null ? peelScopeStats : undefined}
+					onScopeFilter={
+						peel.currentFilter.type === null
+							? (scope) => {
+									peelScopeFilter = scope;
+								}
+							: undefined
+					}
 					onClose={() => peel.closePeel(true)}
 					onTogglePin={peel.togglePin}
 					onFilterText={(v) => (peel.peelFilterText = v)}

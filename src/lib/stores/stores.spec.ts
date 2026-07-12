@@ -82,7 +82,7 @@ describe('stores helpers', () => {
 	it('peelTitleFor and open patch', () => {
 		expect(peelTitleFor('linked', '', { type: null })).toBe('Linked');
 		expect(peelTitleFor('conflicts', '', { type: null })).toBe('Conflicts');
-		expect(peelTitleFor('notes', 'query', { type: null })).toBe('All notes');
+		expect(peelTitleFor('notes', 'query', { type: null })).toBe('Ingredients');
 		expect(peelTitleFor('notes', 'query', { type: 'pinned' })).toBe('Pinned');
 		expect(peelOpenPatch('folders').foldersFlyout).toBe(true);
 	});

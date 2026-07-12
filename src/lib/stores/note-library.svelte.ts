@@ -481,12 +481,17 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 		try {
 			await initSearchIndex();
 			const sessionId = opts.getActiveSessionId?.() ?? undefined;
+			const onKeptCollection = sessionId === KEPT_COLLECTION_SESSION_ID;
+			const sessionMode = opts.getActiveSessionMode?.();
 			let loaded = await getActiveNotes({
 				limit: 10000,
 				sessionId,
-				keptCollection: sessionId === KEPT_COLLECTION_SESSION_ID
+				keptCollection: onKeptCollection,
+				// Scratch desks see their ingredients plus the kept pantry.
+				includeKeptPantry: Boolean(sessionId && !onKeptCollection && sessionMode !== 'kept')
 			});
-			const wasEmpty = loaded.length === 0;
+			const wasEmpty =
+				loaded.filter((n) => n.scope !== 'kept' || n.sessionId === sessionId).length === 0;
 			const teamNote = await ensureMashTeamWelcomeNote();
 			updateNoteInSearch(teamNote, teamNote);
 			loaded = [teamNote, ...loaded.filter((note) => !isMashTeamWelcomeCandidate(note))];

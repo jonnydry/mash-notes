@@ -49,7 +49,8 @@ export function peelTitleFor(mode: PeelMode, _searchQuery: string, filter: NavFi
 	if (filter.type === 'pinned') return 'Pinned';
 	if (filter.type === 'folder' && filter.value) return filter.value;
 	if (filter.type === 'tag' && filter.value) return `#${filter.value}`;
-	return 'All notes';
+	// Desk root peel is the ingredients tray, not a permanent library.
+	return 'Ingredients';
 }
 
 /** Header search updates the query only — it must not open the peel. */
