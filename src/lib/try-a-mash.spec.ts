@@ -3,8 +3,11 @@ import {
 	TRY_A_MASH_DISMISSED_KEY,
 	TRY_A_MASH_TAG,
 	dismissTryAMash,
+	isTryAMashDemoNote,
 	isTryAMashDismissed,
 	shouldOfferTryAMash,
+	shouldStayOnDeskAfterMash,
+	tryAMashAfterMashToast,
 	tryAMashDrafts,
 	tryAMashSuccessToast
 } from './try-a-mash';
@@ -50,9 +53,14 @@ describe('try-a-mash', () => {
 		expect(isTryAMashDismissed(storage)).toBe(true);
 	});
 
-	it('only offers on empty non-pinned boards when not dismissed', () => {
+	it('only offers on empty root Desk when not dismissed', () => {
 		expect(
-			shouldOfferTryAMash({ dismissed: false, emptyStateVisible: true, isPinnedBoard: false })
+			shouldOfferTryAMash({
+				dismissed: false,
+				emptyStateVisible: true,
+				isPinnedBoard: false,
+				isRootDesk: true
+			})
 		).toBe(true);
 		expect(
 			shouldOfferTryAMash({ dismissed: true, emptyStateVisible: true, isPinnedBoard: false })
@@ -63,10 +71,33 @@ describe('try-a-mash', () => {
 		expect(
 			shouldOfferTryAMash({ dismissed: false, emptyStateVisible: true, isPinnedBoard: true })
 		).toBe(false);
+		expect(
+			shouldOfferTryAMash({
+				dismissed: false,
+				emptyStateVisible: true,
+				isPinnedBoard: false,
+				isRootDesk: false
+			})
+		).toBe(false);
+		// Legacy callers without isRootDesk still offer on empty non-pinned boards
+		expect(
+			shouldOfferTryAMash({ dismissed: false, emptyStateVisible: true, isPinnedBoard: false })
+		).toBe(true);
 	});
 
-	it('has a short success toast', () => {
+	it('detects demo scraps and keeps their mash on the desk', () => {
+		const drafts = tryAMashDrafts();
+		expect(isTryAMashDemoNote(drafts[0]!)).toBe(true);
+		expect(isTryAMashDemoNote({ tags: ['other'] })).toBe(false);
+		expect(shouldStayOnDeskAfterMash(drafts)).toBe(true);
+		expect(shouldStayOnDeskAfterMash([{ tags: [TRY_A_MASH_TAG] }, { tags: [] }])).toBe(false);
+		expect(shouldStayOnDeskAfterMash([{ tags: [TRY_A_MASH_TAG] }])).toBe(false);
+	});
+
+	it('has short success and after-mash toasts', () => {
 		expect(tryAMashSuccessToast()).toMatch(/Both selected/i);
 		expect(tryAMashSuccessToast()).toMatch(/Mash/i);
+		expect(tryAMashAfterMashToast()).toMatch(/Unmash/i);
+		expect(tryAMashAfterMashToast()).toMatch(/Undo/i);
 	});
 });

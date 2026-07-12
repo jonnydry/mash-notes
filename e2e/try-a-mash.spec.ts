@@ -35,6 +35,10 @@ test.describe('Try a mash teaching', () => {
 		await expect(
 			page.getByRole('group', { name: /Half-baked idea \+ Another scrap/ })
 		).toBeVisible({ timeout: 10_000 });
+		// Demo mash stays on the desk (no editor stage) and points at Unmash
+		await expect(page.locator('.mash-editor-stage.is-open')).toHaveCount(0);
+		await expect(page.getByTestId('action-status')).toContainText(/Unmash|Undo/i);
+		await expect(page.getByRole('button', { name: /Unmash/i })).toBeVisible();
 	});
 
 	test('Not now dismisses forever', async ({ page }) => {
