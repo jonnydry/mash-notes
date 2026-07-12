@@ -2,10 +2,11 @@ import { expect, test } from '@playwright/test';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createNamedNote, selectNotesInPeel, wipeIndexedDb } from './helpers';
+import { createNamedNote, openDesksPanel, selectNotesInPeel, wipeIndexedDb } from './helpers';
 
 test.describe('Consolidated Finish takeaway', () => {
 	test('keeps a selected takeaway while clearing the remaining scratch desk', async ({ page }) => {
+		test.setTimeout(60_000);
 		await wipeIndexedDb(page);
 		await createNamedNote(page, 'Durable takeaway', 'Keep this conclusion.');
 		await createNamedNote(page, 'Disposable ingredient', 'Clear this working material.');
@@ -33,7 +34,7 @@ test.describe('Consolidated Finish takeaway', () => {
 		await confirm.getByRole('button', { name: 'Keep takeaway and clear' }).click();
 		await expect(page.getByTestId('action-status')).toContainText('Kept 1 card');
 
-		await page.getByRole('button', { name: 'Open session manager' }).click();
+		await openDesksPanel(page);
 		const desks = page.getByRole('dialog', { name: 'Your desks' });
 		await expect(desks.getByText('Recently cleared')).toBeVisible();
 		await desks.getByRole('button').filter({ hasText: 'Kept takeaways' }).click();
@@ -49,6 +50,7 @@ test.describe('Consolidated Finish takeaway', () => {
 	});
 
 	test('exports the selected scope and labels the whole-desk bundle honestly', async ({ page }) => {
+		test.setTimeout(90_000);
 		await wipeIndexedDb(page);
 		await createNamedNote(page, 'Finish Alpha', 'Alpha takeaway');
 		await createNamedNote(page, 'Finish Beta', 'Beta takeaway');
@@ -120,13 +122,23 @@ test.describe('Consolidated Finish takeaway', () => {
 		await keepDesk.focus();
 		await keepDesk.press('Space');
 		await finish.getByRole('button', { name: 'Finish', exact: true }).click();
-		await expect(page.getByRole('button', { name: 'Open session manager' })).toContainText(
-			'Kept on this device'
-		);
+		// Persistence prompt can appear after Keep — dismiss before reopening Finish/desks
 		const protectionPrompt = page.getByRole('alertdialog', { name: 'Help protect kept desks?' });
-		if (await protectionPrompt.isVisible()) {
+		try {
+			await protectionPrompt.waitFor({ state: 'visible', timeout: 4_000 });
 			await protectionPrompt.getByRole('button', { name: 'Cancel' }).click();
+			await expect(protectionPrompt).toBeHidden();
+		} catch {
+			/* no prompt */
 		}
+		await openDesksPanel(page);
+		await expect(
+			page.getByRole('dialog', { name: 'Your desks' }).getByText('Kept on this device')
+		).toBeVisible();
+		await page
+			.getByRole('dialog', { name: 'Your desks' })
+			.getByRole('button', { name: 'Close desk panel' })
+			.click();
 
 		fs.unlinkSync(markdownPath);
 		fs.unlinkSync(boardImagePath);

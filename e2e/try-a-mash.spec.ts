@@ -39,6 +39,13 @@ test.describe('Try a mash teaching', () => {
 		await expect(page.locator('.mash-editor-stage.is-open')).toHaveCount(0);
 		await expect(page.getByTestId('action-status')).toContainText(/Unmash|Undo/i);
 		await expect(page.getByRole('button', { name: /Unmash/i })).toBeVisible();
+
+		await page.getByRole('button', { name: /Unmash/i }).click();
+		await expect(page.getByRole('group', { name: /Half-baked idea/ })).toBeVisible({
+			timeout: 10_000
+		});
+		await expect(page.getByRole('group', { name: /Another scrap/ })).toBeVisible();
+		await expect(page.getByTestId('action-status')).toContainText(/Unmash/i);
 	});
 
 	test('Not now dismisses forever', async ({ page }) => {

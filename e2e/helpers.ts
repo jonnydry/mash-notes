@@ -27,7 +27,8 @@ export async function wipeIndexedDb(page: Page) {
 		try {
 			localStorage.removeItem('mash.openSpaces');
 			localStorage.removeItem('mash.syncHygiene');
-			localStorage.removeItem('mash.storagePersistencePrompted');
+			// Suppress the post-Keep persistence confirm so Finish/desks e2e aren't blocked
+			localStorage.setItem('mash.storagePersistencePrompted', '1');
 		} catch {
 			/* ignore */
 		}
@@ -107,4 +108,57 @@ export async function confirmMashDialog(page: Page) {
 	await expect(dialog).toBeVisible();
 	await expect(dialog.getByRole('heading', { name: 'Mash these notes?' })).toBeVisible();
 	await dialog.getByRole('button', { name: 'Mash', exact: true }).click();
+}
+
+/** Dismiss confirm / storage-protection dialogs that block the header Finish button. */
+export async function dismissBlockingDialogs(page: Page) {
+	const alertdialog = page.getByRole('alertdialog');
+	if (await alertdialog.isVisible().catch(() => false)) {
+		const cancel = alertdialog.getByRole('button', { name: /Cancel|Close|Not now|Dismiss/i });
+		if (await cancel.first().isVisible().catch(() => false)) {
+			await cancel.first().click();
+		} else {
+			await page.keyboard.press('Escape');
+		}
+		await expect(alertdialog).toBeHidden({ timeout: 5_000 });
+	}
+	const backdrop = page.locator('.mash-confirm-backdrop');
+	if (await backdrop.isVisible().catch(() => false)) {
+		// Click outside panel (backdrop handler cancels) or Escape
+		await backdrop.click({ position: { x: 4, y: 4 }, force: true }).catch(() => {});
+		await page.keyboard.press('Escape');
+		await backdrop.waitFor({ state: 'hidden', timeout: 5_000 }).catch(() => {});
+	}
+}
+
+/**
+ * Open the desks panel. Header is Finish-only; desks live under dock More (mobile)
+ * or Finish → View all desks (desktop).
+ */
+export async function openDesksPanel(page: Page) {
+	await dismissBlockingDialogs(page);
+	const more = page.getByRole('button', { name: 'More navigation' });
+	if (await more.isVisible()) {
+		await more.click();
+		await page.locator('.mash-dock-more-menu').getByRole('button', { name: 'Desks' }).click();
+	} else {
+		await page.getByRole('button', { name: 'Finish', exact: true }).click();
+		const finish = page.getByRole('dialog', { name: 'Finish this desk' });
+		await expect(finish).toBeVisible({ timeout: 10_000 });
+		await finish.getByRole('button', { name: 'View all desks' }).click();
+	}
+	await expect(page.getByRole('dialog', { name: 'Your desks' })).toBeVisible({
+		timeout: 10_000
+	});
+}
+
+/** Redo lives under View after quiet board chrome (not a primary board chip). */
+export async function redoFromViewMenu(page: Page) {
+	// Stage can cover board chrome after mash — collapse first when open.
+	const collapse = page.getByRole('button', { name: 'Collapse to canvas' });
+	if (await collapse.isVisible().catch(() => false)) {
+		await collapse.click();
+	}
+	await page.getByTestId('board-view-toggle').click();
+	await page.getByTestId('board-view-menu').getByRole('menuitem', { name: 'Redo layout' }).click();
 }
