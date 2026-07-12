@@ -118,6 +118,11 @@
 		};
 		/** Override whether the board mascot/guidance is visible behind cards. */
 		showEmptyState?: boolean;
+		/** First-session empty-desk demo (Try a mash). */
+		showTryAMash?: boolean;
+		/** Avoid on* names — Svelte 5 can treat them as DOM event handlers. */
+		tryAMash?: () => void | Promise<void>;
+		dismissTryAMash?: () => void;
 		onSelect: (noteId: string, opts: { additive: boolean; range: boolean }) => void;
 		onSelectNotes: (noteIds: string[], opts: { additive: boolean }) => void;
 		onMove: (itemId: string, x: number, y: number) => void;
@@ -198,6 +203,9 @@
 			copy: 'Press ⌘/Ctrl+V for text, drop files, or use New note.'
 		},
 		showEmptyState,
+		showTryAMash = false,
+		tryAMash,
+		dismissTryAMash,
 		onSelect,
 		onSelectNotes,
 		onMove,
@@ -2322,7 +2330,13 @@
 	</div>
 
 	{#if emptyStateVisible}
-		<div class="pointer-events-none absolute inset-0 flex items-center justify-center p-6 sm:p-8">
+		<div
+			class="absolute inset-0 flex items-center justify-center p-6 sm:p-8 {showTryAMash &&
+			!isExternalDragOver &&
+			!isFileDragOver
+				? 'pointer-events-auto'
+				: 'pointer-events-none'}"
+		>
 			<div
 				class="mash-empty-state flex max-w-sm flex-col items-center text-center transition-transform duration-200
 					{isExternalDragOver ? 'mash-empty-state-active scale-[1.03]' : ''}"
@@ -2333,7 +2347,7 @@
 					alt=""
 					width={emptyMascot.width ?? 116}
 					height={emptyMascot.height ?? 200}
-					class="mash-empty-mascot h-40 w-auto select-none sm:h-44"
+					class="mash-empty-mascot pointer-events-none h-40 w-auto select-none sm:h-44"
 					draggable="false"
 				/>
 				<p class="mash-display mash-empty-title mt-5 text-xl font-medium tracking-tight sm:text-[1.35rem]">
@@ -2351,6 +2365,41 @@
 					<p class="mash-empty-copy mt-2 max-w-[17rem] text-sm leading-relaxed">
 						{emptyMascot.copy}
 					</p>
+					{#if showTryAMash && tryAMash}
+						<!-- data-canvas-chrome: board pointerdown must not marquee/capture over these buttons -->
+						<div
+							data-canvas-chrome
+							class="mt-5 flex flex-col items-center gap-2"
+						>
+							<button
+								type="button"
+								class="mash-btn rounded-xl px-4 py-2 text-sm font-semibold"
+								data-testid="try-a-mash"
+								onpointerdown={(e) => e.stopPropagation()}
+								onclick={(e) => {
+									e.stopPropagation();
+									void tryAMash();
+								}}
+							>
+								Try a mash
+							</button>
+							{#if dismissTryAMash}
+								<button
+									type="button"
+									class="text-[11px] font-medium underline-offset-2 hover:underline"
+									style="color: var(--mash-ink-muted);"
+									data-testid="try-a-mash-dismiss"
+									onpointerdown={(e) => e.stopPropagation()}
+									onclick={(e) => {
+										e.stopPropagation();
+										dismissTryAMash();
+									}}
+								>
+									Not now
+								</button>
+							{/if}
+						</div>
+					{/if}
 				{/if}
 			</div>
 		</div>
