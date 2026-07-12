@@ -810,6 +810,19 @@
 			if (showPalette) paletteQuery = '';
 		},
 		handleNewNote: () => handleNewNote(),
+		startTypingNote: (initialTitle) => handleNewNote(initialTitle),
+		canStartTypingNote: () =>
+			!Boolean(
+				showPalette ||
+					settingsOpen ||
+					shortcutsOpen ||
+					spacesOverviewOpen ||
+					sessionPanelOpen ||
+					pasteDialogOpen ||
+					gifExplodeDialogOpen ||
+					documentReaders.documentReaderOpen ||
+					editorStage.open
+			),
 		invokeCombineSelection: () => invokeOperatorAction('combine-selection'),
 		getSelectionCount: () => library.selectionIds.length,
 		getSelectedId: () => library.selectedId,
@@ -1308,11 +1321,11 @@
 		if (searchDropdownOpen) closeSearchDropdown(false);
 	}
 
-	async function handleNewNote() {
+	async function handleNewNote(initialTitle = 'Untitled') {
 		const onPinned = peel.currentFilter.type === 'pinned';
 		const note = await createNote({
 			...activeNoteOwnership(),
-			title: 'Untitled',
+			title: initialTitle,
 			body: '',
 			folder: peel.currentFilter.type === 'folder' ? peel.currentFilter.value || '' : '',
 			links: [],

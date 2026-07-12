@@ -8,6 +8,7 @@ function keyEvent(
 		metaKey?: boolean;
 		ctrlKey?: boolean;
 		shiftKey?: boolean;
+		altKey?: boolean;
 		target?: { tagName?: string; isContentEditable?: boolean } | null;
 	} = {}
 ): KeyboardEvent {
@@ -17,6 +18,7 @@ function keyEvent(
 		metaKey: init.metaKey ?? false,
 		ctrlKey: init.ctrlKey ?? false,
 		shiftKey: init.shiftKey ?? false,
+		altKey: init.altKey ?? false,
 		target: init.target ?? null,
 		preventDefault
 	} as unknown as KeyboardEvent;
@@ -28,6 +30,8 @@ function makeDeps(overrides: Partial<AppKeyboardDeps> = {}): AppKeyboardDeps {
 		canvasRedo: vi.fn(),
 		togglePalette: vi.fn(),
 		handleNewNote: vi.fn(),
+		startTypingNote: vi.fn(),
+		canStartTypingNote: vi.fn(() => true),
 		invokeCombineSelection: vi.fn(),
 		getSelectionCount: vi.fn(() => 0),
 		getSelectedId: vi.fn(() => null),
@@ -67,6 +71,31 @@ describe('createAppKeydown', () => {
 		const handle = createAppKeydown(deps);
 		handle(keyEvent('n', { ctrlKey: true }));
 		expect(deps.handleNewNote).toHaveBeenCalledOnce();
+	});
+
+	it('starts a note with the first printable character when the desk has focus', () => {
+		// @ts-expect-error minimal document stub for node
+		globalThis.document = { activeElement: { tagName: 'BODY' } };
+		const deps = makeDeps();
+		const e = keyEvent('H', { target: { tagName: 'BODY', isContentEditable: false } });
+		createAppKeydown(deps)(e);
+		expect(e.preventDefault).toHaveBeenCalled();
+		expect(deps.startTypingNote).toHaveBeenCalledWith('H');
+	});
+
+	it('does not start a note from typing targets, modified keys, or blocked surfaces', () => {
+		// @ts-expect-error minimal document stub for node
+		globalThis.document = { activeElement: { tagName: 'BODY' } };
+		const deps = makeDeps();
+		const handle = createAppKeydown(deps);
+		handle(keyEvent('a', { target: { tagName: 'INPUT', isContentEditable: false } }));
+		handle(keyEvent('a', { metaKey: true, target: { tagName: 'BODY' } }));
+		handle(keyEvent(' ', { target: { tagName: 'BODY' } }));
+		expect(deps.startTypingNote).not.toHaveBeenCalled();
+
+		const blocked = makeDeps({ canStartTypingNote: () => false });
+		createAppKeydown(blocked)(keyEvent('a', { target: { tagName: 'BODY' } }));
+		expect(blocked.startTypingNote).not.toHaveBeenCalled();
 	});
 
 	it('⌘Z undoes layout when not typing; Shift+⌘Z redoes', () => {

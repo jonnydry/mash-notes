@@ -982,12 +982,15 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 		var(--mash-shadow-card),
 		0 0 0 1px color-mix(in srgb, var(--mash-accent) 18%, transparent);
 	transition:
-		transform 120ms ease,
+		background-color 120ms ease,
 		box-shadow 120ms ease,
 		border-color 120ms ease;
 }
 .mash-flow-edge-hit:hover {
-	transform: translate(-50%, -50%) scale(1.08);
+	background: var(--mash-accent-wash);
+	box-shadow:
+		var(--mash-shadow-card),
+		0 0 0 3px color-mix(in srgb, var(--mash-accent) 22%, transparent);
 }
 .mash-flow-edge-hit.is-invalid {
 	box-shadow: 0 0 0 2px color-mix(in srgb, var(--mash-danger) 35%, transparent);
@@ -1134,9 +1137,6 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	}
 	.mash-note-card.is-dragging-card {
 		transform: none;
-	}
-	.mash-flow-edge-hit:hover {
-		transform: translate(-50%, -50%);
 	}
 }
 

@@ -6,6 +6,8 @@ export type AppKeyboardDeps = {
 	canvasRedo: () => void | Promise<void>;
 	togglePalette: () => void;
 	handleNewNote: () => void | Promise<void>;
+	startTypingNote: (initialTitle: string) => void | Promise<void>;
+	canStartTypingNote: () => boolean;
 	invokeCombineSelection: () => void | Promise<void>;
 	getSelectionCount: () => number;
 	getSelectedId: () => string | null;
@@ -75,6 +77,24 @@ export function createAppKeydown(deps: AppKeyboardDeps) {
 		if (e.key === '/' && document.activeElement?.tagName === 'BODY') {
 			e.preventDefault();
 			deps.focusGlobalSearch();
+		}
+		if (
+			e.key.length === 1 &&
+			/\S/u.test(e.key) &&
+			!e.repeat &&
+			!e.isComposing &&
+			e.key !== '?' &&
+			e.key !== '/' &&
+			!e.metaKey &&
+			!e.ctrlKey &&
+			!e.altKey &&
+			!isTypingTarget(e.target) &&
+			document.activeElement?.tagName === 'BODY' &&
+			deps.canStartTypingNote()
+		) {
+			e.preventDefault();
+			void deps.startTypingNote(e.key);
+			return;
 		}
 		if (e.key === 'Escape') {
 			if (deps.onEscape()) return;

@@ -1545,7 +1545,9 @@
 		focusedExpandId = expandedNoteId;
 		requestAnimationFrame(() => {
 			titleInputEl?.focus();
-			titleInputEl?.select();
+			const title = notesById.get(expandedNoteId)?.title ?? '';
+			if (title === 'Untitled') titleInputEl?.select();
+			else titleInputEl?.setSelectionRange(title.length, title.length);
 		});
 	});
 
