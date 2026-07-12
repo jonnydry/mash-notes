@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { createNamedNote, wipeIndexedDb } from './helpers';
+import { createNamedNote, openDesksPanel, wipeIndexedDb } from './helpers';
 
 test.describe('Modal focus and announcements', () => {
 	test('traps and restores focus while announcing selection and lifecycle changes', async ({
@@ -8,11 +8,13 @@ test.describe('Modal focus and announcements', () => {
 		test.setTimeout(60_000);
 		await wipeIndexedDb(page);
 		const announcer = page.getByTestId('sr-announcer');
-		const deskTrigger = page.getByRole('button', { name: 'Open session manager' });
 
-		await deskTrigger.click();
+		// Desktop: Finish → View all desks; mobile: More → Desks.
+		// Finish→desks reuses the dialog shell, so re-home focus for the trap check.
+		await openDesksPanel(page);
 		const desks = page.getByRole('dialog', { name: 'Your desks' });
 		const closeDeskPanel = desks.getByRole('button', { name: 'Close desk panel' });
+		await closeDeskPanel.focus();
 		await expect(closeDeskPanel).toBeFocused();
 
 		await page.keyboard.press('Shift+Tab');
@@ -25,9 +27,8 @@ test.describe('Modal focus and announcements', () => {
 		await expect(closeDeskPanel).toBeFocused();
 		await page.keyboard.press('Escape');
 		await expect(desks).toBeHidden();
-		await expect(deskTrigger).toBeFocused();
 
-		await deskTrigger.click();
+		await openDesksPanel(page);
 		await desks.locator('select').selectOption('30');
 		await expect(page.getByTestId('action-status')).toHaveText(
 			'Scratch desks now clear after 30 days of inactivity'

@@ -122,6 +122,8 @@
 		showTryAMash?: boolean;
 		/** Avoid on* names — Svelte 5 can treat them as DOM event handlers. */
 		tryAMash?: () => void | Promise<void>;
+		/** True while demo scraps are being placed. */
+		tryAMashBusy?: boolean;
 		dismissTryAMash?: () => void;
 		onSelect: (noteId: string, opts: { additive: boolean; range: boolean }) => void;
 		onSelectNotes: (noteIds: string[], opts: { additive: boolean }) => void;
@@ -205,6 +207,7 @@
 		showEmptyState,
 		showTryAMash = false,
 		tryAMash,
+		tryAMashBusy = false,
 		dismissTryAMash,
 		onSelect,
 		onSelectNotes,
@@ -2331,11 +2334,7 @@
 
 	{#if emptyStateVisible}
 		<div
-			class="absolute inset-0 flex items-center justify-center p-6 sm:p-8 {showTryAMash &&
-			!isExternalDragOver &&
-			!isFileDragOver
-				? 'pointer-events-auto'
-				: 'pointer-events-none'}"
+			class="pointer-events-none absolute inset-0 flex items-center justify-center p-6 sm:p-8"
 		>
 			<div
 				class="mash-empty-state flex max-w-sm flex-col items-center text-center transition-transform duration-200
@@ -2366,32 +2365,39 @@
 						{emptyMascot.copy}
 					</p>
 					{#if showTryAMash && tryAMash}
-						<!-- data-canvas-chrome: board pointerdown must not marquee/capture over these buttons -->
+						<!-- Only the CTA is interactive; empty overlay stays pass-through for pan/marquee.
+						     data-canvas-chrome: board pointerdown must not marquee/capture over these buttons -->
 						<div
 							data-canvas-chrome
-							class="mt-5 flex flex-col items-center gap-2"
+							class="pointer-events-auto mt-5 flex flex-col items-center gap-2"
 						>
 							<button
 								type="button"
 								class="mash-btn rounded-xl px-4 py-2 text-sm font-semibold"
 								data-testid="try-a-mash"
+								disabled={tryAMashBusy}
+								aria-busy={tryAMashBusy}
+								aria-label="Try a mash — place two demo scraps ready to combine"
 								onpointerdown={(e) => e.stopPropagation()}
 								onclick={(e) => {
 									e.stopPropagation();
+									if (tryAMashBusy) return;
 									void tryAMash();
 								}}
 							>
-								Try a mash
+								{tryAMashBusy ? 'Placing…' : 'Try a mash'}
 							</button>
 							{#if dismissTryAMash}
 								<button
 									type="button"
-									class="text-[11px] font-medium underline-offset-2 hover:underline"
+									class="text-[11px] font-medium underline-offset-2 hover:underline disabled:opacity-50"
 									style="color: var(--mash-ink-muted);"
 									data-testid="try-a-mash-dismiss"
+									disabled={tryAMashBusy}
 									onpointerdown={(e) => e.stopPropagation()}
 									onclick={(e) => {
 										e.stopPropagation();
+										if (tryAMashBusy) return;
 										dismissTryAMash();
 									}}
 								>

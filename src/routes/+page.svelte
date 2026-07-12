@@ -106,6 +106,8 @@
 		dismissTryAMash,
 		isTryAMashDismissed,
 		shouldOfferTryAMash,
+		shouldStayOnDeskAfterMash,
+		tryAMashAfterMashToast,
 		tryAMashDrafts,
 		tryAMashSuccessToast
 	} from '$lib/try-a-mash';
@@ -1753,7 +1755,9 @@
 		shouldOfferTryAMash({
 			dismissed: tryAMashDismissed,
 			emptyStateVisible: showCanvasEmptyState,
-			isPinnedBoard: peel.currentFilter.type === 'pinned'
+			isPinnedBoard: peel.currentFilter.type === 'pinned',
+			// Root Desk only — folder/tag/linked boards stay quiet
+			isRootDesk: peel.currentFilter.type === null
 		})
 	);
 
@@ -1762,11 +1766,19 @@
 		tryAMashDismissed = true;
 	}
 
+	let tryAMashBusy = $state(false);
+
 	async function runTryAMash() {
-		const notes = await placeNoteDraftsOnDesk(tryAMashDrafts());
-		if (notes.length === 0) return;
-		dismissTryAMashForever();
-		flashToast(tryAMashSuccessToast(), 4200);
+		if (tryAMashBusy || tryAMashDismissed) return;
+		tryAMashBusy = true;
+		try {
+			const notes = await placeNoteDraftsOnDesk(tryAMashDrafts());
+			if (notes.length === 0) return;
+			dismissTryAMashForever();
+			flashToast(tryAMashSuccessToast(), 4200);
+		} finally {
+			tryAMashBusy = false;
+		}
 	}
 	let peelScopeStats = $derived(peelScopeCounts(filteredNotes));
 	let peelNotes = $derived(
@@ -1941,9 +1953,22 @@
 			setTimeout(() => {
 				canvas.settlingIds = new Set();
 			}, 320);
-			openInStage(mashed.id, 'maximize');
+			const demoCook = shouldStayOnDeskAfterMash(sourceNotes);
+			// First-session demo stays on the desk so Mash → Unmash is visible.
+			if (!demoCook) {
+				openInStage(mashed.id, 'maximize');
+			} else {
+				library.selectionIds = [mashed.id];
+				library.selectedId = mashed.id;
+				canvas.canvasBoard?.ensureNoteVisible(mashed.id);
+			}
 			await refreshOperationHistory();
-			flashToast(formatContentOperatorToast('Mash', sourceIds.length, 1));
+			flashToast(
+				demoCook
+					? tryAMashAfterMashToast()
+					: formatContentOperatorToast('Mash', sourceIds.length, 1),
+				demoCook ? 4800 : undefined
+			);
 			return true;
 		} catch (error) {
 			console.error('Failed to Mash notes', error);
@@ -3023,6 +3048,7 @@
 					showEmptyState={showCanvasEmptyState}
 					showTryAMash={showTryAMash}
 					tryAMash={runTryAMash}
+					tryAMashBusy={tryAMashBusy}
 					dismissTryAMash={dismissTryAMashForever}
 					onSelect={canvas.handleCanvasSelect}
 					onSelectNotes={canvas.handleCanvasSelectNotes}

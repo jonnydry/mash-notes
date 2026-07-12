@@ -6,6 +6,7 @@ import {
 	confirmMashDialog,
 	createNamedNote,
 	openPalette,
+	redoFromViewMenu,
 	selectNotesInPeel,
 	wipeIndexedDb
 } from './helpers';
@@ -36,7 +37,8 @@ test.describe('Mash smoke', () => {
 		await expect(page.getByRole('group', { name: /Smoke Alpha/ })).toBeVisible();
 		await expect(page.getByRole('group', { name: /Smoke Beta/ })).toBeVisible();
 		await expect(page.getByTestId('action-status')).toHaveText('Undo Mash');
-		await page.getByRole('button', { name: 'Redo', exact: true }).click();
+		// Redo is under View (quiet board chrome) — not a primary chip
+		await redoFromViewMenu(page);
 		await expect(mashCard).toBeVisible();
 		await expect(page.getByTestId('action-status')).toHaveText('Redo Mash');
 

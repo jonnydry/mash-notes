@@ -34,7 +34,8 @@ export async function convertDocxToHtml(
 	try {
 		const mammothModule = await import('mammoth');
 		// CJS interop: vitest/node may expose the API on `.default`.
-		const mammoth = (mammothModule as { default?: typeof mammothModule }).default ?? mammothModule;
+		const mammoth =
+			(mammothModule as unknown as { default?: typeof mammothModule }).default ?? mammothModule;
 		// Node mammoth accepts `buffer`; the browser build accepts `arrayBuffer`.
 		const input =
 			typeof Buffer !== 'undefined'

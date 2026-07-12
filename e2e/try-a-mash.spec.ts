@@ -26,7 +26,7 @@ test.describe('Try a mash teaching', () => {
 			timeout: 10_000
 		});
 		await expect(page.getByRole('group', { name: /Another scrap/ })).toBeVisible();
-		await expect(page.getByTestId('action-status')).toContainText(/Select both|Mash/i);
+		await expect(page.getByTestId('action-status')).toContainText(/Both selected|Mash/i);
 		await expect(page.getByTestId('try-a-mash')).toBeHidden();
 
 		await expect(page.getByTestId('selection-mash')).toBeVisible();
@@ -35,6 +35,17 @@ test.describe('Try a mash teaching', () => {
 		await expect(
 			page.getByRole('group', { name: /Half-baked idea \+ Another scrap/ })
 		).toBeVisible({ timeout: 10_000 });
+		// Demo mash stays on the desk (no editor stage) and points at Unmash
+		await expect(page.locator('.mash-editor-stage.is-open')).toHaveCount(0);
+		await expect(page.getByTestId('action-status')).toContainText(/Unmash|Undo/i);
+		await expect(page.getByRole('button', { name: /Unmash/i })).toBeVisible();
+
+		await page.getByRole('button', { name: /Unmash/i }).click();
+		await expect(page.getByRole('group', { name: /Half-baked idea/ })).toBeVisible({
+			timeout: 10_000
+		});
+		await expect(page.getByRole('group', { name: /Another scrap/ })).toBeVisible();
+		await expect(page.getByTestId('action-status')).toContainText(/Unmash/i);
 	});
 
 	test('Not now dismisses forever', async ({ page }) => {
