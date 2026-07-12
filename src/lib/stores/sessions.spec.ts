@@ -75,6 +75,30 @@ describe('session manager', () => {
 		expect((await db.notes.get(note.id))?.scope).toBe('kept');
 	});
 
+	it('does not promote soft-deleted notes when keeping a desk', async () => {
+		const manager = createSessionManager();
+		await manager.bootstrap(DAY_MS);
+		const sessionId = manager.activeSession!.id;
+		const live = await createNote({
+			title: 'Live',
+			sessionId,
+			scope: 'session'
+		});
+		const tombstone = await createNote({
+			title: 'Trash',
+			sessionId,
+			scope: 'session'
+		});
+		await db.notes.update(tombstone.id, { deletedAt: DAY_MS + 1 });
+
+		await manager.keepActive(2 * DAY_MS);
+
+		expect((await db.notes.get(live.id))?.scope).toBe('kept');
+		const deleted = await db.notes.get(tombstone.id);
+		expect(deleted?.scope).not.toBe('kept');
+		expect(deleted?.deletedAt).toBe(DAY_MS + 1);
+	});
+
 	it('keeps a takeaway globally and preserves its operation when scratch recovery expires', async () => {
 		const manager = createSessionManager();
 		await manager.bootstrap(DAY_MS);

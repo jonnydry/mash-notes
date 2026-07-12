@@ -97,6 +97,33 @@ export function readStoredTypography(): TypographySuiteId {
 	return 'kitchen';
 }
 
+const loadedFontSuites = new Set<TypographySuiteId>(['kitchen']);
+
+/** Lazy-load non-default suite font faces so initial CSS stays small. */
+export async function ensureTypographyFonts(id: TypographySuiteId): Promise<void> {
+	if (loadedFontSuites.has(id)) return;
+	switch (id) {
+		case 'editor':
+			await import('../../routes/fonts-editor.css');
+			break;
+		case 'workshop':
+			await import('../../routes/fonts-workshop.css');
+			break;
+		case 'atelier':
+			await import('../../routes/fonts-atelier.css');
+			break;
+		case 'napkin':
+			await import('../../routes/fonts-napkin.css');
+			break;
+		case 'terminal':
+			await import('../../routes/fonts-terminal.css');
+			break;
+		default:
+			break;
+	}
+	loadedFontSuites.add(id);
+}
+
 export function applyTypography(id: TypographySuiteId): void {
 	if (typeof document === 'undefined') return;
 	const suite = suiteById(id);
@@ -116,11 +143,15 @@ function createTypographySession(initial: TypographySuiteId = readStoredTypograp
 		} catch {
 			/* ignore */
 		}
-		applyTypography(next);
+		void ensureTypographyFonts(next).then(() => applyTypography(next));
 	}
 
 	if (typeof document !== 'undefined') {
-		applyTypography(initial);
+		if (initial !== 'kitchen') {
+			void ensureTypographyFonts(initial).then(() => applyTypography(initial));
+		} else {
+			applyTypography(initial);
+		}
 	}
 
 	return {

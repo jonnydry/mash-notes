@@ -20,6 +20,14 @@ export function findNoteByTitle(notes: Note[], title: string): Note | undefined 
  * Prefer body extraction so stale `links[]` caches cannot diverge from content.
  */
 export function outgoingLinkTargets(note: Note): string[] {
+	// Prefer cached links for image bodies (data URL or mash-blob).
+	if (
+		note.body.startsWith('![') &&
+		(note.body.includes('data:image') || note.body.includes('mash-blob:'))
+	) {
+		if (note.links?.length) return [...note.links];
+		return [];
+	}
 	const fromBody = extractWikilinks(note.body);
 	if (fromBody.length > 0) return fromBody;
 	if (note.links?.length) return [...note.links];

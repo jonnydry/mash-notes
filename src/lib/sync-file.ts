@@ -3,13 +3,22 @@
  * Bundle v4 includes notes + desk + tombstones + operation provenance.
  * v3, v2, and v1 still import.
  */
-import type { Canvas, CanvasEdge, CanvasItem, Note, Operation } from './types';
+import type { Canvas, CanvasEdge, CanvasItem, Note, NoteBlobMime, Operation } from './types';
 import { mergeNotesLww, hasConflicts, type MergeResult, type SyncConflict } from './sync-model';
 import { normalizeImportedNote } from './import-notes';
 import { db, getSyncTombstoneNotes, newId } from './db';
 import { exportAllDismissed, importDismissedMap, type DismissedByCanvas } from './canvas-dismiss';
+import {
+	bytesToDataUrl,
+	dataUrlToBytes,
+	extractBlobIdsFromNotes,
+	getNoteBlobsByIds,
+	normalizeBlobMime,
+	putNoteBlob
+} from './note-blobs';
 
-export const SYNC_BUNDLE_VERSION = 4 as const;
+export const SYNC_BUNDLE_VERSION = 5 as const;
+export const SYNC_BUNDLE_VERSION_V4 = 4 as const;
 export const SYNC_BUNDLE_VERSION_V3 = 3 as const;
 export const SYNC_BUNDLE_VERSION_V2 = 2 as const;
 export const SYNC_BUNDLE_VERSION_V1 = 1 as const;
@@ -31,9 +40,19 @@ export type DeskSnapshot = {
 	dismissed: DismissedByCanvas;
 };
 
+/** Transport-only image payload (v5). Rehydrated into noteBlobs on import. */
+export type SyncBlob = {
+	id: string;
+	mime: NoteBlobMime;
+	width: number;
+	height: number;
+	dataBase64: string;
+};
+
 export type SyncBundle = {
 	version:
 		| typeof SYNC_BUNDLE_VERSION
+		| typeof SYNC_BUNDLE_VERSION_V4
 		| typeof SYNC_BUNDLE_VERSION_V3
 		| typeof SYNC_BUNDLE_VERSION_V2
 		| typeof SYNC_BUNDLE_VERSION_V1;
@@ -43,6 +62,8 @@ export type SyncBundle = {
 	tombstones?: SyncTombstone[];
 	/** Durable provenance receipts. Introduced in v4. */
 	operations?: Operation[];
+	/** Out-of-line note images. Introduced in v5. */
+	blobs?: SyncBlob[];
 };
 
 export type DeskApplySummary = {
@@ -221,14 +242,71 @@ export async function buildSyncBundle(notes: Note[], sessionId?: string): Promis
 				typeof n.deletedAt === 'number' && (!sessionId || !n.sessionId || n.sessionId === sessionId)
 		)
 		.map((n) => ({ id: n.id, deletedAt: n.deletedAt as number }));
+
+	const blobIds = extractBlobIdsFromNotes(active);
+	const blobRows = await getNoteBlobsByIds(blobIds);
+	const blobs: SyncBlob[] = blobRows.map((row) => {
+		const dataUrl = bytesToDataUrl(row.mime, row.bytes);
+		const b64 = dataUrl.split(',')[1] ?? '';
+		return {
+			id: row.id,
+			mime: row.mime,
+			width: row.width,
+			height: row.height,
+			dataBase64: b64
+		};
+	});
+
 	return {
 		version: SYNC_BUNDLE_VERSION,
 		exportedAt: Date.now(),
 		notes: active,
 		desk,
 		tombstones,
-		operations
+		operations,
+		blobs
 	};
+}
+
+function normalizeSyncBlobs(raw: unknown): SyncBlob[] | string {
+	if (raw == null) return [];
+	if (!Array.isArray(raw)) return 'Blobs must be an array';
+	if (raw.length > 5000) return 'Too many blobs in sync bundle';
+	const out: SyncBlob[] = [];
+	for (let i = 0; i < raw.length; i++) {
+		const row = raw[i];
+		if (!isRecord(row)) return `Blob ${i + 1} is not an object`;
+		const id = asString(row.id).trim();
+		const mime = normalizeBlobMime(asString(row.mime));
+		const dataBase64 = asString(row.dataBase64).replace(/\s+/g, '');
+		if (!id || !mime || !dataBase64) return `Blob ${i + 1} missing id/mime/dataBase64`;
+		out.push({
+			id,
+			mime,
+			width: asNumber(row.width, 0),
+			height: asNumber(row.height, 0),
+			dataBase64
+		});
+	}
+	return out;
+}
+
+export async function persistSyncBlobs(blobs: SyncBlob[] | undefined): Promise<number> {
+	if (!blobs?.length) return 0;
+	let n = 0;
+	for (const row of blobs) {
+		const parsed = dataUrlToBytes(`data:${row.mime};base64,${row.dataBase64}`);
+		if (!parsed) continue;
+		await putNoteBlob({
+			id: row.id,
+			mime: parsed.mime,
+			bytes: parsed.bytes,
+			width: row.width,
+			height: row.height
+		});
+		n++;
+	}
+	return n;
 }
 
 function normalizeTombstones(raw: unknown): SyncTombstone[] | string {
@@ -298,6 +376,7 @@ export function parseSyncBundle(
 	const version = obj.version;
 	if (
 		version !== SYNC_BUNDLE_VERSION &&
+		version !== SYNC_BUNDLE_VERSION_V4 &&
 		version !== SYNC_BUNDLE_VERSION_V3 &&
 		version !== SYNC_BUNDLE_VERSION_V2 &&
 		version !== SYNC_BUNDLE_VERSION_V1
@@ -324,6 +403,7 @@ export function parseSyncBundle(
 	let desk: DeskSnapshot | undefined;
 	if (
 		version === SYNC_BUNDLE_VERSION ||
+		version === SYNC_BUNDLE_VERSION_V4 ||
 		version === SYNC_BUNDLE_VERSION_V3 ||
 		version === SYNC_BUNDLE_VERSION_V2
 	) {
@@ -333,17 +413,28 @@ export function parseSyncBundle(
 	}
 
 	let tombstones: SyncTombstone[] | undefined;
-	if (version === SYNC_BUNDLE_VERSION || version === SYNC_BUNDLE_VERSION_V3) {
+	if (
+		version === SYNC_BUNDLE_VERSION ||
+		version === SYNC_BUNDLE_VERSION_V4 ||
+		version === SYNC_BUNDLE_VERSION_V3
+	) {
 		const tombResult = normalizeTombstones(obj.tombstones);
 		if (typeof tombResult === 'string') return { ok: false, error: tombResult };
 		tombstones = tombResult;
 	}
 
 	let operations: Operation[] | undefined;
-	if (version === SYNC_BUNDLE_VERSION) {
+	if (version === SYNC_BUNDLE_VERSION || version === SYNC_BUNDLE_VERSION_V4) {
 		const operationResult = normalizeOperations(obj.operations);
 		if (typeof operationResult === 'string') return { ok: false, error: operationResult };
 		operations = operationResult;
+	}
+
+	let blobs: SyncBlob[] | undefined;
+	if (version === SYNC_BUNDLE_VERSION) {
+		const blobResult = normalizeSyncBlobs(obj.blobs);
+		if (typeof blobResult === 'string') return { ok: false, error: blobResult };
+		blobs = blobResult;
 	}
 
 	return {
@@ -354,7 +445,8 @@ export function parseSyncBundle(
 			notes,
 			desk,
 			tombstones,
-			operations
+			operations,
+			blobs
 		}
 	};
 }
@@ -548,6 +640,12 @@ async function applyDeskIdbSnapshot(
 			.first();
 
 		if (!existing) {
+			// Only insert remote-only placements when remote canvas wins LWW.
+			// Otherwise an older bundle can resurrect cards the user already removed.
+			if (!remoteNewer) {
+				itemsSkipped += 1;
+				continue;
+			}
 			const localItemId = newId();
 			await db.canvasItems.put({
 				id: localItemId,
@@ -647,16 +745,21 @@ export async function persistMergedSync(
 	desk: DeskSnapshot | undefined,
 	knownNoteIds: Set<string>,
 	sessionId?: string,
-	operations: Operation[] = []
-): Promise<{ desk?: DeskApplySummary; operationsUpserted: number }> {
+	operations: Operation[] = [],
+	blobs: SyncBlob[] = []
+): Promise<{ desk?: DeskApplySummary; operationsUpserted: number; blobsUpserted?: number }> {
 	let deskSummary: DeskApplySummary | undefined;
 	let remappedDismissed: DismissedByCanvas = {};
 	let operationsUpserted = 0;
+	let blobsUpserted = 0;
 	const deletedIds = plainNotes.filter((n) => n.deletedAt != null).map((n) => n.id);
+
+	// Blobs first so note refs resolve after import (outside nested note tx is fine).
+	blobsUpserted = await persistSyncBlobs(blobs);
 
 	await db.transaction(
 		'rw',
-		[db.notes, db.canvases, db.canvasItems, db.canvasEdges, db.operations],
+		[db.notes, db.canvases, db.canvasItems, db.canvasEdges, db.operations, db.noteBlobs],
 		async () => {
 			const operationIdMap = new Map<string, string>();
 			for (const operation of operations) {
@@ -700,7 +803,7 @@ export async function persistMergedSync(
 		importDismissedMap(remappedDismissed);
 	}
 
-	return { desk: deskSummary, operationsUpserted };
+	return { desk: deskSummary, operationsUpserted, blobsUpserted };
 }
 
 export async function downloadSyncBundle(

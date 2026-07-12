@@ -46,10 +46,15 @@ const DANGEROUS_TAGS = new Set([
 /** Strip active content; keep readable structure for local user files. */
 export function sanitizeHtmlFragment(raw: string): string {
 	if (typeof DOMParser === 'undefined') {
-		// Node/unit fallback: strip script blocks and event handlers roughly.
+		// Node/unit fallback: strip script blocks, event handlers, and unsafe URLs.
 		return raw
 			.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
 			.replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+			.replace(
+				/\s(href|src|xlink:href)\s*=\s*("|\')\s*(javascript:|data:|vbscript:|\/\/)[^"']*\2/gi,
+				''
+			)
+			.replace(/\s(href|src|xlink:href)\s*=\s*(javascript:|data:|vbscript:|\/\/)[^\s>]*/gi, '')
 			.replace(/javascript:/gi, '');
 	}
 	const parser = new DOMParser();
@@ -69,11 +74,16 @@ export function sanitizeHtmlFragment(raw: string): string {
 					el.removeAttribute(attr.name);
 					continue;
 				}
-				if (
-					(name === 'href' || name === 'src' || name === 'xlink:href') &&
-					/^\s*javascript:/i.test(value)
-				) {
-					el.removeAttribute(attr.name);
+				if (name === 'href' || name === 'src' || name === 'xlink:href') {
+					const v = value.trim().toLowerCase();
+					if (
+						v.startsWith('javascript:') ||
+						v.startsWith('data:') ||
+						v.startsWith('vbscript:') ||
+						v.startsWith('//')
+					) {
+						el.removeAttribute(attr.name);
+					}
 				}
 			}
 		}

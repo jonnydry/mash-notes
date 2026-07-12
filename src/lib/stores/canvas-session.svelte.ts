@@ -16,6 +16,7 @@ import {
 	replaceCanvasEdges,
 	replaceCanvasItemSubset,
 	setOperationReverted,
+	bulkUpdateCanvasItemPositions,
 	updateCanvasItemPosition
 } from '$lib/db';
 import type { Canvas, CanvasEdge, CanvasItem, Note } from '$lib/types';
@@ -190,6 +191,8 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 	// Non-reactive: must not invalidate folder-membership $effect via seq bumps.
 	let canvasLoadSeq = 0;
 	let undoContextKey = '';
+	/** Item ids with optimistic layout not yet confirmed from IDB (drag/resize). */
+	const dirtyLayoutIds = new Set<string>();
 	const canvasUndo = new CanvasUndoStack();
 
 	const canvasUndoState = $derived.by(() => ({
@@ -301,11 +304,11 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 			}
 
 			if (seq !== canvasLoadSeq) return;
-			// Preserve optimistic drag/resize positions if a reload races mid-gesture.
+			// Preserve optimistic positions only for dirty drag/resize items, not arbitrary drift.
 			const localById = new Map(canvasItems.map((i) => [i.id, i]));
 			canvasItems = items.map((item) => {
 				const local = localById.get(item.id);
-				if (!local) return item;
+				if (!local || !dirtyLayoutIds.has(item.id)) return item;
 				if (local.x !== item.x || local.y !== item.y || local.w !== item.w || local.h !== item.h) {
 					return { ...item, x: local.x, y: local.y, w: local.w, h: local.h };
 				}
@@ -330,8 +333,14 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 
 	async function refreshCanvasItems() {
 		if (!activeCanvas) return;
-		canvasItems = await getCanvasItems(activeCanvas.id);
-		canvasEdges = await listCanvasEdges(activeCanvas.id);
+		const seq = canvasLoadSeq;
+		const canvasId = activeCanvas.id;
+		const items = await getCanvasItems(canvasId);
+		if (seq !== canvasLoadSeq || activeCanvas?.id !== canvasId) return;
+		const edges = await listCanvasEdges(canvasId);
+		if (seq !== canvasLoadSeq || activeCanvas?.id !== canvasId) return;
+		canvasItems = items;
+		canvasEdges = edges;
 	}
 
 	async function snapSequenceForLink(fromItemId: string, toItemId: string) {
@@ -539,6 +548,8 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 
 	async function handleDropNotes(noteIds: string[], x: number, y: number) {
 		if (!activeCanvas || noteIds.length === 0) return;
+		// Supersede in-flight membership reloads so they cannot wipe this drop.
+		canvasLoadSeq++;
 		undismissNotesFromCanvas(activeCanvas.id, noteIds);
 		if (isPinnedCanvasKey(opts.getCanvasKey()) && opts.ensureNotePinned) {
 			for (const id of noteIds) {
@@ -590,13 +601,13 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 	}
 
 	async function applyLayoutSnapshots(snaps: CanvasLayoutSnapshot[]) {
-		const byId = new Map(snaps.map((s) => [s.itemId, s]));
-		canvasItems = canvasItems.map((item) => {
-			const s = byId.get(item.id);
-			return s ? { ...item, x: s.x, y: s.y, w: s.w, h: s.h } : item;
-		});
-		await Promise.all(
-			snaps.map((s) => updateCanvasItemPosition(s.itemId, { x: s.x, y: s.y, w: s.w, h: s.h }))
+		const patches = new Map<string, { x: number; y: number; w?: number; h?: number }>();
+		for (const s of snaps) {
+			patches.set(s.itemId, { x: s.x, y: s.y, w: s.w, h: s.h });
+		}
+		patchCanvasItems(patches);
+		await bulkUpdateCanvasItemPositions(
+			snaps.map((s) => ({ itemId: s.itemId, x: s.x, y: s.y, w: s.w, h: s.h }))
 		);
 	}
 
@@ -711,17 +722,40 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		opts.flashToast(`Redo ${entry.label}`);
 	}
 
+	/** Patch only touched cards — avoid remapping the full board on every drag frame. */
+	function patchCanvasItems(
+		patches: Map<string, { x?: number; y?: number; w?: number; h?: number }>
+	) {
+		if (patches.size === 0) return;
+		let changed = false;
+		const next = canvasItems.map((item) => {
+			const p = patches.get(item.id);
+			if (!p) return item;
+			changed = true;
+			return {
+				...item,
+				...(p.x !== undefined ? { x: p.x } : {}),
+				...(p.y !== undefined ? { y: p.y } : {}),
+				...(p.w !== undefined ? { w: p.w } : {}),
+				...(p.h !== undefined ? { h: p.h } : {})
+			};
+		});
+		if (changed) canvasItems = next;
+	}
+
 	function handleCanvasMove(itemId: string, x: number, y: number) {
 		// Optimistic only — persist on drag end to avoid IndexedDB thrash.
-		canvasItems = canvasItems.map((item) => (item.id === itemId ? { ...item, x, y } : item));
+		dirtyLayoutIds.add(itemId);
+		patchCanvasItems(new Map([[itemId, { x, y }]]));
 	}
 
 	function handleCanvasMoveMany(moves: Array<{ itemId: string; x: number; y: number }>) {
-		const byId = new Map(moves.map((m) => [m.itemId, m]));
-		canvasItems = canvasItems.map((item) => {
-			const m = byId.get(item.id);
-			return m ? { ...item, x: m.x, y: m.y } : item;
-		});
+		const patches = new Map<string, { x: number; y: number }>();
+		for (const m of moves) {
+			dirtyLayoutIds.add(m.itemId);
+			patches.set(m.itemId, { x: m.x, y: m.y });
+		}
+		patchCanvasItems(patches);
 	}
 
 	async function handleCanvasMoveEnd(
@@ -757,7 +791,8 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 			});
 			canvasUndoTick++;
 		}
-		await Promise.all(moves.map((m) => updateCanvasItemPosition(m.itemId, { x: m.x, y: m.y })));
+		await bulkUpdateCanvasItemPositions(moves.map((m) => ({ itemId: m.itemId, x: m.x, y: m.y })));
+		for (const m of moves) dirtyLayoutIds.delete(m.itemId);
 		opts.onMeaningfulActivity?.();
 	}
 
@@ -1114,7 +1149,8 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 	}
 
 	function handleCanvasResize(itemId: string, w: number, h: number) {
-		canvasItems = canvasItems.map((item) => (item.id === itemId ? { ...item, w, h } : item));
+		dirtyLayoutIds.add(itemId);
+		patchCanvasItems(new Map([[itemId, { w, h }]]));
 	}
 
 	async function handleCanvasResizeEnd(
@@ -1125,6 +1161,8 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 	) {
 		const item = canvasItems.find((i) => i.id === itemId);
 		if (!item) return;
+		// Supersede in-flight membership reloads mid-resize.
+		canvasLoadSeq++;
 		const beforeSnap: CanvasLayoutSnapshot = {
 			itemId,
 			x: item.x,
@@ -1132,9 +1170,11 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 			w: before?.w ?? item.w,
 			h: before?.h ?? item.h
 		};
-		canvasItems = canvasItems.map((i) => (i.id === itemId ? { ...i, w, h } : i));
+		dirtyLayoutIds.add(itemId);
+		patchCanvasItems(new Map([[itemId, { w, h }]]));
 		pushCanvasUndo('Resize', [beforeSnap], [{ itemId, x: item.x, y: item.y, w, h }]);
 		await updateCanvasItemPosition(itemId, { x: item.x, y: item.y, w, h });
+		dirtyLayoutIds.delete(itemId);
 		opts.onMeaningfulActivity?.();
 		if (expandedNoteId === item.noteId) {
 			void bumpNeighborsAround(itemId, { w, h });
@@ -1224,16 +1264,15 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		}
 		bumpRestore = restore;
 
-		canvasItems = canvasItems.map((cItem) => {
-			const next = moved.get(cItem.id);
-			return next ? { ...cItem, x: next.x, y: next.y } : cItem;
-		});
+		const patches = new Map<string, { x: number; y: number }>();
+		for (const [id, pos] of moved) patches.set(id, { x: pos.x, y: pos.y });
+		patchCanvasItems(patches);
 		settlingIds = new Set(moved.keys());
 		setTimeout(() => {
 			settlingIds = new Set();
 		}, 320);
-		await Promise.all(
-			[...moved.entries()].map(([id, pos]) => updateCanvasItemPosition(id, { x: pos.x, y: pos.y }))
+		await bulkUpdateCanvasItemPositions(
+			[...moved.entries()].map(([id, pos]) => ({ itemId: id, x: pos.x, y: pos.y }))
 		);
 	}
 
@@ -1243,18 +1282,15 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		bumpRestore = null;
 		if (!restore || restore.size === 0) return;
 
-		canvasItems = canvasItems.map((item) => {
-			const prev = restore.get(item.id);
-			return prev ? { ...item, x: prev.x, y: prev.y } : item;
-		});
+		const patches = new Map<string, { x: number; y: number }>();
+		for (const [id, pos] of restore) patches.set(id, { x: pos.x, y: pos.y });
+		patchCanvasItems(patches);
 		settlingIds = new Set(restore.keys());
 		setTimeout(() => {
 			settlingIds = new Set();
 		}, 320);
-		await Promise.all(
-			[...restore.entries()].map(([itemId, pos]) =>
-				updateCanvasItemPosition(itemId, { x: pos.x, y: pos.y })
-			)
+		await bulkUpdateCanvasItemPositions(
+			[...restore.entries()].map(([itemId, pos]) => ({ itemId, x: pos.x, y: pos.y }))
 		);
 	}
 
@@ -1271,7 +1307,7 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		const w = Math.max(item.w ?? 0, EXPANDED_CARD.w);
 		const h = Math.max(item.h ?? 0, EXPANDED_CARD.h);
 		if (w !== item.w || h !== item.h) {
-			canvasItems = canvasItems.map((i) => (i.id === item.id ? { ...i, w, h } : i));
+			patchCanvasItems(new Map([[item.id, { w, h }]]));
 			void updateCanvasItemPosition(item.id, { x: item.x, y: item.y, w, h });
 		}
 		void bumpNeighborsAround(item.id, { w, h });
@@ -1290,13 +1326,15 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		if (!tooBig) return;
 		const w = COLLAPSED_CARD.w;
 		const h = COLLAPSED_CARD.h;
-		canvasItems = canvasItems.map((i) => (i.id === item.id ? { ...i, w, h } : i));
+		patchCanvasItems(new Map([[item.id, { w, h }]]));
 		void updateCanvasItemPosition(item.id, { x: item.x, y: item.y, w, h });
 	}
 
 	/** Tray / search / peel: ensure note is on canvas, then open in the stage editor. */
 	async function openStickyFromTray(noteId: string) {
 		if (!activeCanvas) return;
+		// Supersede in-flight membership reloads so they cannot wipe this placement.
+		canvasLoadSeq++;
 		const existing = canvasItems.find((i) => i.noteId === noteId);
 		if (!existing) {
 			const spawn = canvasBoard?.getSpawnPoint(COLLAPSED_CARD, canvasItems.length) ?? {

@@ -1,14 +1,6 @@
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
-	import {
-		addNoteToCanvas,
-		createNote,
-		createOperationRecord,
-		db,
-		deleteNote,
-		listOperationRecords,
-		replaceNoteSubset
-	} from '$lib/db';
+	import { createNote, db, deleteNote, listOperationRecords } from '$lib/db';
 	import { addNoteToSearch, removeNoteFromSearch, searchNotes } from '$lib/search';
 	import type { Note, Operation } from '$lib/types';
 	import {
@@ -17,6 +9,8 @@
 		Copy,
 		Download,
 		Layers,
+		Combine,
+		Sparkles,
 		X,
 		Trash2,
 		Folder,
@@ -40,26 +34,15 @@
 	import MashDock from '$lib/components/MashDock.svelte';
 	import PeelScanner from '$lib/components/PeelScanner.svelte';
 	import SearchResultsDropdown from '$lib/components/SearchResultsDropdown.svelte';
-	import SettingsPanel from '$lib/components/SettingsPanel.svelte';
 	import CanvasBoard from '$lib/components/CanvasBoard.svelte';
 	import EditorStage from '$lib/components/EditorStage.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
-	import ShortcutsModal from '$lib/components/ShortcutsModal.svelte';
-	import SpacesOverview from '$lib/components/SpacesOverview.svelte';
-	import SessionPanel from '$lib/components/SessionPanel.svelte';
-	import PasteChoiceDialog from '$lib/components/PasteChoiceDialog.svelte';
+	// Settings / Shortcuts / Spaces / Session+Finish / Paste / GIF dialogs are
+	// dynamic-imported below so they stay off the initial JS graph.
 	import { focusTrap } from '$lib/focus-trap';
-	import { actionsForSurface, createActionRegistry } from '$lib/action-registry';
-	import {
-		shuffledSetMoves,
-		sortedSetMoves,
-		spreadSetMoves,
-		stackedSetMoves
-	} from '$lib/set-operators';
+	import { actionsForSurface } from '$lib/action-registry';
 	import {
 		KITCHEN_GROUPS,
-		formatContentOperatorToast,
-		formatLayoutOperatorToast,
 		kitchenActionSubtitle,
 		kitchenActionTitle,
 		kitchenGroupForActionId,
@@ -68,24 +51,8 @@
 	} from '$lib/operator-kitchen';
 	import OperatorReceiptStrip from '$lib/components/OperatorReceiptStrip.svelte';
 
-	import { extractWikilinks } from '$lib/markdown';
-	import {
-		combineNotes,
-		copyText,
-		exportNotesJson,
-		exportNotesMarkdown,
-		printSequenceAsPdf,
-		slugifyFilename
-	} from '$lib/mash';
-	import {
-		createFinishSnapshot,
-		noteIdsForFinishScope,
-		notesForFinishScope,
-		type FinishDraft,
-		type FinishExportKind,
-		type FinishScope,
-		type FinishSnapshot
-	} from '$lib/finish-model';
+	import { exportNotesJson, printSequenceAsPdf } from '$lib/mash';
+	import { createFinishSnapshot, type FinishSnapshot } from '$lib/finish-model';
 	import { clearCanvasViewport } from '$lib/viewport';
 	import { clearDismissedForCanvas } from '$lib/canvas-dismiss';
 	import { findBacklinks, findOutgoingNotes } from '$lib/links';
@@ -93,7 +60,12 @@
 	import { readSyncHygiene, recordSyncExport, shouldRemindSyncBackup } from '$lib/sync-hygiene';
 	import { loadSnapPref, saveSnapPref } from '$lib/canvas-geom';
 	import { COLLAPSED_CARD, createCanvasSession } from '$lib/stores/canvas-session.svelte';
-	import { createNoteLibrary, filterNotes, filterPeelNotes } from '$lib/stores/note-library.svelte';
+	import {
+		createNoteLibrary,
+		filterNotes,
+		filterPeelNotes,
+		peelSearchText
+	} from '$lib/stores/note-library.svelte';
 	import {
 		filterNotesByPeelScope,
 		peelScopeCounts,
@@ -106,8 +78,6 @@
 		dismissTryAMash,
 		isTryAMashDismissed,
 		shouldOfferTryAMash,
-		shouldStayOnDeskAfterMash,
-		tryAMashAfterMashToast,
 		tryAMashDrafts,
 		tryAMashSuccessToast
 	} from '$lib/try-a-mash';
@@ -117,52 +87,33 @@
 	import { syncConflicts } from '$lib/stores/sync-conflicts.svelte';
 	import { createEditorStage, type SnapZone } from '$lib/stores/editor-stage.svelte';
 	import { createSessionManager } from '$lib/stores/sessions.svelte';
-	import { sessionLifecycleLabel } from '$lib/session-lifecycle';
+	import { createDocumentReaders } from '$lib/stores/document-readers.svelte';
+	import { createSelectionOperators } from '$lib/selection-operators';
+	import {
+		buildDocxClippingDraft,
+		buildHtmlClippingDraft,
+		buildPdfClippingDraft,
+		withNoteId
+	} from '$lib/document-clipping';
+	import { createFinishSessionUi } from '$lib/finish-session-ui';
+	import {
+		buildBasePaletteActions,
+		buildOperatorActions
+	} from '$lib/command-palette';
+	import { createContentOperators } from '$lib/content-operators';
+	import { createAppKeydown } from '$lib/app-keyboard';
+	import { createGlobalPasteHandler } from '$lib/global-paste';
+	import { createDeskPlacement } from '$lib/desk-placement';
 	import type { PeelConflictRow } from '$lib/components/PeelScanner.svelte';
 	import { shouldShowCanvasEmptyState } from '$lib/canvas-empty-state';
 	import { detectJsonImportKind, splitExternalImportFiles } from '$lib/external-file-drop';
-	import {
-		normalizePdfExcerpt,
-		pdfClippingTitle,
-		pdfRegionClippingBody,
-		pdfRegionClippingTitle,
-		type PdfClipPayload,
-		type PdfClipping
-	} from '$lib/pdf-clipping';
-	import {
-		docxClippingTitle,
-		normalizeDocxExcerpt,
-		type DocxClipPayload,
-		type DocxClipping
-	} from '$lib/docx-clipping';
-	import {
-		htmlClippingTitle,
-		normalizeHtmlExcerpt,
-		type HtmlClipPayload,
-		type HtmlClipping
-	} from '$lib/html-clipping';
-	import {
-		analyzePastedText,
-		draftsFromPastedText,
-		type PasteAnalysis,
-		type PasteSplitMode
-	} from '$lib/paste-cards';
-	import {
-		DESK_IMAGE_MAX_PER_ACTION,
-		clipboardImageBlob,
-		imageNoteBody,
-		imageNoteSource,
-		prepareDeskImage
-	} from '$lib/desk-image';
-	import { draftsFromGif, inspectGif, isGifFile, type GifExplodeMode } from '$lib/gif-explode';
-	import GifExplodeDialog from '$lib/components/GifExplodeDialog.svelte';
-	import { draftsFromUrlOnlyText, URL_SOURCE_MAX_PER_PASTE } from '$lib/url-source';
-	import { keepSelectionToast, keepableNoteIds } from '$lib/keep-selection';
-	import {
-		splitNoteFragments,
-		type ContentSplitMode,
-		type SplitFragment
-	} from '$lib/split-content';
+	import { type PdfClipPayload } from '$lib/pdf-clipping';
+	import { type DocxClipPayload } from '$lib/docx-clipping';
+	import { type HtmlClipPayload } from '$lib/html-clipping';
+	import { type PasteAnalysis } from '$lib/paste-cards';
+	import { DESK_IMAGE_MAX_PER_ACTION } from '$lib/desk-image';
+	import type { GifExplodeMode } from '$lib/gif-explode';
+	import { keepableNoteIds } from '$lib/keep-selection';
 	import {
 		inspectStorage,
 		PERSISTENCE_PROMPTED_KEY,
@@ -247,29 +198,7 @@
 	let docxInputEl: HTMLInputElement | undefined = $state();
 	let htmlInputEl: HTMLInputElement | undefined = $state();
 	let imageInputEl: HTMLInputElement | undefined = $state();
-	let pdfReaderFile: File | null = $state(null);
-	let pdfReaderOpen = $state(false);
-	let pdfReaderView = $state({ page: 1, zoom: 1 });
-	let LazyPdfReader = $state<(typeof import('$lib/components/PdfReader.svelte'))['default'] | null>(
-		null
-	);
-	let pdfReaderModuleLoading = $state(false);
-	let pdfClippings = $state<PdfClipping[]>([]);
-	let docxReaderFile: File | null = $state(null);
-	let docxReaderOpen = $state(false);
-	let LazyDocxReader = $state<
-		(typeof import('$lib/components/DocxReader.svelte'))['default'] | null
-	>(null);
-	let docxReaderModuleLoading = $state(false);
-	let docxClippings = $state<DocxClipping[]>([]);
-	let htmlReaderFile: File | null = $state(null);
-	let htmlReaderOpen = $state(false);
-	let LazyHtmlReader = $state<
-		(typeof import('$lib/components/HtmlReader.svelte'))['default'] | null
-	>(null);
-	let htmlReaderModuleLoading = $state(false);
-	let htmlClippings = $state<HtmlClipping[]>([]);
-	const documentReaderOpen = $derived(pdfReaderOpen || docxReaderOpen || htmlReaderOpen);
+	// documentReaders + selectionOps initialized after canvas (below)
 
 	function flashToast(msg: string, ms = 1600) {
 		actionToast = msg;
@@ -412,7 +341,17 @@
 		},
 		onNotesDeleted: (ids) => {
 			const idSet = new Set(ids);
+			const removedItemIds = canvas.canvasItems
+				.filter((i) => idSet.has(i.noteId))
+				.map((i) => i.id);
 			canvas.canvasItems = canvas.canvasItems.filter((i) => !idSet.has(i.noteId));
+			if (removedItemIds.length > 0) {
+				const removeSet = new Set(removedItemIds);
+				canvas.canvasEdges = canvas.canvasEdges.filter(
+					(e) => !removeSet.has(e.fromItemId) && !removeSet.has(e.toItemId)
+				);
+				canvas.pruneCanvasUndo(removedItemIds);
+			}
 		},
 		onFolderDeleted: async (folder) => {
 			const sessionId = sessionManager.activeSession?.id;
@@ -421,6 +360,7 @@
 				: await db.canvases.where('folder').equals(folder).first();
 			if (folderCanvas) {
 				await db.canvasItems.where('canvasId').equals(folderCanvas.id).delete();
+				await db.canvasEdges.where('canvasId').equals(folderCanvas.id).delete();
 				await db.canvases.delete(folderCanvas.id);
 				clearCanvasViewport(folderCanvas.id);
 				clearDismissedForCanvas(folderCanvas.id);
@@ -528,6 +468,11 @@
 		spaces.switchTo(key);
 	}
 
+	/** Warm Session/Finish chunk before click (header hover). */
+	function preloadSessionPanel() {
+		void import('$lib/components/SessionPanel.svelte');
+	}
+
 	function openSessionPanel(view: 'desks' | 'finish' = 'desks') {
 		if (view === 'finish' && sessionManager.activeSession) {
 			finishSnapshot = createFinishSnapshot({
@@ -544,357 +489,6 @@
 		spacesOverviewOpen = false;
 		settingsOpen = false;
 		peel.closePeel(true);
-	}
-
-	async function prepareSessionSwitch() {
-		await library.flushPendingSaveAsync();
-		library.clearSelection();
-		editorStage.dismissAll();
-		canvas.expandedNoteId = null;
-		peel.clearFilter();
-	}
-
-	async function activateSession(id: string) {
-		await prepareSessionSwitch();
-		await sessionManager.switchTo(id);
-		await library.loadNotes();
-		await canvas.loadContextCanvas(peel.canvasKey);
-		sessionPanelOpen = false;
-		if (sessionManager.activeSession) {
-			flashToast(
-				`Opened ${sessionManager.activeSession.title}. ${sessionLifecycleLabel(sessionManager.activeSession, Date.now())}`
-			);
-		}
-	}
-
-	async function createScratchSession() {
-		await prepareSessionSwitch();
-		const created = await sessionManager.createScratch();
-		await library.loadNotes();
-		await canvas.loadContextCanvas(peel.canvasKey, created.id);
-		sessionPanelOpen = false;
-		flashToast('New scratch desk — clears after inactivity');
-	}
-
-	async function runFinishExport(kind: FinishExportKind, scope: FinishScope) {
-		const snapshot = finishSnapshot;
-		if (!snapshot) return { ok: false, message: 'This desk is not ready to export.' };
-		await library.flushPendingSaveAsync();
-		const notes = notesForFinishScope(snapshot, scope, library.notesById);
-		if (notes.length === 0) return { ok: false, message: 'There are no cards in this takeaway.' };
-		const countLabel = `${notes.length} card${notes.length === 1 ? '' : 's'}`;
-
-		try {
-			if (kind === 'copy-markdown') {
-				let copied = false;
-				try {
-					copied = await copyText(combineNotes(notes));
-				} catch {
-					copied = false;
-				}
-				return copied
-					? { ok: true, message: `Copied ${countLabel} as Markdown.` }
-					: { ok: false, message: 'Clipboard unavailable. Download Markdown instead.' };
-			}
-			if (kind === 'download-markdown') {
-				const deskName = slugifyFilename(sessionManager.activeSession?.title ?? 'mash-desk');
-				exportNotesMarkdown(notes, `${deskName}-${scope}.md`);
-				return { ok: true, message: `Downloaded ${countLabel} as Markdown.` };
-			}
-			if (kind === 'pdf') {
-				const opened = printSequenceAsPdf(
-					notes,
-					`${sessionManager.activeSession?.title ?? 'MASH desk'} · ${countLabel}`
-				);
-				return opened
-					? { ok: true, message: `Opened ${countLabel} for printing or PDF.` }
-					: { ok: false, message: 'Could not prepare the printable PDF.' };
-			}
-			if (kind === 'board-image') {
-				const { loadBoardImageExporter } = await import('$lib/lazy-board-image');
-				const { downloadBoardImage } = await loadBoardImageExporter();
-				const result = await downloadBoardImage({
-					noteIds: notes.map((note) => note.id),
-					notesById: library.notesById,
-					items: canvas.canvasItems,
-					edges: canvas.canvasEdges,
-					theme: document.documentElement.dataset.theme === 'light' ? 'light' : 'dark',
-					filename: `${slugifyFilename(sessionManager.activeSession?.title ?? 'mash-desk')}-${scope}-board.png`
-				});
-				return {
-					ok: true,
-					message: `Downloaded ${result.cardCount} card${result.cardCount === 1 ? '' : 's'} as a ${result.width} × ${result.height} PNG${result.downscaled ? ' (safely downscaled)' : ''}.`
-				};
-			}
-
-			await exportSyncBundle();
-			return {
-				ok: true,
-				message: `Downloaded the whole desk with ${notes.length} card${notes.length === 1 ? '' : 's'} and result history.`
-			};
-		} catch (error) {
-			console.error('Finish export failed', error);
-			return { ok: false, message: 'That export did not finish. Your desk is unchanged.' };
-		}
-	}
-
-	async function commitFinishNow(draft: FinishDraft) {
-		const snapshot = finishSnapshot;
-		const session = sessionManager.activeSession;
-		if (!snapshot || !session || snapshot.sessionId !== session.id) {
-			return { ok: false, message: 'This desk changed. Reopen Finish and try again.' };
-		}
-		const mutatesStorage = draft.keepTakeaway || draft.disposition !== 'leave';
-		await library.flushPendingSaveAsync();
-		if (mutatesStorage && library.writeError) {
-			return {
-				ok: false,
-				message: 'Mash could not update local storage. Copy or download your work, then retry.'
-			};
-		}
-
-		let promotedCount = 0;
-		if (draft.keepTakeaway && draft.disposition !== 'keep-desk') {
-			const noteIds = noteIdsForFinishScope(snapshot, draft.scope);
-			const promoted = await sessionManager.keepTakeaway(noteIds);
-			promotedCount = promoted.length;
-			library.applyPromotedNotes(promoted);
-		}
-
-		if (draft.disposition === 'keep-desk') {
-			const keptAt = Date.now();
-			const kept = await sessionManager.keepActive(keptAt);
-			if (!kept) return { ok: false, message: 'Mash could not keep this desk.' };
-			library.notes = library.notes.map((note) => ({
-				...note,
-				scope: 'kept',
-				keptAt: note.keptAt ?? keptAt
-			}));
-			sessionPanelOpen = false;
-			flashToast(`Kept “${kept.title}” on this device`, 3600);
-			await offerPersistentStorageOnce();
-			return { ok: true, message: `Kept the entire desk on this device.` };
-		}
-
-		if (draft.disposition === 'clear') {
-			const title = session.title;
-			await prepareSessionSwitch();
-			const created = await sessionManager.clearActive();
-			await library.loadNotes();
-			if (created) await canvas.loadContextCanvas(peel.canvasKey, created.id);
-			sessionPanelOpen = false;
-			const keptPart =
-				promotedCount > 0 ? `Kept ${promotedCount} card${promotedCount === 1 ? '' : 's'} · ` : '';
-			flashToast(`${keptPart}“${title}” moved to Recently cleared for 7 days`, 4600);
-			return { ok: true, message: `${keptPart}${title} is recoverable for 7 days.` };
-		}
-
-		sessionPanelOpen = false;
-		const lifecycle = sessionLifecycleLabel(session, Date.now());
-		flashToast(
-			promotedCount > 0
-				? `Kept ${promotedCount} card${promotedCount === 1 ? '' : 's'} · ${lifecycle}`
-				: lifecycle,
-			3600
-		);
-		return {
-			ok: true,
-			message:
-				promotedCount > 0
-					? `Kept ${promotedCount} card${promotedCount === 1 ? '' : 's'}; the desk remains scratch.`
-					: `The desk remains unchanged. ${lifecycle}.`
-		};
-	}
-
-	async function runFinishCommit(draft: FinishDraft) {
-		if (draft.disposition !== 'clear') return commitFinishNow(draft);
-		const snapshot = finishSnapshot;
-		const title = sessionManager.activeSession?.title ?? 'this desk';
-		const takeawayCount = snapshot ? noteIdsForFinishScope(snapshot, draft.scope).length : 0;
-		const keepMessage = draft.keepTakeaway
-			? ` Keep ${takeawayCount} takeaway card${takeawayCount === 1 ? '' : 's'} on this device.`
-			: '';
-		askConfirm({
-			title: 'Clear this desk?',
-			message: `“${title}” will leave your active desks.${keepMessage} You can restore the desk from Recently cleared for 7 days.`,
-			confirmLabel: draft.keepTakeaway ? 'Keep takeaway and clear' : 'Clear desk',
-			danger: true,
-			action: async () => {
-				await commitFinishNow(draft);
-			}
-		});
-		return { ok: true, message: 'Review the clear confirmation.' };
-	}
-
-	async function restoreSession(id: string) {
-		await prepareSessionSwitch();
-		const restored = await sessionManager.restore(id);
-		if (!restored) return;
-		await library.loadNotes();
-		await canvas.loadContextCanvas(peel.canvasKey, restored.id);
-		sessionPanelOpen = false;
-		flashToast('Scratch desk restored');
-	}
-
-	function selectedCanvasItems() {
-		const selected = new Set(library.selectionIds);
-		return canvas.canvasItems.filter((item) => selected.has(item.noteId));
-	}
-
-	async function applyLayoutOperator(
-		actionId: string,
-		label: string,
-		moves: Array<{ itemId: string; x: number; y: number }>
-	) {
-		const byId = new Map(canvas.canvasItems.map((item) => [item.id, item]));
-		const before = moves
-			.map((move) => byId.get(move.itemId))
-			.filter((item): item is NonNullable<typeof item> => Boolean(item))
-			.map((item) => ({ itemId: item.id, x: item.x, y: item.y }));
-		await canvas.handleCanvasMoveEnd(moves, before, {
-			label,
-			actionId,
-			affectedNoteIds: library.selectionIds
-		});
-		library.bulkMenu = null;
-		flashToast(formatLayoutOperatorToast(label));
-	}
-
-	async function sortSelection(mode: 'title' | 'created') {
-		const label = mode === 'title' ? 'Sort by title' : 'Sort by creation time';
-		await applyLayoutOperator(
-			`sort-selection-${mode}`,
-			label,
-			sortedSetMoves(selectedCanvasItems(), library.notesById, mode)
-		);
-	}
-
-	async function shuffleSelection() {
-		await applyLayoutOperator(
-			'shuffle-selection',
-			'Shuffle',
-			shuffledSetMoves(selectedCanvasItems())
-		);
-	}
-
-	async function stackSelection() {
-		await applyLayoutOperator('stack-selection', 'Stack', stackedSetMoves(selectedCanvasItems()));
-	}
-
-	async function spreadSelection() {
-		await applyLayoutOperator('spread-selection', 'Spread', spreadSetMoves(selectedCanvasItems()));
-	}
-
-	async function sequenceSelection() {
-		const result = await canvas.sequenceCanvasSelection(library.selectionIds);
-		library.bulkMenu = null;
-		if (result.sequenced < 2) {
-			flashToast('Could not sequence these cards');
-			return;
-		}
-		const label =
-			result.replacedLinks > 0
-				? `Sequenced ${result.sequenced} · replaced ${result.replacedLinks} prior link${result.replacedLinks === 1 ? '' : 's'}`
-				: `Sequenced ${result.sequenced} cards`;
-		flashToast(formatLayoutOperatorToast(label));
-	}
-
-	async function deduplicateSelection() {
-		const result = await canvas.deduplicateCanvasSelection(library.selectionIds, library.notesById);
-		library.bulkMenu = null;
-		if (result.removed === 0) {
-			flashToast('No duplicate cards found');
-			return;
-		}
-		library.selectionIds = result.keepNoteIds;
-		library.selectedId = result.keepNoteIds[0] ?? null;
-		flashToast(
-			`Removed ${result.removed} duplicate card${result.removed === 1 ? '' : 's'} — notes remain in the library`
-		);
-	}
-
-	const keepableSelectionIds = $derived(
-		keepableNoteIds(library.selectionIds, library.notesById)
-	);
-
-	/** Promote selected scratch cards to durable kept notes without finishing the desk. */
-	async function keepSelection() {
-		await library.flushPendingSaveAsync();
-		if (library.writeError) {
-			flashToast('Mash could not update local storage. Retry after saves finish.');
-			return;
-		}
-		const ids = keepableNoteIds(library.selectionIds, library.notesById);
-		if (ids.length === 0) {
-			flashToast(keepSelectionToast(0));
-			return;
-		}
-		const promoted = await sessionManager.keepTakeaway(ids);
-		library.applyPromotedNotes(promoted);
-		void sessionManager.recordMeaningfulActivity();
-		library.bulkMenu = null;
-		if (promoted.length > 0) await offerPersistentStorageOnce();
-		flashToast(keepSelectionToast(promoted.length));
-	}
-
-	function splitCandidate(
-		mode: ContentSplitMode
-	): { note: Note; fragments: SplitFragment[] } | null {
-		const items = selectedCanvasItems();
-		if (items.length !== 1 || library.selectionIds.length !== 1) return null;
-		const note = library.notesById.get(items[0]!.noteId);
-		if (!note) return null;
-		const fragments = splitNoteFragments(note, mode);
-		return fragments.length >= 2 ? { note, fragments } : null;
-	}
-
-	async function splitSelection(mode: ContentSplitMode) {
-		const candidate = splitCandidate(mode);
-		const sessionId = sessionManager.activeSession?.id;
-		if (!candidate || !sessionId) {
-			flashToast(`This card does not contain multiple ${mode}`);
-			return;
-		}
-		const operation = await createOperationRecord({
-			sessionId,
-			type: `split-${mode}`,
-			inputNoteIds: [candidate.note.id],
-			outputNoteIds: [],
-			payload: { mode }
-		});
-		const outputs: Note[] = [];
-		try {
-			for (const fragment of candidate.fragments) {
-				outputs.push(
-					await createNote({
-						...activeNoteOwnership(),
-						title: fragment.title,
-						body: fragment.body,
-						folder: candidate.note.folder,
-						tags: [...new Set([...candidate.note.tags, 'split'])],
-						links: extractWikilinks(fragment.body),
-						mashedFrom: [candidate.note.id],
-						operationId: operation.id,
-						pinned: candidate.note.pinned
-					})
-				);
-			}
-			await db.operations.update(operation.id, { outputNoteIds: outputs.map((note) => note.id) });
-			const applied = await canvas.splitCanvasItem(candidate.note.id, outputs, operation.id);
-			if (!applied) throw new Error('Canvas split was not applied');
-			library.adoptNotes(outputs);
-			library.bulkMenu = null;
-			await refreshOperationHistory();
-			flashToast(formatContentOperatorToast(`Split by ${mode}`, 1, outputs.length));
-		} catch (error) {
-			console.error('Failed to split note', error);
-			await replaceNoteSubset(
-				outputs.map((note) => note.id),
-				[]
-			);
-			await db.operations.delete(operation.id);
-			flashToast('Could not split this card');
-		}
 	}
 
 	async function changeRetentionDays(days: number) {
@@ -949,391 +543,225 @@
 	});
 	canvasHolder.session = canvas;
 
-	async function ensurePdfReaderModule() {
-		if (LazyPdfReader || pdfReaderModuleLoading) return;
-		pdfReaderModuleLoading = true;
-		try {
-			const { loadPdfReader } = await import('$lib/lazy-pdf-reader');
-			LazyPdfReader = await loadPdfReader();
-		} catch (error) {
-			console.error('Failed to load PDF tools', error);
-			pdfReaderOpen = false;
-			flashToast('PDF tools could not be loaded. Check your connection and try again.');
-		} finally {
-			pdfReaderModuleLoading = false;
+	const documentReaders = createDocumentReaders({
+		flashToast,
+		prepareForReader: () => {
+			showPalette = false;
+			settingsOpen = false;
+			peel.closePeel(true);
+			library.clearSelection();
+			if (canvas.expandedNoteId) canvas.collapseSticky();
+			if (editorStage.open) editorStage.dismissAll();
 		}
-	}
+	});
 
-	async function ensureDocxReaderModule() {
-		if (LazyDocxReader || docxReaderModuleLoading) return;
-		docxReaderModuleLoading = true;
-		try {
-			const { loadDocxReader } = await import('$lib/lazy-docx-reader');
-			LazyDocxReader = await loadDocxReader();
-		} catch (error) {
-			console.error('Failed to load Word document tools', error);
-			docxReaderOpen = false;
-			flashToast('Couldn’t load Word document tools', 3600);
-		} finally {
-			docxReaderModuleLoading = false;
-		}
-	}
+	const selectionOps = createSelectionOperators({
+		getSelectionIds: () => library.selectionIds,
+		setSelection: (ids, primary) => {
+			library.selectionIds = ids;
+			library.selectedId = primary;
+		},
+		getCanvasItems: () => canvas.canvasItems,
+		getNotesById: () => library.notesById,
+		handleCanvasMoveEnd: (moves, before, moveOpts) =>
+			canvas.handleCanvasMoveEnd(moves, before, moveOpts),
+		sequenceCanvasSelection: (ids) => canvas.sequenceCanvasSelection(ids),
+		deduplicateCanvasSelection: (ids, map) => canvas.deduplicateCanvasSelection(ids, map),
+		closeBulkMenu: () => {
+			library.bulkMenu = null;
+		},
+		flashToast,
+		flushPendingSaveAsync: () => library.flushPendingSaveAsync(),
+		getWriteError: () => library.writeError,
+		keepTakeaway: (ids) => sessionManager.keepTakeaway(ids),
+		applyPromotedNotes: (notes) => library.applyPromotedNotes(notes),
+		recordMeaningfulActivity: () => {
+			void sessionManager.recordMeaningfulActivity();
+		},
+		offerPersistentStorageOnce: () => offerPersistentStorageOnce()
+	});
 
-	async function ensureHtmlReaderModule() {
-		if (LazyHtmlReader || htmlReaderModuleLoading) return;
-		htmlReaderModuleLoading = true;
-		try {
-			const { loadHtmlReader } = await import('$lib/lazy-html-reader');
-			LazyHtmlReader = await loadHtmlReader();
-		} catch (error) {
-			console.error('Failed to load HTML document tools', error);
-			htmlReaderOpen = false;
-			flashToast('Couldn’t load HTML document tools', 3600);
-		} finally {
-			htmlReaderModuleLoading = false;
-		}
-	}
+	const {
+		openPdfReader,
+		openDocxReader,
+		openHtmlReader,
+		resumePdfReader,
+		resumeDocxReader,
+		resumeHtmlReader,
+		hidePdfReader,
+		hideDocxReader,
+		hideHtmlReader
+	} = documentReaders;
 
-	function openPdfReader(file: File) {
-		pdfReaderFile = file;
-		pdfReaderOpen = true;
-		docxReaderOpen = false;
-		htmlReaderOpen = false;
-		pdfReaderView = { page: 1, zoom: 1 };
-		pdfClippings = [];
-		showPalette = false;
-		settingsOpen = false;
-		peel.closePeel(true);
+	const {
+		selectedCanvasItems,
+		sortSelection,
+		shuffleSelection,
+		stackSelection,
+		spreadSelection,
+		sequenceSelection,
+		deduplicateSelection,
+		keepSelection
+	} = selectionOps;
+
+	const keepableSelectionIds = $derived(
+		keepableNoteIds(library.selectionIds, library.notesById)
+	);
+
+	async function prepareSessionSwitch() {
+		await library.flushPendingSaveAsync();
 		library.clearSelection();
-		if (canvas.expandedNoteId) canvas.collapseSticky();
-		if (editorStage.open) editorStage.dismissAll();
-		void ensurePdfReaderModule();
+		editorStage.dismissAll();
+		canvas.expandedNoteId = null;
+		peel.clearFilter();
 	}
 
-	function openDocxReader(file: File) {
-		docxReaderFile = file;
-		docxReaderOpen = true;
-		pdfReaderOpen = false;
-		htmlReaderOpen = false;
-		docxClippings = [];
-		showPalette = false;
-		settingsOpen = false;
-		peel.closePeel(true);
-		library.clearSelection();
-		if (canvas.expandedNoteId) canvas.collapseSticky();
-		if (editorStage.open) editorStage.dismissAll();
-		void ensureDocxReaderModule();
+	const finishSessionUi = createFinishSessionUi({
+		getFinishSnapshot: () => finishSnapshot,
+		setFinishSnapshot: (s) => {
+			finishSnapshot = s;
+		},
+		getActiveSession: () => sessionManager.activeSession,
+		getNotes: () => library.notes,
+		getNotesById: () => library.notesById,
+		getCanvasItems: () => canvas.canvasItems,
+		getCanvasEdges: () => canvas.canvasEdges,
+		getSelectionIds: () => library.selectionIds,
+		getOperations: () => operationHistory,
+		flushPendingSaveAsync: () => library.flushPendingSaveAsync(),
+		getWriteError: () => library.writeError,
+		exportSyncBundle: () => exportSyncBundle(),
+		keepTakeaway: (ids) => sessionManager.keepTakeaway(ids),
+		keepActive: (now) => sessionManager.keepActive(now),
+		clearActive: () => sessionManager.clearActive(),
+		switchTo: (id) => sessionManager.switchTo(id),
+		restore: (id) => sessionManager.restore(id),
+		createScratch: () => sessionManager.createScratch(),
+		applyPromotedNotes: (notes) => library.applyPromotedNotes(notes),
+		setNotes: (notes) => {
+			library.notes = notes;
+		},
+		loadNotes: () => library.loadNotes(),
+		loadContextCanvas: (key, sessionId) => canvas.loadContextCanvas(key, sessionId),
+		getCanvasKey: () => peel.canvasKey,
+		prepareSessionSwitch,
+		setSessionPanelOpen: (open) => {
+			sessionPanelOpen = open;
+		},
+		flashToast,
+		askConfirm,
+		offerPersistentStorageOnce: () => offerPersistentStorageOnce(),
+		getTheme: () =>
+			document.documentElement.dataset.theme === 'light' ? 'light' : 'dark'
+	});
+
+	const {
+		runFinishExport,
+		runFinishCommit,
+		activateSession,
+		createScratchSession,
+		restoreSession
+	} = finishSessionUi;
+
+	const contentOps = createContentOperators({
+		flashToast,
+		askConfirm,
+		getActiveSessionId: () => sessionManager.activeSession?.id,
+		getActiveCanvasId: () => canvas.activeCanvas?.id,
+		getCanvasFolder: () => peel.canvasFolder,
+		activeNoteOwnership,
+		getCanvasItems: () => canvas.canvasItems,
+		getNotes: () => library.notes,
+		getNotesById: () => library.notesById,
+		getSelectedNotes: () => library.selectedNotes,
+		getSelectionIds: () => library.selectionIds,
+		selectedCanvasItems,
+		mashCanvasItems: (sourceIds, mashed, opId, place, removeIds) =>
+			canvas.mashCanvasItems(sourceIds, mashed, opId, place, removeIds),
+		unmashCanvasItem: (mash, sources) => canvas.unmashCanvasItem(mash, sources),
+		splitCanvasItem: (sourceNoteId, outputs, opId) =>
+			canvas.splitCanvasItem(sourceNoteId, outputs, opId),
+		adoptNotes: (notes) => library.adoptNotes(notes),
+		setSettlingIds: (ids) => {
+			canvas.settlingIds = ids;
+		},
+		getExpandedNoteId: () => canvas.expandedNoteId,
+		setExpandedNoteId: (id) => {
+			canvas.expandedNoteId = id;
+		},
+		dismissPaneForNote: (noteId) => {
+			const pane = editorStage.panes.find((p) => p.noteId === noteId);
+			if (pane) editorStage.dismissPane(pane.id);
+		},
+		setSelection: (ids, primary) => {
+			library.selectionIds = ids;
+			library.selectedId = primary;
+		},
+		closeBulkMenu: () => {
+			library.bulkMenu = null;
+		},
+		openInStage: (noteId, zone) => openInStage(noteId, zone ?? 'maximize'),
+		ensureNoteVisible: (noteId) => {
+			canvas.canvasBoard?.ensureNoteVisible(noteId);
+		},
+		refreshOperationHistory: () => refreshOperationHistory()
+	});
+
+	const {
+		splitCandidate,
+		splitSelection,
+		mashNotesIntoBubble,
+		combineSelection,
+		unmashSelection,
+		handleMashCards
+	} = contentOps;
+
+	function queueGifExplodeChoice(
+		file: File | Blob,
+		fileName: string,
+		frameCount: number,
+		origin?: { x: number; y: number },
+		caption?: string
+	) {
+		gifExplodePending = { blob: file, fileName, frameCount, origin, caption };
 	}
 
-	function openHtmlReader(file: File) {
-		htmlReaderFile = file;
-		htmlReaderOpen = true;
-		pdfReaderOpen = false;
-		docxReaderOpen = false;
-		htmlClippings = [];
-		showPalette = false;
-		settingsOpen = false;
-		peel.closePeel(true);
-		library.clearSelection();
-		if (canvas.expandedNoteId) canvas.collapseSticky();
-		if (editorStage.open) editorStage.dismissAll();
-		void ensureHtmlReaderModule();
-	}
+	const deskPlacement = createDeskPlacement({
+		flashToast,
+		getActiveCanvasId: () => canvas.activeCanvas?.id,
+		getCanvasFolder: () => peel.canvasFolder,
+		activeNoteOwnership,
+		getCanvasItemCount: () => canvas.canvasItems.length,
+		getSpawnPoint: (size, index) => canvas.canvasBoard?.getSpawnPoint(size, index),
+		refreshCanvasItems: () => canvas.refreshCanvasItems(),
+		adoptNotesToLibrary: (notes) => {
+			for (const note of notes) addNoteToSearch(note);
+			library.notes = [...notes, ...library.notes];
+		},
+		setSelection: (ids, primary) => {
+			library.selectionIds = ids;
+			library.selectedId = primary;
+		},
+		setSettlingIds: (ids) => {
+			canvas.settlingIds = ids;
+		},
+		ensureNoteVisible: (noteId) => {
+			canvas.canvasBoard?.ensureNoteVisible(noteId);
+		},
+		recordMeaningfulActivity: () => {
+			void sessionManager.recordMeaningfulActivity();
+		},
+		queueGifExplodeChoice
+	});
 
-	function resumePdfReader() {
-		if (!pdfReaderFile) return;
-		pdfReaderOpen = true;
-		docxReaderOpen = false;
-		htmlReaderOpen = false;
-		settingsOpen = false;
-		peel.closePeel(true);
-		library.clearSelection();
-		if (canvas.expandedNoteId) canvas.collapseSticky();
-		if (editorStage.open) editorStage.dismissAll();
-		void ensurePdfReaderModule();
-	}
+	const {
+		placeNoteDraftsOnDesk,
+		placeGifAsDrafts,
+		createVisualStickiesFromFiles,
+		handleOpenImageFiles
+	} = deskPlacement;
 
-	function resumeDocxReader() {
-		if (!docxReaderFile) return;
-		docxReaderOpen = true;
-		pdfReaderOpen = false;
-		htmlReaderOpen = false;
-		settingsOpen = false;
-		peel.closePeel(true);
-		library.clearSelection();
-		if (canvas.expandedNoteId) canvas.collapseSticky();
-		if (editorStage.open) editorStage.dismissAll();
-		void ensureDocxReaderModule();
-	}
-
-	function resumeHtmlReader() {
-		if (!htmlReaderFile) return;
-		htmlReaderOpen = true;
-		pdfReaderOpen = false;
-		docxReaderOpen = false;
-		settingsOpen = false;
-		peel.closePeel(true);
-		library.clearSelection();
-		if (canvas.expandedNoteId) canvas.collapseSticky();
-		if (editorStage.open) editorStage.dismissAll();
-		void ensureHtmlReaderModule();
-	}
-
-	function hidePdfReader() {
-		pdfReaderOpen = false;
-	}
-
-	function hideDocxReader() {
-		docxReaderOpen = false;
-	}
-
-	function hideHtmlReader() {
-		htmlReaderOpen = false;
-	}
-
-	async function savePdfClipping(excerpt: PdfClipPayload) {
-		if (!pdfReaderFile) return;
-		if (excerpt.imageDataUrl) {
-			const title = pdfRegionClippingTitle(pdfReaderFile.name, excerpt.page);
-			const body = pdfRegionClippingBody(excerpt.imageDataUrl, pdfReaderFile.name, excerpt.page);
-			const note = await createNote({
-				...activeNoteOwnership(),
-				title,
-				body,
-				folder: peel.canvasFolder,
-				tags: ['pdf-clipping'],
-				links: [],
-				source: {
-					kind: 'pdf',
-					title: pdfReaderFile.name,
-					page: excerpt.page
-				}
-			});
-			addNoteToSearch(note);
-			library.notes = [note, ...library.notes];
-			pdfClippings = [
-				...pdfClippings,
-				{
-					id: crypto.randomUUID(),
-					noteId: note.id,
-					text: title,
-					page: excerpt.page,
-					imageDataUrl: excerpt.imageDataUrl
-				}
-			];
-			flashToast(`Saved region from page ${excerpt.page}`);
-			return;
-		}
-
-		const text = normalizePdfExcerpt(excerpt.text ?? '');
-		if (!text) return;
-		const note = await createNote({
-			...activeNoteOwnership(),
-			title: pdfClippingTitle(text),
-			body: text,
-			folder: peel.canvasFolder,
-			tags: ['pdf-clipping'],
-			links: [],
-			source: {
-				kind: 'pdf',
-				title: pdfReaderFile.name,
-				page: excerpt.page
-			}
-		});
-		addNoteToSearch(note);
-		library.notes = [note, ...library.notes];
-		pdfClippings = [
-			...pdfClippings,
-			{ id: crypto.randomUUID(), noteId: note.id, text, page: excerpt.page }
-		];
-		flashToast(`Saved excerpt from page ${excerpt.page}`);
-	}
-
-	async function saveDocxClipping(excerpt: DocxClipPayload) {
-		if (!docxReaderFile) return;
-		const text = normalizeDocxExcerpt(excerpt.text ?? '');
-		if (!text) return;
-		const note = await createNote({
-			...activeNoteOwnership(),
-			title: docxClippingTitle(text),
-			body: text,
-			folder: peel.canvasFolder,
-			tags: ['docx-clipping'],
-			links: [],
-			source: {
-				kind: 'docx',
-				title: docxReaderFile.name
-			}
-		});
-		addNoteToSearch(note);
-		library.notes = [note, ...library.notes];
-		docxClippings = [
-			...docxClippings,
-			{ id: crypto.randomUUID(), noteId: note.id, text }
-		];
-		flashToast('Saved excerpt from Word document');
-	}
-
-	async function saveHtmlClipping(excerpt: HtmlClipPayload) {
-		if (!htmlReaderFile) return;
-		const text = normalizeHtmlExcerpt(excerpt.text ?? '');
-		if (!text) return;
-		const note = await createNote({
-			...activeNoteOwnership(),
-			title: htmlClippingTitle(text),
-			body: text,
-			folder: peel.canvasFolder,
-			tags: ['html-clipping'],
-			links: [],
-			source: {
-				kind: 'html',
-				title: htmlReaderFile.name
-			}
-		});
-		addNoteToSearch(note);
-		library.notes = [note, ...library.notes];
-		htmlClippings = [
-			...htmlClippings,
-			{ id: crypto.randomUUID(), noteId: note.id, text }
-		];
-		flashToast('Saved excerpt from HTML document');
-	}
-
-	async function openPdfClippingsOnCanvas(noteIds: string[]) {
-		if (noteIds.length === 0) return;
-		const spawn = canvas.canvasBoard?.getSpawnPoint(COLLAPSED_CARD, canvas.canvasItems.length) ?? {
-			x: 80,
-			y: 80
-		};
-		pdfReaderOpen = false;
-		await tick();
-		await canvas.handleDropNotes(noteIds, spawn.x, spawn.y);
-		flashToast(`Opened ${noteIds.length} clipping${noteIds.length === 1 ? '' : 's'} on canvas`);
-	}
-
-	async function openDocxClippingsOnCanvas(noteIds: string[]) {
-		if (noteIds.length === 0) return;
-		const spawn = canvas.canvasBoard?.getSpawnPoint(COLLAPSED_CARD, canvas.canvasItems.length) ?? {
-			x: 80,
-			y: 80
-		};
-		docxReaderOpen = false;
-		await tick();
-		await canvas.handleDropNotes(noteIds, spawn.x, spawn.y);
-		flashToast(`Opened ${noteIds.length} clipping${noteIds.length === 1 ? '' : 's'} on canvas`);
-	}
-
-	async function openHtmlClippingsOnCanvas(noteIds: string[]) {
-		if (noteIds.length === 0) return;
-		const spawn = canvas.canvasBoard?.getSpawnPoint(COLLAPSED_CARD, canvas.canvasItems.length) ?? {
-			x: 80,
-			y: 80
-		};
-		htmlReaderOpen = false;
-		await tick();
-		await canvas.handleDropNotes(noteIds, spawn.x, spawn.y);
-		flashToast(`Opened ${noteIds.length} clipping${noteIds.length === 1 ? '' : 's'} on canvas`);
-	}
-
-	async function placeNoteDraftsOnDesk(
-		drafts: Array<{ title: string; body: string; source?: Note['source']; tags?: string[] }>,
-		origin?: { x: number; y: number }
-	): Promise<Note[]> {
-		if (!canvas.activeCanvas) {
-			flashToast('Desk is still getting ready');
-			return [];
-		}
-		if (drafts.length === 0) return [];
-		const spawn =
-			origin ??
-			canvas.canvasBoard?.getSpawnPoint(COLLAPSED_CARD, canvas.canvasItems.length) ?? {
-				x: 80,
-				y: 80
-			};
-		const columns = Math.min(3, Math.max(1, drafts.length));
-		const createdNotes: Note[] = [];
-		const placedIds: string[] = [];
-		for (let index = 0; index < drafts.length; index++) {
-			const draft = drafts[index]!;
-			const note = await createNote({
-				...activeNoteOwnership(),
-				title: draft.title,
-				body: draft.body,
-				folder: peel.canvasFolder,
-				tags: draft.tags ?? [],
-				links: extractWikilinks(draft.body),
-				...(draft.source ? { source: draft.source } : {})
-			});
-			addNoteToSearch(note);
-			createdNotes.push(note);
-			const item = await addNoteToCanvas(canvas.activeCanvas.id, note.id, {
-				x: spawn.x + (index % columns) * (COLLAPSED_CARD.w + 24),
-				y: spawn.y + Math.floor(index / columns) * (COLLAPSED_CARD.h + 24),
-				w: COLLAPSED_CARD.w,
-				h: COLLAPSED_CARD.h
-			});
-			placedIds.push(item.id);
-		}
-		library.notes = [...createdNotes, ...library.notes];
-		await canvas.refreshCanvasItems();
-		library.selectionIds = createdNotes.map((note) => note.id);
-		library.selectedId = createdNotes[0]?.id ?? null;
-		canvas.settlingIds = new Set(placedIds);
-		setTimeout(() => {
-			canvas.settlingIds = new Set();
-		}, 320);
-		canvas.canvasBoard?.ensureNoteVisible(createdNotes[0]!.id);
-		void sessionManager.recordMeaningfulActivity();
-		return createdNotes;
-	}
-
-	async function placeGifAsDrafts(
-		blob: Blob,
-		mode: GifExplodeMode,
-		opts: { fileName: string; origin?: { x: number; y: number }; caption?: string }
-	): Promise<number> {
-		const result = await draftsFromGif(blob, mode, {
-			fileName: opts.fileName,
-			caption: opts.caption
-		});
-		if (!result.ok) {
-			if (result.error === 'too-large') {
-				flashToast('Image too large to import (max 20 MB)', 3200);
-			} else {
-				flashToast("Couldn't explode that GIF — try another file", 3200);
-			}
-			return 0;
-		}
-		const notes = await placeNoteDraftsOnDesk(result.drafts, opts.origin);
-		if (notes.length === 0) return 0;
-		const parts: string[] = [];
-		if (mode === 'still') {
-			parts.push('Added 1 image card');
-		} else {
-			parts.push(
-				notes.length === 1
-					? 'Exploded 1 frame'
-					: `Exploded ${notes.length} frames`
-			);
-			if (result.sampled) {
-				parts.push(`sampled from ${result.frameCount}`);
-			}
-		}
-		flashToast(parts.join(' · '), 3600);
-		return notes.length;
-	}
-
-	function queueGifExplodeChoice(file: File | Blob, fileName: string, frameCount: number, origin?: { x: number; y: number }, caption?: string) {
-		gifExplodePending = {
-			blob: file,
-			fileName,
-			frameCount,
-			origin,
-			caption
-		};
-	}
-
-	async function handleGifExplodeChoice(mode: GifExplodeMode) {
+	async function handleGifExplodeChoice(mode: import('$lib/gif-explode').GifExplodeMode) {
 		const pending = gifExplodePending;
 		gifExplodePending = null;
 		if (!pending) return;
@@ -1344,83 +772,222 @@
 		});
 	}
 
-	async function createVisualStickiesFromFiles(
-		files: File[],
-		origin?: { x: number; y: number },
-		options?: { caption?: string; titleOverride?: string }
-	): Promise<{ created: number; compacted: number; failed: number; skippedCap: number }> {
-		const capped = files.slice(0, DESK_IMAGE_MAX_PER_ACTION);
-		const skippedCap = Math.max(0, files.length - capped.length);
-		const drafts: Array<{ title: string; body: string; source?: Note['source'] }> = [];
-		let compacted = 0;
-		let failed = 0;
-		const animatedGifs: File[] = [];
-
-		for (const file of capped) {
-			if (isGifFile(file)) {
-				const inspected = await inspectGif(file);
-				if (inspected.ok && inspected.animated) {
-					animatedGifs.push(file);
-					continue;
-				}
-			}
-			const prepared = await prepareDeskImage(file, {
-				fileName: file.name,
-				titleHint: options?.titleOverride
-			});
-			if (!prepared.ok) {
-				failed++;
-				if (prepared.error === 'too-large') {
-					flashToast(`Image too large to import (max 20 MB): ${file.name}`, 3200);
-				} else if (prepared.error === 'unsupported') {
-					flashToast(`Can't import ${file.name} — try PNG, JPEG, WebP, or GIF`, 3200);
-				}
-				continue;
-			}
-			if (prepared.compacted) compacted++;
-			const title = options?.titleOverride?.trim() || prepared.titleHint;
-			const sourceTitle = file.name?.trim() || title;
-			drafts.push({
-				title,
-				body: imageNoteBody(prepared.dataUrl, title, options?.caption ?? ''),
-				source: imageNoteSource(sourceTitle)
-			});
+	const pasteHandlers = createGlobalPasteHandler({
+		flashToast,
+		isPasteBlocked: () =>
+			Boolean(
+				showPalette ||
+					settingsOpen ||
+					shortcutsOpen ||
+					spacesOverviewOpen ||
+					sessionPanelOpen ||
+					pasteDialogOpen ||
+					gifExplodeDialogOpen ||
+					documentReaders.documentReaderOpen ||
+					editorStage.open
+			),
+		placeNoteDraftsOnDesk: (drafts) => placeNoteDraftsOnDesk(drafts),
+		queueGifExplodeChoice: (file, fileName, frameCount, origin, caption) => {
+			queueGifExplodeChoice(file, fileName, frameCount, origin, caption);
+		},
+		openPasteDialog: (analysis) => {
+			pasteAnalysis = analysis;
+			pasteDialogOpen = true;
+		},
+		closePasteDialog: () => {
+			pasteDialogOpen = false;
+			pasteAnalysis = null;
 		}
+	});
 
-		const notes = await placeNoteDraftsOnDesk(drafts, origin);
-		let created = notes.length;
+	const { handleGlobalPaste, createCardsFromPaste } = pasteHandlers;
 
-		if (animatedGifs.length === 1) {
-			const gif = animatedGifs[0]!;
-			const inspected = await inspectGif(gif);
-			if (inspected.ok) {
-				queueGifExplodeChoice(
-					gif,
-					gif.name || 'animation.gif',
-					inspected.frameCount,
-					origin,
-					options?.caption
-				);
-			} else {
-				failed++;
+	const handleKeydown = createAppKeydown({
+		canvasUndo: () => canvas.undoCanvasLayout(),
+		canvasRedo: () => canvas.redoCanvasLayout(),
+		togglePalette: () => {
+			showPalette = !showPalette;
+			if (showPalette) paletteQuery = '';
+		},
+		handleNewNote: () => handleNewNote(),
+		invokeCombineSelection: () => invokeOperatorAction('combine-selection'),
+		getSelectionCount: () => library.selectionIds.length,
+		getSelectedId: () => library.selectedId,
+		getSelectedNote: () => library.selectedNote,
+		togglePinSelected: (noteId, pinned) => {
+			void library.handleStickyMetaChange(noteId, { pinned });
+		},
+		openShortcuts: () => {
+			shortcutsOpen = true;
+		},
+		showSpacesOverview,
+		focusGlobalSearch: () => {
+			(document.getElementById('global-search') as HTMLInputElement)?.focus();
+		},
+		onEscape: () => {
+			if (documentReaders.pdfReaderOpen) {
+				hidePdfReader();
+				return true;
 			}
-		} else if (animatedGifs.length > 1) {
-			// Avoid dialog spam: still each, hint to drop one at a time for explode.
-			for (const gif of animatedGifs) {
-				const n = await placeGifAsDrafts(gif, 'still', {
-					fileName: gif.name || 'animation.gif',
-					origin,
-					caption: options?.caption
-				});
-				created += n;
+			if (documentReaders.docxReaderOpen) {
+				hideDocxReader();
+				return true;
 			}
-			flashToast(
-				`Imported ${animatedGifs.length} GIFs as stills — drop one GIF to explode frames`,
-				4200
-			);
+			if (documentReaders.htmlReaderOpen) {
+				hideHtmlReader();
+				return true;
+			}
+			if (confirmDialog) {
+				confirmDialog = null;
+				return true;
+			}
+			if (spacesOverviewOpen) {
+				hideSpacesOverview();
+				return true;
+			}
+			if (shortcutsOpen) {
+				shortcutsOpen = false;
+				return true;
+			}
+			if (library.bulkMenu) {
+				library.bulkMenu = null;
+				return true;
+			}
+			if (showPalette) {
+				showPalette = false;
+				return true;
+			}
+			if (searchDropdownOpen || peel.searchQuery.trim()) {
+				closeSearchDropdown(true);
+				return true;
+			}
+			if (editorStage.open) {
+				editorStage.dismissAll();
+				return true;
+			}
+			if (canvas.expandedNoteId) {
+				canvas.collapseSticky();
+				return true;
+			}
+			if (settingsOpen) {
+				settingsOpen = false;
+				return true;
+			}
+			if (peel.peelOpen) {
+				peel.closePeel(true);
+				return true;
+			}
+			if (library.selectionIds.length > 0) {
+				library.clearSelection();
+				return true;
+			}
+			return false;
 		}
+	});
 
-		return { created, compacted, failed, skippedCap };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	async function adoptClipDraft(draft: Awaited<ReturnType<typeof buildPdfClippingDraft>>) {
+		if (!draft) return;
+		const note = await createNote({
+			...activeNoteOwnership(),
+			title: draft.title,
+			body: draft.body,
+			folder: peel.canvasFolder,
+			tags: draft.tags,
+			links: [],
+			source: draft.source
+		});
+		addNoteToSearch(note);
+		library.notes = [note, ...library.notes];
+		return { note, clipping: withNoteId(draft.clipping, note.id), toast: draft.toast };
+	}
+
+	async function savePdfClipping(excerpt: PdfClipPayload) {
+		const file = documentReaders.pdfReaderFile;
+		if (!file) return;
+		const draft = await buildPdfClippingDraft(file, excerpt);
+		const adopted = await adoptClipDraft(draft);
+		if (!adopted) return;
+		documentReaders.pdfClippings = [
+			...documentReaders.pdfClippings,
+			adopted.clipping as import('$lib/pdf-clipping').PdfClipping
+		];
+		flashToast(adopted.toast);
+	}
+
+	async function saveDocxClipping(excerpt: DocxClipPayload) {
+		const file = documentReaders.docxReaderFile;
+		if (!file) return;
+		const draft = buildDocxClippingDraft(file, excerpt);
+		const adopted = await adoptClipDraft(draft);
+		if (!adopted) return;
+		documentReaders.docxClippings = [
+			...documentReaders.docxClippings,
+			adopted.clipping as import('$lib/docx-clipping').DocxClipping
+		];
+		flashToast(adopted.toast);
+	}
+
+	async function saveHtmlClipping(excerpt: HtmlClipPayload) {
+		const file = documentReaders.htmlReaderFile;
+		if (!file) return;
+		const draft = buildHtmlClippingDraft(file, excerpt);
+		const adopted = await adoptClipDraft(draft);
+		if (!adopted) return;
+		documentReaders.htmlClippings = [
+			...documentReaders.htmlClippings,
+			adopted.clipping as import('$lib/html-clipping').HtmlClipping
+		];
+		flashToast(adopted.toast);
+	}
+
+	async function openClippingsOnCanvas(
+		noteIds: string[],
+		close: () => void
+	) {
+		if (noteIds.length === 0) return;
+		const spawn = canvas.canvasBoard?.getSpawnPoint(COLLAPSED_CARD, canvas.canvasItems.length) ?? {
+			x: 80,
+			y: 80
+		};
+		close();
+		await tick();
+		await canvas.handleDropNotes(noteIds, spawn.x, spawn.y);
+		flashToast(`Opened ${noteIds.length} clipping${noteIds.length === 1 ? '' : 's'} on canvas`);
+	}
+
+	async function openPdfClippingsOnCanvas(noteIds: string[]) {
+		await openClippingsOnCanvas(noteIds, () => {
+			documentReaders.pdfReaderOpen = false;
+		});
+	}
+
+	async function openDocxClippingsOnCanvas(noteIds: string[]) {
+		await openClippingsOnCanvas(noteIds, () => {
+			documentReaders.docxReaderOpen = false;
+		});
+	}
+
+	async function openHtmlClippingsOnCanvas(noteIds: string[]) {
+		await openClippingsOnCanvas(noteIds, () => {
+			documentReaders.htmlReaderOpen = false;
+		});
 	}
 
 	async function handleDroppedFiles(files: File[], x: number, y: number) {
@@ -1563,147 +1130,6 @@
 		else if (!waitingForConfirmation) flashToast('No supported files imported', 3600);
 	}
 
-	function isEditablePasteTarget(target: EventTarget | null): boolean {
-		if (!(target instanceof HTMLElement)) return false;
-		return Boolean(target.closest('input, textarea, [contenteditable="true"], [role="textbox"]'));
-	}
-
-	function handleGlobalPaste(event: ClipboardEvent) {
-		if (isEditablePasteTarget(event.target)) return;
-		if (
-			showPalette ||
-			settingsOpen ||
-			shortcutsOpen ||
-			spacesOverviewOpen ||
-			sessionPanelOpen ||
-			pasteDialogOpen ||
-			gifExplodeDialogOpen ||
-			documentReaderOpen ||
-			editorStage.open
-		) {
-			return;
-		}
-		const imageBlob = clipboardImageBlob(event.clipboardData);
-		const text = event.clipboardData?.getData('text/plain') ?? '';
-		if (imageBlob) {
-			event.preventDefault();
-			void (async () => {
-				const caption = text.trim();
-				const fileName =
-					imageBlob instanceof File && imageBlob.name
-						? imageBlob.name
-						: isGifFile({ name: '', type: imageBlob.type })
-							? 'clipboard.gif'
-							: 'clipboard.png';
-				if (isGifFile({ name: fileName, type: imageBlob.type })) {
-					const inspected = await inspectGif(imageBlob);
-					if (inspected.ok && inspected.animated) {
-						queueGifExplodeChoice(imageBlob, fileName, inspected.frameCount, undefined, caption);
-						return;
-					}
-				}
-				const prepared = await prepareDeskImage(imageBlob, {
-					fileName,
-					titleHint: 'Pasted image'
-				});
-				if (!prepared.ok) {
-					if (prepared.error === 'too-large') {
-						flashToast('Image too large to import (max 20 MB)', 3200);
-					} else {
-						flashToast("Can't import that image — try PNG, JPEG, WebP, or GIF", 3200);
-					}
-					return;
-				}
-				const title = prepared.titleHint || 'Pasted image';
-				const notes = await placeNoteDraftsOnDesk([
-					{
-						title,
-						body: imageNoteBody(prepared.dataUrl, title, caption),
-						source: imageNoteSource(
-							imageBlob instanceof File && imageBlob.name ? imageBlob.name : 'Clipboard'
-						)
-					}
-				]);
-				if (notes.length > 0) {
-					const bits = [
-						notes.length === 1 ? 'Pasted image card' : `Pasted ${notes.length} image cards`
-					];
-					if (prepared.compacted) bits.push('Image resized for the desk');
-					flashToast(bits.join(' · '));
-				}
-			})();
-			return;
-		}
-		const urlDrafts = draftsFromUrlOnlyText(text);
-		if (urlDrafts) {
-			event.preventDefault();
-			void (async () => {
-				const notes = await placeNoteDraftsOnDesk(urlDrafts);
-				if (notes.length === 0) return;
-				const totalLines = text
-					.replace(/\r\n?/g, '\n')
-					.split('\n')
-					.map((l) => l.trim())
-					.filter(Boolean).length;
-				const parts = [
-					notes.length === 1 ? 'Pasted 1 link card' : `Pasted ${notes.length} link cards`
-				];
-				if (totalLines > URL_SOURCE_MAX_PER_PASTE) {
-					parts.push(`Imported ${URL_SOURCE_MAX_PER_PASTE} of ${totalLines} links`);
-				}
-				flashToast(parts.join(' · '));
-			})();
-			return;
-		}
-		const analysis = analyzePastedText(text);
-		if (!analysis.text) return;
-		event.preventDefault();
-		if (analysis.lines.length <= 1 && analysis.paragraphs.length <= 1) {
-			void createCardsFromPaste(analysis, 'single');
-			return;
-		}
-		pasteAnalysis = analysis;
-		pasteDialogOpen = true;
-	}
-
-	async function createCardsFromPaste(analysis: PasteAnalysis, mode: PasteSplitMode) {
-		const drafts = draftsFromPastedText(analysis.text, mode);
-		if (drafts.length === 0) return;
-		const createdNotes = await placeNoteDraftsOnDesk(drafts);
-		pasteDialogOpen = false;
-		pasteAnalysis = null;
-		if (createdNotes.length > 0) {
-			flashToast(
-				createdNotes.length === 1 ? 'Pasted 1 card' : `Pasted ${createdNotes.length} cards`
-			);
-		}
-	}
-
-	async function handleOpenImageFiles(files: File[]) {
-		if (!files.length) return;
-		const result = await createVisualStickiesFromFiles(files);
-		const parts: string[] = [];
-		if (result.created > 0) {
-			parts.push(
-				result.created === 1 ? 'Added 1 image card' : `Added ${result.created} image cards`
-			);
-		}
-		if (result.compacted > 0) {
-			parts.push(
-				result.compacted === 1
-					? 'Image resized for the desk'
-					: `${result.compacted} images resized for the desk`
-			);
-		}
-		if (result.skippedCap > 0) {
-			parts.push(`Imported ${DESK_IMAGE_MAX_PER_ACTION} of ${files.length} images`);
-		}
-		if (result.created === 0 && result.failed > 0) {
-			parts.push('No images imported');
-		}
-		if (parts.length > 0) flashToast(parts.join(' · '), 3600);
-	}
-
 	/** Desk/folders/tags peels sit above the stage and steal clicks — dismiss unless Linked. */
 	function dismissPeelForStage() {
 		if (peel.peelOpen && peel.peelMode !== 'linked') {
@@ -1794,9 +1220,9 @@
 			? peelScopeSubtitle(peelScopeStats, peelScopeFilter)
 			: undefined
 	);
-	/** Screenplay mode: any open folder/pinned board besides root Desk. */
+	/** Multiple open boards: chip shows the active board name (not the Screenplay metaphor). */
 	let screenplayActive = $derived(spaces.openKeys.length > 1);
-	let screenplayChipTitle = $derived(screenplayActive ? 'Screenplay' : peel.canvasTitle);
+	let screenplayChipTitle = $derived(peel.canvasTitle);
 	let canvasPlaceCount = $derived(
 		canvas.canvasItems.filter((item) => library.notesById.has(item.noteId)).length
 	);
@@ -1882,130 +1308,42 @@
 		if (searchDropdownOpen) closeSearchDropdown(false);
 	}
 
-	/**
-	 * Mash notes into a new note + canvas bubble.
-	 * Source notes stay in the library; their canvas cards are removed and can be restored via Unmash.
-	 */
-	async function mashNotesIntoBubble(
-		sourceNotes: Note[],
-		opts?: { x?: number; y?: number; removeItemIds?: string[] }
-	): Promise<boolean> {
-		if (sourceNotes.length < 2) {
-			flashToast('Pick at least two notes to mash');
-			return false;
-		}
-		const sessionId = sessionManager.activeSession?.id;
-		if (!canvas.activeCanvas || !sessionId) {
-			flashToast('Canvas not ready');
-			return false;
-		}
-
-		const body = combineNotes(sourceNotes);
-		const title =
-			sourceNotes.length === 2
-				? `${sourceNotes[0].title} + ${sourceNotes[1].title}`.slice(0, 200)
-				: `Mash of ${sourceNotes.length} notes`;
-
-		const xs = opts?.x;
-		const ys = opts?.y;
-		let placeX = xs ?? 80;
-		let placeY = ys ?? 80;
-		if (xs === undefined || ys === undefined) {
-			const onBoard = canvas.canvasItems.filter((i) => sourceNotes.some((n) => n.id === i.noteId));
-			if (onBoard.length > 0) {
-				placeX = onBoard.reduce((s, i) => s + i.x, 0) / onBoard.length;
-				placeY = onBoard.reduce((s, i) => s + i.y, 0) / onBoard.length;
-			}
-		}
-
-		const sourceIds = sourceNotes.map((n) => n.id);
-		const mergedTags = [...new Set(['mash', ...sourceNotes.flatMap((n) => n.tags)])];
-		const operation = await createOperationRecord({
-			sessionId,
-			type: 'mash',
-			inputNoteIds: sourceIds,
-			outputNoteIds: [],
-			payload: { sourceCount: sourceIds.length }
+	async function handleNewNote() {
+		const onPinned = peel.currentFilter.type === 'pinned';
+		const note = await createNote({
+			...activeNoteOwnership(),
+			title: 'Untitled',
+			body: '',
+			folder: peel.currentFilter.type === 'folder' ? peel.currentFilter.value || '' : '',
+			links: [],
+			pinned: onPinned ? 1 : 0
 		});
-		let mashed: Note | null = null;
-		try {
-			mashed = await createNote({
-				...activeNoteOwnership(),
-				title,
-				body,
-				folder: peel.canvasFolder,
-				tags: mergedTags,
-				links: extractWikilinks(body),
-				mashedFrom: sourceIds,
-				operationId: operation.id
-			});
-			await db.operations.update(operation.id, { outputNoteIds: [mashed.id] });
-			const item = await canvas.mashCanvasItems(
-				sourceIds,
-				mashed,
-				operation.id,
-				{ x: placeX, y: placeY },
-				opts?.removeItemIds
-			);
-			if (!item) throw new Error('Canvas Mash was not applied');
-			library.adoptNotes([mashed]);
-			canvas.settlingIds = new Set([item.id]);
-			setTimeout(() => {
-				canvas.settlingIds = new Set();
-			}, 320);
-			const demoCook = shouldStayOnDeskAfterMash(sourceNotes);
-			// First-session demo stays on the desk so Mash → Unmash is visible.
-			if (!demoCook) {
-				openInStage(mashed.id, 'maximize');
-			} else {
-				library.selectionIds = [mashed.id];
-				library.selectedId = mashed.id;
-				canvas.canvasBoard?.ensureNoteVisible(mashed.id);
-			}
-			await refreshOperationHistory();
-			flashToast(
-				demoCook
-					? tryAMashAfterMashToast()
-					: formatContentOperatorToast('Mash', sourceIds.length, 1),
-				demoCook ? 4800 : undefined
-			);
-			return true;
-		} catch (error) {
-			console.error('Failed to Mash notes', error);
-			if (mashed) await replaceNoteSubset([mashed.id], []);
-			await db.operations.delete(operation.id);
-			flashToast('Could not Mash these cards');
-			return false;
-		}
-	}
-
-	async function combineSelection() {
-		const notes = library.selectedNotes;
-		if (notes.length < 2) {
-			flashToast('Select at least 2 notes to mash');
+		addNoteToSearch(note);
+		library.notes = [note, ...library.notes];
+		void sessionManager.recordMeaningfulActivity();
+		if (canvas.activeCanvas) {
+			// Place via drop path (bumps load seq) and expand in-place — stage is for explicit Edit.
+			const spawn = canvas.canvasBoard?.getSpawnPoint(
+				COLLAPSED_CARD,
+				canvas.canvasItems.length
+			) ?? {
+				x: 80,
+				y: 80
+			};
+			await canvas.handleDropNotes([note.id], spawn.x, spawn.y);
+			library.selectNote(note.id);
+			canvas.expandSticky(note.id, 'title');
 			return;
 		}
-		const preview = notes
-			.slice(0, 3)
-			.map((n) => n.title)
-			.join(', ');
-		const extra = notes.length > 3 ? ` +${notes.length - 3}` : '';
-		const noteIds = notes.map((n) => n.id);
-		askConfirm({
-			title: 'Mash these notes?',
-			message: `Combine ${notes.length} notes (${preview}${extra}) into one sticky. Sources leave the desk until you Unmash.`,
-			confirmLabel: 'Mash',
-			action: async () => {
-				const latest = noteIds
-					.map((id) => library.notesById.get(id))
-					.filter((n): n is Note => Boolean(n));
-				if (latest.length < 2) {
-					flashToast('Select at least 2 notes to mash');
-					return;
-				}
-				await mashNotesIntoBubble(latest);
-			}
-		});
+		library.selectNote(note.id);
+		openInStage(note.id, 'maximize');
+	}
+
+	async function runConfirmDialog() {
+		const pending = confirmDialog;
+		confirmDialog = null;
+		if (!pending) return;
+		await pending.action();
 	}
 
 	function selectionExportTitle(notes: Note[]): string {
@@ -2067,44 +1405,6 @@
 		library.exportSelectionMarkdown(notes);
 	}
 
-	/** Restore source notes with a reversible Unmash receipt. */
-	async function unmashSelection() {
-		if (!canvas.activeCanvas) return;
-		const mashNotes = library.selectedNotes.filter(
-			(n) => n.tags.includes('mash') && n.mashedFrom && n.mashedFrom.length > 0
-		);
-		if (mashNotes.length === 0) {
-			flashToast('Select a mashed sticky to unmash');
-			return;
-		}
-
-		const placed: string[] = [];
-		let missingSources = 0;
-		for (const mash of mashNotes) {
-			const sourceIds = mash.mashedFrom ?? [];
-			const sources = sourceIds
-				.map((id) => library.notes.find((n) => n.id === id))
-				.filter((n): n is Note => Boolean(n));
-			const result = await canvas.unmashCanvasItem(mash, sources);
-			missingSources += result.missing;
-			placed.push(...result.itemIds);
-			if (result.restored > 0) {
-				if (canvas.expandedNoteId === mash.id) canvas.expandedNoteId = null;
-				const pane = editorStage.panes.find((candidate) => candidate.noteId === mash.id);
-				if (pane) editorStage.dismissPane(pane.id);
-			}
-		}
-		canvas.settlingIds = new Set(placed);
-		setTimeout(() => {
-			canvas.settlingIds = new Set();
-		}, 320);
-		flashToast(
-			missingSources > 0
-				? `Unmashed — ${missingSources} source${missingSources === 1 ? '' : 's'} missing`
-				: 'Unmashed — sources restored'
-		);
-	}
-
 	async function openWikilink(target: string) {
 		const title = target.trim();
 		const needle = title.toLowerCase();
@@ -2136,532 +1436,68 @@
 		});
 	}
 
-	async function handleMashCards(sourceItemId: string, targetItemId: string) {
-		const source = canvas.canvasItems.find((i) => i.id === sourceItemId);
-		const target = canvas.canvasItems.find((i) => i.id === targetItemId);
-		if (!source || !target) return;
+	const paletteDeps = {
+		closePalette: () => {
+			showPalette = false;
+		},
+		handleNewNote,
+		clickPdfInput: () => pdfInputEl?.click(),
+		clickDocxInput: () => docxInputEl?.click(),
+		clickHtmlInput: () => htmlInputEl?.click(),
+		clickImageInput: () => imageInputEl?.click(),
+		clickImportInput: () => importInputEl?.click(),
+		clickMarkdownImportInput: () => markdownImportInputEl?.click(),
+		clickSyncInput: () => syncInputEl?.click(),
+		showSpacesOverview,
+		openSettings: () => {
+			peel.closePeel(true);
+			settingsOpen = true;
+		},
+		openShortcuts: () => {
+			shortcutsOpen = true;
+		},
+		copySelection: () => library.copySelection(),
+		exportSelectionMarkdown: () => library.exportSelectionMarkdown(),
+		exportSelectionJson: () => library.exportSelectionJson(),
+		exportSelectionPdf,
+		printSelection,
+		downloadSelectionMarkdown,
+		exportAllJson: () => {
+			exportNotesJson(library.notes, 'mash-notes-export.json');
+		},
+		exportSyncBundle: () => exportSyncBundle(),
+		getNotes: () => library.notes,
+		getSelectionIds: () => library.selectionIds,
+		getSelectedId: () => library.selectedId,
+		getSelectedNote: () => library.selectedNote,
+		getCanUnmash: () => library.canUnmash,
+		getNotesById: () => library.notesById,
+		selectedCanvasCount: () => selectedCanvasItems().length,
+		splitCandidate,
+		setBulkMenu: (
+			menu: 'tag' | 'folder' | 'align' | 'operators' | 'mash' | 'more' | null
+		) => {
+			library.bulkMenu = menu;
+		},
+		handleDelete: () => library.handleDelete(),
+		handleStickyMetaChange: (id: string, patch: { pinned: 0 | 1 }) =>
+			library.handleStickyMetaChange(id, patch),
+		clearFilter: () => peel.clearFilter(),
+		combineSelection,
+		unmashSelection,
+		splitSelection,
+		stackSelection,
+		spreadSelection,
+		sequenceSelection,
+		sortSelection,
+		shuffleSelection,
+		deduplicateSelection,
+		keepSelection,
+		flashToast
+	};
 
-		// Drag-onto always mashes the overlapped pair only. Use the selection-bar
-		// Mash action (or ⌘M) to combine a larger multi-selection.
-		const mashNoteIds = [source.noteId, target.noteId];
-		const mashNotes = mashNoteIds
-			.map((id) => library.notesById.get(id))
-			.filter((n): n is Note => Boolean(n));
-		if (mashNotes.length < 2) return;
-
-		const mashItems = canvas.canvasItems.filter((i) => mashNoteIds.includes(i.noteId));
-		const midX = mashItems.reduce((s, i) => s + i.x, 0) / Math.max(1, mashItems.length);
-		const midY = mashItems.reduce((s, i) => s + i.y, 0) / Math.max(1, mashItems.length);
-
-		await mashNotesIntoBubble(mashNotes, {
-			x: midX,
-			y: midY,
-			removeItemIds: mashItems.map((i) => i.id)
-		});
-	}
-
-	async function handleNewNote() {
-		const onPinned = peel.currentFilter.type === 'pinned';
-		const note = await createNote({
-			...activeNoteOwnership(),
-			title: 'Untitled',
-			body: '',
-			folder: peel.currentFilter.type === 'folder' ? peel.currentFilter.value || '' : '',
-			links: [],
-			pinned: onPinned ? 1 : 0
-		});
-		addNoteToSearch(note);
-		library.notes = [note, ...library.notes];
-		void sessionManager.recordMeaningfulActivity();
-		if (canvas.activeCanvas) {
-			const spawn = canvas.canvasBoard?.getSpawnPoint(
-				COLLAPSED_CARD,
-				canvas.canvasItems.length
-			) ?? {
-				x: 80,
-				y: 80
-			};
-			const item = await addNoteToCanvas(canvas.activeCanvas.id, note.id, {
-				x: spawn.x,
-				y: spawn.y,
-				w: COLLAPSED_CARD.w,
-				h: COLLAPSED_CARD.h
-			});
-			await canvas.refreshCanvasItems();
-			library.selectNote(note.id);
-			canvas.settlingIds = new Set([item.id, ...canvas.settlingIds]);
-			setTimeout(() => {
-				canvas.settlingIds = new Set();
-			}, 320);
-			openInStage(note.id, 'maximize');
-			return;
-		}
-		library.selectNote(note.id);
-		openInStage(note.id, 'maximize');
-	}
-
-	async function runConfirmDialog() {
-		const pending = confirmDialog;
-		confirmDialog = null;
-		if (!pending) return;
-		await pending.action();
-	}
-
-	function handleKeydown(e: KeyboardEvent) {
-		if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
-			const tag = (e.target as HTMLElement)?.tagName;
-			if (tag !== 'INPUT' && tag !== 'TEXTAREA') {
-				e.preventDefault();
-				if (e.shiftKey) void canvas.redoCanvasLayout();
-				else void canvas.undoCanvasLayout();
-				return;
-			}
-		}
-		if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-			e.preventDefault();
-			showPalette = !showPalette;
-			if (showPalette) paletteQuery = '';
-		}
-		if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
-			e.preventDefault();
-			handleNewNote();
-		}
-		if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'm') {
-			const tag = (e.target as HTMLElement)?.tagName;
-			if (tag !== 'INPUT' && tag !== 'TEXTAREA' && library.selectionIds.length >= 2) {
-				e.preventDefault();
-				void invokeOperatorAction('combine-selection');
-			}
-		}
-		if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'p') {
-			const tag = (e.target as HTMLElement)?.tagName;
-			if (tag !== 'INPUT' && tag !== 'TEXTAREA' && library.selectedId) {
-				e.preventDefault();
-				const note = library.selectedNote;
-				if (note) {
-					const np = note.pinned === 1 ? 0 : 1;
-					void library.handleStickyMetaChange(note.id, { pinned: np as 0 | 1 });
-				}
-			}
-		}
-		if (e.key === '?') {
-			const tag = (e.target as HTMLElement)?.tagName;
-			if (tag !== 'INPUT' && tag !== 'TEXTAREA' && !(e.target as HTMLElement)?.isContentEditable) {
-				e.preventDefault();
-				shortcutsOpen = true;
-			}
-		}
-		// Ctrl+ArrowUp — Show Screenplay (open folder boards)
-		if (e.ctrlKey && e.key === 'ArrowUp') {
-			const tag = (e.target as HTMLElement)?.tagName;
-			if (tag !== 'INPUT' && tag !== 'TEXTAREA' && !(e.target as HTMLElement)?.isContentEditable) {
-				e.preventDefault();
-				showSpacesOverview();
-			}
-		}
-		if (e.key === '/' && document.activeElement?.tagName === 'BODY') {
-			e.preventDefault();
-			(document.getElementById('global-search') as HTMLInputElement)?.focus();
-		}
-		if (e.key === 'Escape') {
-			if (pdfReaderOpen) {
-				hidePdfReader();
-				return;
-			}
-			if (docxReaderOpen) {
-				hideDocxReader();
-				return;
-			}
-			if (htmlReaderOpen) {
-				hideHtmlReader();
-				return;
-			}
-			if (confirmDialog) {
-				confirmDialog = null;
-				return;
-			}
-			if (spacesOverviewOpen) {
-				hideSpacesOverview();
-				return;
-			}
-			if (shortcutsOpen) {
-				shortcutsOpen = false;
-				return;
-			}
-			if (library.bulkMenu) {
-				library.bulkMenu = null;
-				return;
-			}
-			if (showPalette) {
-				showPalette = false;
-				return;
-			}
-			if (searchDropdownOpen || peel.searchQuery.trim()) {
-				closeSearchDropdown(true);
-				return;
-			}
-			if (editorStage.open) {
-				editorStage.dismissAll();
-				return;
-			}
-			if (canvas.expandedNoteId) {
-				canvas.collapseSticky();
-				return;
-			}
-			if (settingsOpen) {
-				settingsOpen = false;
-				return;
-			}
-			if (peel.peelOpen) {
-				peel.closePeel(true);
-				return;
-			}
-			if (library.selectionIds.length > 0) {
-				library.clearSelection();
-			}
-		}
-	}
-
-	const basePaletteActions = createActionRegistry([
-		{ label: 'New note', action: handleNewNote, shortcut: '⌘N' },
-		{
-			label: 'Open PDF reader…',
-			action: () => {
-				showPalette = false;
-				pdfInputEl?.click();
-			},
-			shortcut: ''
-		},
-		{
-			label: 'Open Word document…',
-			action: () => {
-				showPalette = false;
-				docxInputEl?.click();
-			},
-			shortcut: ''
-		},
-		{
-			label: 'Open HTML document…',
-			action: () => {
-				showPalette = false;
-				htmlInputEl?.click();
-			},
-			shortcut: ''
-		},
-		{
-			label: 'Open image…',
-			action: () => {
-				showPalette = false;
-				imageInputEl?.click();
-			},
-			shortcut: ''
-		},
-		{
-			label: 'Show Screenplay…',
-			action: () => {
-				showPalette = false;
-				showSpacesOverview();
-			},
-			shortcut: '⌃↑'
-		},
-		{
-			label: 'Open Settings…',
-			action: () => {
-				showPalette = false;
-				peel.closePeel(true);
-				settingsOpen = true;
-			},
-			shortcut: ''
-		},
-		{
-			label: 'Copy selected as Markdown',
-			action: () => {
-				void library.copySelection();
-				showPalette = false;
-			},
-			shortcut: ''
-		},
-		{
-			label: 'Export selected as Markdown',
-			action: () => {
-				library.exportSelectionMarkdown();
-				showPalette = false;
-			},
-			shortcut: ''
-		},
-		{
-			label: 'Export selected as JSON',
-			action: () => {
-				library.exportSelectionJson();
-				showPalette = false;
-			},
-			shortcut: ''
-		},
-		{
-			label: 'Tag selected notes',
-			action: () => {
-				if (library.selectionIds.length === 0) return;
-				library.bulkMenu = 'tag';
-				showPalette = false;
-			},
-			shortcut: ''
-		},
-		{
-			label: 'Move selected to folder',
-			action: () => {
-				if (library.selectionIds.length === 0) return;
-				library.bulkMenu = 'folder';
-				showPalette = false;
-			},
-			shortcut: ''
-		},
-		{
-			label: 'Delete selected notes',
-			action: () => {
-				void library.handleDelete();
-				showPalette = false;
-			},
-			shortcut: ''
-		},
-		{
-			label: 'Toggle pin',
-			action: () => {
-				if (!library.selectedId) return;
-				const np = library.selectedNote?.pinned === 1 ? 0 : 1;
-				library.handleStickyMetaChange(library.selectedId, { pinned: np as 0 | 1 });
-				showPalette = false;
-			},
-			shortcut: '⌘P'
-		},
-		{
-			label: 'Delete current note',
-			action: () => {
-				library.handleDelete();
-				showPalette = false;
-			},
-			shortcut: ''
-		},
-		{ label: 'Clear filters & search', action: peel.clearFilter, shortcut: 'Esc' },
-		{
-			label: 'Import notes from JSON…',
-			action: () => {
-				showPalette = false;
-				importInputEl?.click();
-			},
-			shortcut: ''
-		},
-		{
-			label: 'Import markdown vault…',
-			action: () => {
-				showPalette = false;
-				markdownImportInputEl?.click();
-			},
-			shortcut: ''
-		},
-		{
-			label: 'Export all as JSON',
-			action: () => {
-				exportNotesJson(library.notes, 'mash-notes-export.json');
-				flashToast(
-					`Exported ${library.notes.length} note${library.notes.length === 1 ? '' : 's'} as JSON`
-				);
-				showPalette = false;
-			},
-			shortcut: ''
-		},
-		{
-			label: 'Export sync bundle…',
-			action: () => {
-				void exportSyncBundle();
-				showPalette = false;
-			},
-			shortcut: ''
-		},
-		{
-			label: 'Import sync bundle…',
-			action: () => {
-				showPalette = false;
-				syncInputEl?.click();
-			},
-			shortcut: ''
-		},
-		{
-			label: 'Keyboard shortcuts',
-			action: () => {
-				showPalette = false;
-				shortcutsOpen = true;
-			},
-			shortcut: '?'
-		},
-		{
-			label: 'Undo tip: content vs layout',
-			action: () => {
-				showPalette = false;
-				flashToast('In a sticky: ⌘Z undoes typing. On the board: ⌘Z undoes move/align.');
-			},
-			shortcut: '⌘Z'
-		}
-	]);
-
-	const operatorActions = createActionRegistry([
-		{
-			id: 'combine-selection',
-			label: 'Mash selected notes',
-			shortcut: '⌘M',
-			mutation: 'content',
-			surfaces: ['palette', 'shortcut', 'context'],
-			available: () => selectedCanvasItems().length >= 2,
-			confirmation: 'required',
-			undo: 'content',
-			action: combineSelection
-		},
-		{
-			id: 'unmash-selection',
-			label: 'Unmash selected result',
-			shortcut: '',
-			mutation: 'content',
-			surfaces: ['palette', 'context'],
-			available: () => library.canUnmash,
-			undo: 'content',
-			action: unmashSelection
-		},
-		{
-			id: 'split-selection-headings',
-			label: 'Split selected card by headings',
-			shortcut: '',
-			mutation: 'content',
-			surfaces: ['palette', 'selection'],
-			available: () => Boolean(splitCandidate('headings')),
-			undo: 'content',
-			action: () => splitSelection('headings')
-		},
-		{
-			id: 'split-selection-paragraphs',
-			label: 'Split selected card by paragraphs',
-			shortcut: '',
-			mutation: 'content',
-			surfaces: ['palette', 'selection'],
-			available: () => Boolean(splitCandidate('paragraphs')),
-			undo: 'content',
-			action: () => splitSelection('paragraphs')
-		},
-		{
-			id: 'split-selection-lines',
-			label: 'Split selected card by lines',
-			shortcut: '',
-			mutation: 'content',
-			surfaces: ['palette', 'selection'],
-			available: () => Boolean(splitCandidate('lines')),
-			undo: 'content',
-			action: () => splitSelection('lines')
-		},
-		{
-			id: 'export-selection-pdf',
-			label: 'Export selected as PDF',
-			shortcut: '',
-			mutation: 'none',
-			surfaces: ['palette'],
-			available: () => library.selectionIds.length >= 1,
-			action: () => void exportSelectionPdf()
-		},
-		{
-			id: 'print-selection',
-			label: 'Print selected notes',
-			shortcut: '',
-			mutation: 'none',
-			surfaces: ['palette'],
-			available: () => library.selectionIds.length >= 1,
-			action: printSelection
-		},
-		{
-			id: 'export-selection-markdown',
-			label: 'Download selected as Markdown',
-			shortcut: '',
-			mutation: 'none',
-			surfaces: ['palette'],
-			available: () => library.selectionIds.length >= 1,
-			action: downloadSelectionMarkdown
-		},
-		{
-			id: 'stack-selection',
-			label: 'Stack selected cards',
-			shortcut: '',
-			mutation: 'layout',
-			surfaces: ['palette', 'selection'],
-			available: () => selectedCanvasItems().length >= 2,
-			undo: 'layout',
-			action: stackSelection
-		},
-		{
-			id: 'spread-selection',
-			label: 'Spread selected cards',
-			shortcut: '',
-			mutation: 'layout',
-			surfaces: ['palette', 'selection'],
-			available: () => selectedCanvasItems().length >= 2,
-			undo: 'layout',
-			action: spreadSelection
-		},
-		{
-			id: 'sequence-selection',
-			label: 'Sequence selected in reading order',
-			shortcut: '',
-			mutation: 'layout',
-			surfaces: ['palette', 'selection'],
-			available: () => selectedCanvasItems().length >= 2,
-			undo: 'layout',
-			action: sequenceSelection
-		},
-		{
-			id: 'sort-selection-title',
-			label: 'Sort selected by title',
-			shortcut: '',
-			mutation: 'layout',
-			surfaces: ['palette', 'selection'],
-			available: () => selectedCanvasItems().length >= 2,
-			undo: 'layout',
-			action: () => sortSelection('title')
-		},
-		{
-			id: 'sort-selection-created',
-			label: 'Sort selected by creation time',
-			shortcut: '',
-			mutation: 'layout',
-			surfaces: ['palette', 'selection'],
-			available: () => selectedCanvasItems().length >= 2,
-			undo: 'layout',
-			action: () => sortSelection('created')
-		},
-		{
-			id: 'shuffle-selection',
-			label: 'Shuffle selected cards',
-			shortcut: '',
-			mutation: 'layout',
-			surfaces: ['palette', 'selection'],
-			available: () => selectedCanvasItems().length >= 2,
-			undo: 'layout',
-			action: shuffleSelection
-		},
-		{
-			id: 'deduplicate-selection',
-			label: 'Deduplicate selected cards',
-			shortcut: '',
-			mutation: 'content',
-			surfaces: ['palette', 'selection'],
-			available: () => selectedCanvasItems().length >= 2,
-			undo: 'content',
-			action: deduplicateSelection
-		},
-		{
-			id: 'keep-selection',
-			label: 'Keep selected on this device',
-			shortcut: '',
-			mutation: 'content',
-			surfaces: ['palette', 'selection'],
-			available: () => keepableNoteIds(library.selectionIds, library.notesById).length > 0,
-			action: () => void keepSelection()
-		}
-	]);
+	const basePaletteActions = buildBasePaletteActions(paletteDeps);
+	const operatorActions = buildOperatorActions(paletteDeps);
 
 	function invokeOperatorAction(id: string) {
 		const action = operatorActions.find((candidate) => candidate.id === id);
@@ -2697,20 +1533,105 @@
 		...actionsForSurface(operatorActions, 'palette')
 	]);
 
+	type PaletteRow =
+		| { kind: 'group'; label: string; id: string }
+		| { kind: 'action'; action: (typeof paletteActions)[number]; flatIndex: number }
+		| { kind: 'note'; note: Note; flatIndex: number };
+
+	function paletteGroupFor(label: string): string {
+		const l = label.toLowerCase();
+		if (
+			l.includes('import') ||
+			l.includes('export') ||
+			l.includes('sync') ||
+			l.includes('print') ||
+			l.includes('pdf') ||
+			l.includes('markdown') ||
+			l.includes('json') ||
+			l.includes('word') ||
+			l.includes('html') ||
+			l.includes('image') ||
+			l.includes('vault')
+		) {
+			return 'Import · Export';
+		}
+		if (
+			l.includes('mash') ||
+			l.includes('unmash') ||
+			l.includes('split') ||
+			l.includes('sort') ||
+			l.includes('shuffle') ||
+			l.includes('stack') ||
+			l.includes('spread') ||
+			l.includes('dedup') ||
+			l.includes('sequence') ||
+			l.includes('transform') ||
+			l.includes('tag selected') ||
+			l.includes('folder') ||
+			l.includes('copy selected')
+		) {
+			return 'Transform';
+		}
+		if (
+			l.includes('new note') ||
+			l.includes('open ') ||
+			l.startsWith('show ') ||
+			l.includes('settings') ||
+			l.includes('desks') ||
+			l.includes('screenplay') ||
+			l.includes('shortcut') ||
+			l.includes('theme') ||
+			l.includes('undo tip')
+		) {
+			return 'Create · Navigate';
+		}
+		return 'More';
+	}
+
+	let paletteCommandMatches = $derived(
+		paletteActions.filter((a) => a.label.toLowerCase().includes(paletteQuery.toLowerCase()))
+	);
+	let paletteNoteJumps = $derived(
+		paletteQuery.length > 1
+			? library.notes
+					.filter((n: Note) => peelSearchText(n).toLowerCase().includes(paletteQuery.toLowerCase()))
+					.slice(0, 6)
+			: []
+	);
+	let paletteRows = $derived.by((): PaletteRow[] => {
+		const q = paletteQuery.toLowerCase();
+		const matches = paletteActions.filter((a) => a.label.toLowerCase().includes(q));
+		const groups = new Map<string, typeof matches>();
+		for (const action of matches) {
+			const g = paletteGroupFor(action.label);
+			const list = groups.get(g) ?? [];
+			list.push(action);
+			groups.set(g, list);
+		}
+		const order = ['Create · Navigate', 'Transform', 'Import · Export', 'More'];
+		const rows: PaletteRow[] = [];
+		let flat = 0;
+		for (const name of order) {
+			const list = groups.get(name);
+			if (!list?.length) continue;
+			rows.push({ kind: 'group', label: name, id: name });
+			for (const action of list) {
+				rows.push({ kind: 'action', action, flatIndex: flat++ });
+			}
+		}
+		if (paletteNoteJumps.length > 0) {
+			rows.push({ kind: 'group', label: 'Jump to note', id: 'notes' });
+			for (const note of paletteNoteJumps) {
+				rows.push({ kind: 'note', note, flatIndex: flat++ });
+			}
+		}
+		return rows;
+	});
+	let paletteFlatCount = $derived(paletteCommandMatches.length + paletteNoteJumps.length);
+
 	function handlePaletteKeydown(e: KeyboardEvent): void {
-		const commands = paletteActions.filter((a) =>
-			a.label.toLowerCase().includes(paletteQuery.toLowerCase())
-		);
-		const noteJumps =
-			paletteQuery.length > 1
-				? library.notes
-						.filter(
-							(n: Note) =>
-								n.title.toLowerCase().includes(paletteQuery.toLowerCase()) ||
-								n.body.toLowerCase().includes(paletteQuery.toLowerCase())
-						)
-						.slice(0, 6)
-				: [];
+		const commands = paletteCommandMatches;
+		const noteJumps = paletteNoteJumps;
 		const total = commands.length + noteJumps.length;
 		if (total === 0) return;
 
@@ -2850,6 +1771,8 @@
 					type="button"
 					class="mash-btn mash-focus inline-flex h-[38px] items-center rounded-[11px] px-3.5 text-xs font-semibold"
 					onclick={() => openSessionPanel('finish')}
+					onpointerenter={preloadSessionPanel}
+					onfocus={preloadSessionPanel}
 				>
 					Finish
 				</button>
@@ -2858,12 +1781,12 @@
 				<button
 					type="button"
 					class="mash-reader-launch mash-focus"
-					class:is-active={pdfReaderOpen}
-					class:has-session={Boolean(pdfReaderFile) && !pdfReaderOpen}
-					onclick={() => (pdfReaderFile ? resumePdfReader() : pdfInputEl?.click())}
-					aria-label={pdfReaderFile ? 'Return to PDF reader' : 'Open PDF reader'}
-					title={pdfReaderFile
-						? `Return to ${pdfReaderFile.name}`
+					class:is-active={documentReaders.pdfReaderOpen}
+					class:has-session={Boolean(documentReaders.pdfReaderFile) && !documentReaders.pdfReaderOpen}
+					onclick={() => (documentReaders.pdfReaderFile ? resumePdfReader() : pdfInputEl?.click())}
+					aria-label={documentReaders.pdfReaderFile ? 'Return to PDF reader' : 'Open PDF reader'}
+					title={documentReaders.pdfReaderFile
+						? `Return to ${documentReaders.pdfReaderFile.name}`
 						: 'Open a PDF and capture excerpts'}
 				>
 					<BookOpen class="h-[18px] w-[18px]" strokeWidth={1.9} />
@@ -2960,14 +1883,14 @@
 	<!-- Full-bleed canvas stage -->
 	<div class="relative flex min-h-0 flex-1">
 		<div class="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-			{#if !documentReaderOpen}
+			{#if !documentReaders.documentReaderOpen}
 				<div
 					class="mash-canvas-title-chip is-spaces-trigger absolute top-3 left-[4.75rem] z-10 rounded-full border px-3 py-1 text-[10px] backdrop-blur-sm"
 					class:pointer-events-none={spacesOverviewOpen}
 					style="border-color: var(--mash-chrome-chip-border); background: var(--mash-chrome-chip-soft); color: var(--mash-chrome-muted);"
 					role="button"
 					tabindex="0"
-					aria-label="Show Screenplay"
+					aria-label="Open desks"
 					aria-haspopup="dialog"
 					aria-expanded={spacesOverviewOpen}
 					data-screenplay-chip
@@ -2995,27 +1918,27 @@
 			{/if}
 
 			<div class="relative min-h-0 flex-1 overflow-hidden">
-				{#if pdfReaderFile && !pdfReaderOpen}
+				{#if documentReaders.pdfReaderFile && !documentReaders.pdfReaderOpen}
 					<button
 						type="button"
 						class="mash-reader-return mash-focus"
 						onclick={resumePdfReader}
-						title={`Return to ${pdfReaderFile.name}`}
+						title={`Return to ${documentReaders.pdfReaderFile.name}`}
 					>
 						<BookOpen class="h-4 w-4 shrink-0" strokeWidth={2} />
 						<span>Return to PDF</span>
-						<small>{pdfReaderFile.name}</small>
+						<small>{documentReaders.pdfReaderFile.name}</small>
 					</button>
-				{:else if docxReaderFile && !docxReaderOpen}
+				{:else if documentReaders.docxReaderFile && !documentReaders.docxReaderOpen}
 					<button
 						type="button"
 						class="mash-reader-return mash-focus"
 						onclick={resumeDocxReader}
-						title={`Return to ${docxReaderFile.name}`}
+						title={`Return to ${documentReaders.docxReaderFile.name}`}
 					>
 						<BookOpen class="h-4 w-4 shrink-0" strokeWidth={2} />
 						<span>Return to Word</span>
-						<small>{docxReaderFile.name}</small>
+						<small>{documentReaders.docxReaderFile.name}</small>
 					</button>
 				{/if}
 				<CanvasBoard
@@ -3086,21 +2009,23 @@
 					onOpenShortcuts={() => (shortcutsOpen = true)}
 					bind:snapEnabled
 				/>
-				{#if pdfReaderFile && LazyPdfReader}
-					{#key pdfReaderFile}
-						<LazyPdfReader
-							file={pdfReaderFile}
-							clippings={pdfClippings}
-							open={pdfReaderOpen}
-							initialPage={pdfReaderView.page}
-							initialZoom={pdfReaderView.zoom}
+				{#if documentReaders.pdfReaderFile && documentReaders.LazyPdfReader}
+					{#key documentReaders.pdfReaderFile}
+						{@const PdfReaderComp = documentReaders.LazyPdfReader}
+						<PdfReaderComp
+							file={documentReaders.pdfReaderFile}
+							clippings={documentReaders.pdfClippings}
+							open={documentReaders.pdfReaderOpen}
+							initialPage={documentReaders.pdfReaderView.page}
+							initialZoom={documentReaders.pdfReaderView.zoom}
 							onClose={hidePdfReader}
 							onClip={savePdfClipping}
 							onOpenClippings={openPdfClippingsOnCanvas}
-							onViewChange={(view) => (pdfReaderView = view)}
+							onViewChange={(view: { page: number; zoom: number }) =>
+								(documentReaders.pdfReaderView = view)}
 						/>
 					{/key}
-				{:else if pdfReaderOpen && pdfReaderModuleLoading}
+				{:else if documentReaders.pdfReaderOpen}
 					<section class="mash-pdf-reader" aria-label="PDF reader">
 						<div
 							class="flex h-full items-center justify-center text-sm"
@@ -3110,18 +2035,19 @@
 						</div>
 					</section>
 				{/if}
-				{#if docxReaderFile && LazyDocxReader}
-					{#key docxReaderFile}
-						<LazyDocxReader
-							file={docxReaderFile}
-							clippings={docxClippings}
-							open={docxReaderOpen}
+				{#if documentReaders.docxReaderFile && documentReaders.LazyDocxReader}
+					{#key documentReaders.docxReaderFile}
+						{@const DocxReaderComp = documentReaders.LazyDocxReader}
+						<DocxReaderComp
+							file={documentReaders.docxReaderFile}
+							clippings={documentReaders.docxClippings}
+							open={documentReaders.docxReaderOpen}
 							onClose={hideDocxReader}
 							onClip={saveDocxClipping}
 							onOpenClippings={openDocxClippingsOnCanvas}
 						/>
 					{/key}
-				{:else if docxReaderOpen && docxReaderModuleLoading}
+				{:else if documentReaders.docxReaderOpen}
 					<section class="mash-pdf-reader" aria-label="Word document reader">
 						<div
 							class="flex h-full items-center justify-center text-sm"
@@ -3131,18 +2057,19 @@
 						</div>
 					</section>
 				{/if}
-				{#if htmlReaderFile && LazyHtmlReader}
-					{#key htmlReaderFile}
-						<LazyHtmlReader
-							file={htmlReaderFile}
-							clippings={htmlClippings}
-							open={htmlReaderOpen}
+				{#if documentReaders.htmlReaderFile && documentReaders.LazyHtmlReader}
+					{#key documentReaders.htmlReaderFile}
+						{@const HtmlReaderComp = documentReaders.LazyHtmlReader}
+						<HtmlReaderComp
+							file={documentReaders.htmlReaderFile}
+							clippings={documentReaders.htmlClippings}
+							open={documentReaders.htmlReaderOpen}
 							onClose={hideHtmlReader}
 							onClip={saveHtmlClipping}
 							onOpenClippings={openHtmlClippingsOnCanvas}
 						/>
 					{/key}
-				{:else if htmlReaderOpen && htmlReaderModuleLoading}
+				{:else if documentReaders.htmlReaderOpen}
 					<section class="mash-pdf-reader" aria-label="HTML document reader">
 						<div
 							class="flex h-full items-center justify-center text-sm"
@@ -3152,7 +2079,7 @@
 						</div>
 					</section>
 				{/if}
-				{#if !documentReaderOpen}
+				{#if !documentReaders.documentReaderOpen}
 					<EditorStage
 						stage={editorStage}
 						notesById={library.notesById}
@@ -3194,42 +2121,44 @@
 			<div
 				class="mash-peel-slot pointer-events-auto absolute top-1/2 left-[4.75rem] z-30 -translate-y-1/2"
 			>
-				<SettingsPanel
-					{snapEnabled}
-					lastExportAt={syncHygiene.lastExportAt}
-					lastImportAt={syncHygiene.lastImportAt}
-					onClose={() => (settingsOpen = false)}
-					onSnapChange={setSnapEnabled}
-					onOrganize={() => canvas.canvasBoard?.organizeToSnap?.()}
-					onOpenShortcuts={() => {
-						settingsOpen = false;
-						shortcutsOpen = true;
-					}}
-					onImportMarkdown={() => markdownImportInputEl?.click()}
-					onImportJson={() => importInputEl?.click()}
-					onExportJson={() => exportNotesJson(library.notes, 'mash-notes-export.json')}
-					onImportSync={() => syncInputEl?.click()}
-					onExportSync={() => {
-						void exportSyncBundle();
-					}}
-					onOpenDocx={() => {
-						settingsOpen = false;
-						docxInputEl?.click();
-					}}
-					onOpenHtml={() => {
-						settingsOpen = false;
-						htmlInputEl?.click();
-					}}
-					onOpenImage={() => {
-						settingsOpen = false;
-						imageInputEl?.click();
-					}}
-					conflictCount={syncConflicts.count}
-					onOpenConflicts={() => {
-						settingsOpen = false;
-						peel.openPeel('conflicts');
-					}}
-				/>
+				{#await import('$lib/components/SettingsPanel.svelte') then mod}
+					<mod.default
+						{snapEnabled}
+						lastExportAt={syncHygiene.lastExportAt}
+						lastImportAt={syncHygiene.lastImportAt}
+						onClose={() => (settingsOpen = false)}
+						onSnapChange={setSnapEnabled}
+						onOrganize={() => canvas.canvasBoard?.organizeToSnap?.()}
+						onOpenShortcuts={() => {
+							settingsOpen = false;
+							shortcutsOpen = true;
+						}}
+						onImportMarkdown={() => markdownImportInputEl?.click()}
+						onImportJson={() => importInputEl?.click()}
+						onExportJson={() => exportNotesJson(library.notes, 'mash-notes-export.json')}
+						onImportSync={() => syncInputEl?.click()}
+						onExportSync={() => {
+							void exportSyncBundle();
+						}}
+						onOpenDocx={() => {
+							settingsOpen = false;
+							docxInputEl?.click();
+						}}
+						onOpenHtml={() => {
+							settingsOpen = false;
+							htmlInputEl?.click();
+						}}
+						onOpenImage={() => {
+							settingsOpen = false;
+							imageInputEl?.click();
+						}}
+						conflictCount={syncConflicts.count}
+						onOpenConflicts={() => {
+							settingsOpen = false;
+							peel.openPeel('conflicts');
+						}}
+					/>
+				{/await}
 			</div>
 		{:else if peel.peelOpen}
 			<div
@@ -3326,7 +2255,7 @@
 			</div>
 		{/if}
 
-		{#if (library.selectionIds.length > 0 || latestKitchenReceipt) && !documentReaderOpen}
+		{#if (library.selectionIds.length > 0 || latestKitchenReceipt) && !documentReaders.documentReaderOpen}
 			<div
 				class="mash-selection-bar absolute bottom-5 left-1/2 z-20 flex -translate-x-1/2 flex-col items-center gap-2"
 				class:mash-selection-bar--peel={peel.peelOpen || settingsOpen}
@@ -3634,7 +2563,7 @@
 
 				{#if library.selectionIds.length > 0}
 				<div
-					class="mash-dock flex items-center gap-1 rounded-2xl border px-2 py-1.5 shadow-xl"
+					class="mash-dock mash-selection-bar flex items-center gap-1 rounded-2xl border px-2 py-1.5 shadow-xl"
 					style="border-color: var(--mash-panel-border); background: var(--mash-panel); backdrop-filter: blur(10px);"
 				>
 					<span
@@ -3648,7 +2577,7 @@
 							type="button"
 							data-testid="keep-selection"
 							onclick={() => void keepSelection()}
-							class="mash-btn-ghost flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs"
+							class="mash-btn-ghost mash-selection-primary flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs"
 							title="Keep on this device — survives clearing this scratch desk"
 							aria-label="Keep selected on this device"
 						>
@@ -3660,11 +2589,11 @@
 						<button
 							type="button"
 							onclick={onMashButtonClick}
-							class="mash-btn flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold"
+							class="mash-btn mash-selection-primary flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold"
 							title="Combine into one sticky — sources leave the desk until Unmash"
 							data-testid="selection-mash"
 						>
-							<Layers class="h-3.5 w-3.5" />
+							<Combine class="h-3.5 w-3.5" />
 							Mash
 						</button>
 					{/if}
@@ -3673,14 +2602,14 @@
 							type="button"
 							onclick={() =>
 								(library.bulkMenu = library.bulkMenu === 'operators' ? null : 'operators')}
-							class="mash-btn-ghost flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs {library.bulkMenu ===
+							class="mash-btn-ghost mash-selection-secondary flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs {library.bulkMenu ===
 							'operators'
 								? 'border-[var(--mash-accent)] text-[var(--mash-accent-bright)]'
 								: ''}"
 							title="Operator kitchen — shape or arrange the selected set"
 							data-testid="operator-kitchen-toggle"
 						>
-							<Layers class="h-3.5 w-3.5" />
+							<Sparkles class="h-3.5 w-3.5" />
 							Transform
 						</button>
 					{/if}
@@ -3688,7 +2617,7 @@
 						<button
 							type="button"
 							onclick={() => (library.bulkMenu = library.bulkMenu === 'align' ? null : 'align')}
-							class="mash-btn-ghost flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs {library.bulkMenu ===
+							class="mash-btn-ghost mash-selection-secondary flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs {library.bulkMenu ===
 							'align'
 								? 'border-[var(--mash-accent)] text-[var(--mash-accent-bright)]'
 								: ''}"
@@ -3814,58 +2743,74 @@
 						placeholder="Type a command…"
 						class="mash-focus w-full rounded bg-transparent px-1 text-sm outline-none"
 						style="color: var(--mash-ink);"
+						role="combobox"
+						aria-expanded="true"
+						aria-controls="mash-palette-listbox"
+						aria-activedescendant={paletteFlatCount > 0
+							? `mash-palette-option-${paletteHighlight}`
+							: undefined}
+						aria-autocomplete="list"
 						onkeydown={handlePaletteKeydown}
 					/>
 				</div>
-				<div class="max-h-80 overflow-auto p-1 text-sm">
-					{#each paletteActions.filter((a) => a.label
-							.toLowerCase()
-							.includes(paletteQuery.toLowerCase())) as action, i (action.label)}
-						<button
-							onclick={() => {
-								showPalette = false;
-								void action.action();
-							}}
-							class="mash-row-hover flex w-full items-center justify-between rounded px-3 py-2 text-left {i ===
-							paletteHighlight
-								? 'mash-row-active'
-								: ''}"
-						>
-							<span>{action.label}</span>
-							<span class="text-xs" style="color: var(--mash-ink-muted);">{action.shortcut}</span>
-						</button>
-					{/each}
-
-					{#if paletteQuery.length > 1}
-						<div
-							class="mt-1 border-t px-3 pt-1 text-[10px]"
-							style="border-color: var(--mash-tray-edge); color: var(--mash-ink-muted);"
-						>
-							Jump to note
+				<div
+					id="mash-palette-listbox"
+					role="listbox"
+					aria-label="Commands"
+					class="max-h-80 overflow-auto p-1 text-sm"
+				>
+					{#if paletteFlatCount === 0}
+						<div class="px-3 py-4 text-center text-xs" style="color: var(--mash-ink-muted);">
+							No commands match
 						</div>
-						{#each library.notes
-							.filter((n: Note) => n.title
-										.toLowerCase()
-										.includes(paletteQuery.toLowerCase()) || n.body
-										.toLowerCase()
-										.includes(paletteQuery.toLowerCase()))
-							.slice(0, 6) as note, j (note.id)}
-							<button
-								onclick={() => {
-									void canvas.openStickyFromTray(note.id);
-									showPalette = false;
-								}}
-								class="mash-row-hover flex w-full items-center justify-between rounded px-3 py-1.5 text-left text-xs {j +
-									paletteActions.filter((a) =>
-										a.label.toLowerCase().includes(paletteQuery.toLowerCase())
-									).length ===
-								paletteHighlight
-									? 'mash-row-active'
-									: ''}"
-							>
-								<span class="truncate">{note.title}</span>
-								<span class="text-[10px]" style="color: var(--mash-ink-muted);">{note.folder}</span>
-							</button>
+					{:else}
+						{#each paletteRows as row (row.kind === 'group' ? `g-${row.id}` : row.kind === 'action' ? `a-${row.action.label}` : `n-${row.note.id}`)}
+							{#if row.kind === 'group'}
+								<div
+									class="mt-1 border-t px-3 pt-2 pb-0.5 text-[10px] font-medium tracking-wide uppercase first:mt-0 first:border-t-0"
+									style="border-color: var(--mash-tray-edge); color: var(--mash-ink-muted);"
+								>
+									{row.label}
+								</div>
+							{:else if row.kind === 'action'}
+								<button
+									id="mash-palette-option-{row.flatIndex}"
+									role="option"
+									aria-selected={row.flatIndex === paletteHighlight}
+									onclick={() => {
+										showPalette = false;
+										void row.action.action();
+									}}
+									class="mash-row-hover flex w-full items-center justify-between rounded px-3 py-2 text-left {row.flatIndex ===
+									paletteHighlight
+										? 'mash-row-active'
+										: ''}"
+								>
+									<span>{row.action.label}</span>
+									<span class="text-xs" style="color: var(--mash-ink-muted);"
+										>{row.action.shortcut}</span
+									>
+								</button>
+							{:else}
+								<button
+									id="mash-palette-option-{row.flatIndex}"
+									role="option"
+									aria-selected={row.flatIndex === paletteHighlight}
+									onclick={() => {
+										void canvas.openStickyFromTray(row.note.id);
+										showPalette = false;
+									}}
+									class="mash-row-hover flex w-full items-center justify-between rounded px-3 py-1.5 text-left text-xs {row.flatIndex ===
+									paletteHighlight
+										? 'mash-row-active'
+										: ''}"
+								>
+									<span class="truncate">{row.note.title}</span>
+									<span class="text-[10px]" style="color: var(--mash-ink-muted);"
+										>{row.note.folder}</span
+									>
+								</button>
+							{/if}
 						{/each}
 					{/if}
 				</div>
@@ -3989,57 +2934,75 @@
 		onCancel={() => (confirmDialog = null)}
 	/>
 
-	<ShortcutsModal open={shortcutsOpen} onClose={() => (shortcutsOpen = false)} />
-	{#if spacesOverviewOpen}
-		<SpacesOverview
-			sessionId={sessionManager.activeSession?.id}
-			openKeys={spaces.openKeys}
-			activeKey={peel.canvasKey}
-			activeItems={canvas.canvasItems}
-			onClose={hideSpacesOverview}
-			onSwitch={switchSpace}
-			onCloseSpace={(key) => spaces.closeSpace(key)}
-		/>
+	{#if shortcutsOpen}
+		{#await import('$lib/components/ShortcutsModal.svelte') then mod}
+			<mod.default open={shortcutsOpen} onClose={() => (shortcutsOpen = false)} />
+		{/await}
 	{/if}
-	<SessionPanel
-		open={sessionPanelOpen}
-		initialView={sessionPanelView}
-		activeSession={sessionManager.activeSession}
-		activeSessions={sessionManager.activeSessions}
-		recoveringSessions={sessionManager.recoveringSessions}
-		retentionDays={sessionManager.retentionDays}
-		{finishSnapshot}
-		notesById={library.notesById}
-		{storageHealth}
-		onClose={() => (sessionPanelOpen = false)}
-		onSwitch={activateSession}
-		onNewScratch={createScratchSession}
-		onFinishExport={runFinishExport}
-		onFinishCommit={runFinishCommit}
-		onRestore={restoreSession}
-		onRetentionChange={changeRetentionDays}
-		onRefreshStorage={async () => {
-			await refreshStorageHealth();
-		}}
-	/>
-	<PasteChoiceDialog
-		open={pasteDialogOpen}
-		analysis={pasteAnalysis}
-		onChoose={(mode) => {
-			if (pasteAnalysis) void createCardsFromPaste(pasteAnalysis, mode);
-		}}
-		onClose={() => {
-			pasteDialogOpen = false;
-			pasteAnalysis = null;
-		}}
-	/>
-	<GifExplodeDialog
-		open={gifExplodeDialogOpen}
-		fileName={gifExplodePending?.fileName ?? ''}
-		frameCount={gifExplodePending?.frameCount ?? 0}
-		onChoose={(mode) => void handleGifExplodeChoice(mode)}
-		onClose={() => {
-			gifExplodePending = null;
-		}}
-	/>
+	{#if spacesOverviewOpen}
+		{#await import('$lib/components/SpacesOverview.svelte') then mod}
+			<mod.default
+				sessionId={sessionManager.activeSession?.id}
+				openKeys={spaces.openKeys}
+				activeKey={peel.canvasKey}
+				activeItems={canvas.canvasItems}
+				onClose={hideSpacesOverview}
+				onSwitch={switchSpace}
+				onCloseSpace={(key) => spaces.closeSpace(key)}
+			/>
+		{/await}
+	{/if}
+	{#if sessionPanelOpen}
+		{#await import('$lib/components/SessionPanel.svelte') then mod}
+			<mod.default
+				open={sessionPanelOpen}
+				initialView={sessionPanelView}
+				activeSession={sessionManager.activeSession}
+				activeSessions={sessionManager.activeSessions}
+				recoveringSessions={sessionManager.recoveringSessions}
+				retentionDays={sessionManager.retentionDays}
+				{finishSnapshot}
+				notesById={library.notesById}
+				{storageHealth}
+				onClose={() => (sessionPanelOpen = false)}
+				onSwitch={activateSession}
+				onNewScratch={createScratchSession}
+				onFinishExport={runFinishExport}
+				onFinishCommit={runFinishCommit}
+				onRestore={restoreSession}
+				onRetentionChange={changeRetentionDays}
+				onRefreshStorage={async () => {
+					await refreshStorageHealth();
+				}}
+			/>
+		{/await}
+	{/if}
+	{#if pasteDialogOpen}
+		{#await import('$lib/components/PasteChoiceDialog.svelte') then mod}
+			<mod.default
+				open={pasteDialogOpen}
+				analysis={pasteAnalysis}
+				onChoose={(mode) => {
+					if (pasteAnalysis) void createCardsFromPaste(pasteAnalysis, mode);
+				}}
+				onClose={() => {
+					pasteDialogOpen = false;
+					pasteAnalysis = null;
+				}}
+			/>
+		{/await}
+	{/if}
+	{#if gifExplodeDialogOpen}
+		{#await import('$lib/components/GifExplodeDialog.svelte') then mod}
+			<mod.default
+				open={gifExplodeDialogOpen}
+				fileName={gifExplodePending?.fileName ?? ''}
+				frameCount={gifExplodePending?.frameCount ?? 0}
+				onChoose={(mode) => void handleGifExplodeChoice(mode)}
+				onClose={() => {
+					gifExplodePending = null;
+				}}
+			/>
+		{/await}
+	{/if}
 </div>

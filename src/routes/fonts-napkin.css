@@ -1,0 +1,22 @@
+/* Napkin — Excalifont (OFL-1.1, self-hosted) */
+@font-face {
+	font-family: 'Excalifont';
+	font-style: normal;
+	font-display: swap;
+	font-weight: 400;
+	src: url('/fonts/Excalifont-Regular.woff2') format('woff2');
+}
+@font-face {
+	font-family: 'Excalifont';
+	font-style: normal;
+	font-display: swap;
+	font-weight: 500;
+	src: url('/fonts/Excalifont-Regular.woff2') format('woff2');
+}
+@font-face {
+	font-family: 'Excalifont';
+	font-style: normal;
+	font-display: swap;
+	font-weight: 600;
+	src: url('/fonts/Excalifont-Regular.woff2') format('woff2');
+}

@@ -31,10 +31,21 @@
 				onCancel();
 				return;
 			}
+			// Enter activates the focused control only — never force-confirm when Cancel is focused.
 			if (e.key === 'Enter') {
-				e.preventDefault();
-				e.stopImmediatePropagation();
-				onConfirm();
+				const target = e.target;
+				if (!(target instanceof HTMLElement)) return;
+				if (target.closest('[data-dialog-confirm]')) {
+					e.preventDefault();
+					e.stopImmediatePropagation();
+					onConfirm();
+					return;
+				}
+				if (target.closest('[data-dialog-cancel]')) {
+					e.preventDefault();
+					e.stopImmediatePropagation();
+					onCancel();
+				}
 			}
 		}
 		window.addEventListener('keydown', onKey, true);
@@ -65,11 +76,17 @@
 				{message}
 			</p>
 			<div class="mash-dialog-actions">
-				<button type="button" class="mash-btn-ghost mash-dialog-btn" onclick={onCancel}>
+				<button
+					type="button"
+					data-dialog-cancel
+					class="mash-btn-ghost mash-dialog-btn"
+					onclick={onCancel}
+				>
 					{cancelLabel}
 				</button>
 				<button
 					data-dialog-initial-focus
+					data-dialog-confirm
 					type="button"
 					class="mash-dialog-btn mash-dialog-btn-primary {danger ? 'mash-btn-danger' : 'mash-btn'}"
 					onclick={onConfirm}

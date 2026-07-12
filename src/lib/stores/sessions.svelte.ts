@@ -190,6 +190,8 @@ export function createSessionManager() {
 			await db.sessions.put(kept);
 			const notes = await db.notes.where('sessionId').equals(session.id).toArray();
 			for (const note of notes) {
+				// Soft-deleted rows stay tombstones — do not promote discarded trash to kept.
+				if (note.deletedAt != null) continue;
 				await db.notes.update(note.id, { scope: 'kept', keptAt: now });
 			}
 		});

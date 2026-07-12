@@ -83,11 +83,32 @@ function normalizeForSearch(s: string): string {
 		.trim();
 }
 
+/** Cap + strip embedded data-URL images so MiniSearch never tokenizes multi‑MB base64. */
+export function bodyForSearchIndex(body: string, maxChars = 8_000): string {
+	if (!body) return '';
+	// Fast path: embedded visual sticky / PDF clip — index alt + caption only.
+	if (
+		body.startsWith('![') &&
+		(body.includes('data:image') || body.includes('mash-blob:'))
+	) {
+		const close = body.indexOf(')');
+		const altEnd = body.indexOf('](');
+		const alt = altEnd > 2 ? body.slice(2, altEnd) : '';
+		const caption = close >= 0 ? body.slice(close + 1) : '';
+		const compact = `${alt} ${caption}`.replace(/\s+/g, ' ').trim();
+		return normalizeForSearch(compact).slice(0, maxChars);
+	}
+	const stripped = body
+		.replace(/!\[[^\]]*\]\(data:image\/[^)]+\)/gi, ' ')
+		.replace(/data:image\/[a-z+]+;base64,[A-Za-z0-9+/=]+/gi, ' ');
+	return normalizeForSearch(stripped).slice(0, maxChars);
+}
+
 function prepareDocForIndex(note: Note) {
 	return {
 		...note,
 		title: normalizeForSearch(note.title),
-		body: normalizeForSearch(note.body),
+		body: bodyForSearchIndex(note.body),
 		tagsJoined: normalizeForSearch(note.tags.join(' '))
 	};
 }

@@ -22,8 +22,8 @@
 		ZoomOut
 	} from 'lucide-svelte';
 	import { focusTrap } from '$lib/focus-trap';
-	import { rotateImageDataUrl } from '$lib/image-rotate';
 	import { composeEmbeddedNoteImage, parseEmbeddedNoteImage, renderMarkdown } from '$lib/markdown';
+	import { isMashBlobRef, releaseDisplayUrl, resolveDisplayUrl } from '$lib/note-blobs';
 	import { portal } from '$lib/portal';
 	import type { TextAlign } from '$lib/types';
 
@@ -70,9 +70,43 @@
 	let captionPreviewHtml = $derived(
 		embeddedImage?.caption ? renderMarkdown(embeddedImage.caption) : ''
 	);
-	let previewHtml = $derived(mode === 'preview' ? renderMarkdown(body || '') : '');
+	let previewHtml = $derived(
+		mode === 'preview'
+			? embeddedImage
+				? renderMarkdown(embeddedImage.caption || '')
+				: renderMarkdown(body || '')
+			: ''
+	);
 	let align = $derived(textAlign === 'center' || textAlign === 'right' ? textAlign : 'left');
 	let clipZoomLabel = $derived(`${Math.round(clipZoom * 100)}%`);
+	/** Resolved display URL for mash-blob: or pass-through data URL. */
+	let resolvedImageSrc = $state<string | null>(null);
+
+	$effect(() => {
+		const src = embeddedImage?.src ?? null;
+		let cancelled = false;
+		let held: string | null = null;
+		if (!src) {
+			resolvedImageSrc = null;
+			return;
+		}
+		if (!isMashBlobRef(src) && src.toLowerCase().startsWith('data:image/')) {
+			resolvedImageSrc = src;
+			return;
+		}
+		void resolveDisplayUrl(src).then((url) => {
+			if (cancelled) {
+				if (url && isMashBlobRef(src)) releaseDisplayUrl(src);
+				return;
+			}
+			held = src;
+			resolvedImageSrc = url;
+		});
+		return () => {
+			cancelled = true;
+			if (held && isMashBlobRef(held)) releaseDisplayUrl(held);
+		};
+	});
 
 	$effect(() => {
 		if (readOnly && mode !== 'preview') {
@@ -138,8 +172,17 @@
 		if (!embeddedImage || rotating || readOnly) return;
 		rotating = true;
 		try {
-			const src = await rotateImageDataUrl(embeddedImage.src, quarterTurns);
-			onBodyChange(composeEmbeddedNoteImage(embeddedImage.alt, src, embeddedImage.caption));
+			const { rotateImageToBlobRef, releaseRotatedBlob } = await import('$lib/image-rotate');
+			const { src: nextSrc, previousBlobId } = await rotateImageToBlobRef(
+				embeddedImage.src,
+				quarterTurns
+			);
+			onBodyChange(
+				composeEmbeddedNoteImage(embeddedImage.alt, nextSrc, embeddedImage.caption)
+			);
+			// Body now points at the new blob; reclaim the prior pixels if unused.
+			// Ignore this note's stale IDB body until persist catches up.
+			void releaseRotatedBlob(previousBlobId, noteId);
 		} catch (cause) {
 			console.error(cause);
 		} finally {
@@ -465,12 +508,14 @@
 					aria-label="Inspect image clipping"
 					title="Click to inspect"
 				>
-					<img
-						class="mash-sticky-clip"
-						src={embeddedImage.src}
-						alt={embeddedImage.alt || 'Note image'}
-						draggable="false"
-					/>
+					{#if resolvedImageSrc}
+						<img
+							class="mash-sticky-clip"
+							src={resolvedImageSrc}
+							alt={embeddedImage.alt || 'Note image'}
+							draggable="false"
+						/>
+					{/if}
 				</button>
 			</div>
 			{#if mode === 'edit' && !readOnly}
@@ -622,11 +667,13 @@
 				style="--clip-zoom: {clipZoom};"
 				use:clipZoomWheel
 			>
-				<img
-					src={embeddedImage.src}
-					alt={embeddedImage.alt || 'Note image'}
-					draggable="false"
-				/>
+				{#if resolvedImageSrc}
+					<img
+						src={resolvedImageSrc}
+						alt={embeddedImage.alt || 'Note image'}
+						draggable="false"
+					/>
+				{/if}
 			</div>
 		</div>
 	</div>

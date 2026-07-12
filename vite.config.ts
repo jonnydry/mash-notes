@@ -4,7 +4,23 @@ import tailwindcss from '@tailwindcss/vite';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { SvelteKitPWA } from '@vite-pwa/sveltekit';
 
-const deferredFeatureEntries = new Set(['pdf', 'sequence-pdf', 'PdfReader', 'board-image-export']);
+const deferredFeatureEntries = new Set([
+	'pdf',
+	'sequence-pdf',
+	'PdfReader',
+	'board-image-export',
+	'DocxReader',
+	'HtmlReader',
+	'gifuct-js',
+	// Chrome panels loaded on demand from +page
+	'SettingsPanel',
+	'ShortcutsModal',
+	'SpacesOverview',
+	'SessionPanel',
+	'FinishPanel',
+	'PasteChoiceDialog',
+	'GifExplodeDialog'
+]);
 
 async function excludeDeferredFeaturesFromPrecache(
 	manifestEntries: Array<{ url: string; revision: string | null; size: number }>
@@ -35,7 +51,8 @@ async function excludeDeferredFeaturesFromPrecache(
 
 export default defineConfig({
 	optimizeDeps: {
-		include: ['gifuct-js', 'js-binary-schema-parser']
+		// gifuct-js is loaded only when exploding GIFs (dynamic import).
+		include: ['js-binary-schema-parser']
 	},
 	plugins: [
 		tailwindcss(),

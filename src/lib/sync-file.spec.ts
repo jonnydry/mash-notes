@@ -211,6 +211,26 @@ describe('sync-file', () => {
 		expect([...getDismissedNoteIds('local-root')]).toEqual(['n2']);
 	});
 
+	it('does not resurrect remote-only placements when local canvas is newer', async () => {
+		await db.canvases.put({
+			id: 'local-root',
+			folder: '',
+			title: 'Desk',
+			created: 1,
+			modified: 100
+		});
+		const desk = {
+			canvases: [{ id: 'remote-root', folder: '', title: 'Desk', created: 1, modified: 10 }],
+			items: [{ id: 'ri1', canvasId: 'remote-root', noteId: 'n1', x: 100, y: 200, w: 220, h: 120 }],
+			dismissed: {}
+		};
+		const summary = await applyDeskSnapshot(desk, new Set(['n1', 'n2']));
+		expect(summary.itemsUpserted).toBe(0);
+		expect(summary.itemsSkipped).toBe(1);
+		const items = await db.canvasItems.where('canvasId').equals('local-root').toArray();
+		expect(items).toHaveLength(0);
+	});
+
 	it('applies desk flow edges remapped to local item ids', async () => {
 		await db.canvases.put({
 			id: 'local-root',

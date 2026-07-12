@@ -77,6 +77,18 @@ export interface Note {
 	keptAt?: number;
 }
 
+/** Binary image payload stored out-of-line from note bodies (mash-blob: refs). */
+export type NoteBlobMime = 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif';
+
+export interface NoteBlob {
+	id: string;
+	mime: NoteBlobMime;
+	bytes: ArrayBuffer;
+	width: number;
+	height: number;
+	created: number;
+}
+
 /** A durable, local receipt for a deterministic set/content operation. */
 export interface Operation {
 	id: string;

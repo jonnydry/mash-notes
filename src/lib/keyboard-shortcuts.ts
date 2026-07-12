@@ -21,7 +21,7 @@ export const KEYBOARD_SHORTCUT_GROUPS: ShortcutGroup[] = [
 		rows: [
 			{ keys: '⌘K', label: 'Command palette' },
 			{ keys: '⌘N', label: 'New note' },
-			{ keys: '⌃↑', label: 'Show Screenplay (open folder boards)' },
+			{ keys: '⌃↑', label: 'Open desks (Screenplay / folder boards)' },
 			{ keys: '/', label: 'Focus header search' },
 			{ keys: '?', label: 'Keyboard shortcuts' },
 			{ keys: 'Esc', label: 'Dismiss overlay, peel, or selection' }

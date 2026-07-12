@@ -4,6 +4,7 @@
 	import type { DocxClipPayload, DocxClipping } from '$lib/docx-clipping';
 	import { normalizeDocxExcerpt } from '$lib/docx-clipping';
 	import { convertDocxToHtml } from '$lib/docx-import';
+	import { sanitizeHtmlFragment } from '$lib/html-import';
 	import DocumentReaderShell from './DocumentReaderShell.svelte';
 
 	interface Props {
@@ -57,7 +58,8 @@
 			const result = await convertDocxToHtml(buffer, currentFile.name);
 			if (disposed || generation !== loadGeneration) return;
 			if (result.ok) {
-				html = result.html;
+				// Mammoth HTML is untrusted input — run through the same sanitizer as HTML import.
+				html = sanitizeHtmlFragment(result.html);
 			} else {
 				error = result.error;
 			}

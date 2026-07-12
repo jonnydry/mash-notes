@@ -30,11 +30,12 @@
 		Maximize2,
 		X,
 		FileUp,
-		FileText,
-		MoreHorizontal
+		FileText
 	} from 'lucide-svelte';
 	import { focusTrap } from '$lib/focus-trap';
 	import StickyEditor from '$lib/components/StickyEditor.svelte';
+	import CanvasChrome from '$lib/components/CanvasChrome.svelte';
+	import ResolvedNoteImage from '$lib/components/ResolvedNoteImage.svelte';
 	import FolderSuggestField from '$lib/components/FolderSuggestField.svelte';
 	import TagSuggestField from '$lib/components/TagSuggestField.svelte';
 	import { buildLinkSummaryMap } from '$lib/links';
@@ -271,6 +272,11 @@
 	let desktopViewOpen = $state(false);
 	let moveRaf = 0;
 	let pendingMoves: Array<{ itemId: string; x: number; y: number }> | null = null;
+	/** Coalesce pan pointer events to one layout pass per frame. */
+	let panRaf = 0;
+	let pendingPan: { panX: number; panY: number } | null = null;
+	/** Viewport card culling kicks in above this board size. */
+	const CULL_ITEM_THRESHOLD = 18;
 
 	let dragItemId: string | null = $state(null);
 	let dragGroup = $state<Array<{ id: string; originX: number; originY: number }>>([]);
@@ -603,6 +609,7 @@
 		if (target.closest('[data-mash-confirm]')) return;
 		if (target.closest('[data-canvas-chrome]')) return;
 		if (desktopViewOpen) desktopViewOpen = false;
+		if (mobileToolsOpen) mobileToolsOpen = false;
 		if (target.closest('[data-flow-edge]')) return;
 
 		if (flowFromItemId) {
@@ -636,10 +643,21 @@
 		boardEl?.setPointerCapture(e.pointerId);
 	}
 
+	function flushPendingPan() {
+		panRaf = 0;
+		if (!pendingPan) return;
+		panX = pendingPan.panX;
+		panY = pendingPan.panY;
+		pendingPan = null;
+	}
+
 	function onBoardPointerMove(e: PointerEvent) {
 		if (isPanning) {
-			panX = panStart.panX + (e.clientX - panStart.x);
-			panY = panStart.panY + (e.clientY - panStart.y);
+			pendingPan = {
+				panX: panStart.panX + (e.clientX - panStart.x),
+				panY: panStart.panY + (e.clientY - panStart.y)
+			};
+			if (!panRaf) panRaf = requestAnimationFrame(flushPendingPan);
 			return;
 		}
 		if (marquee) {
@@ -914,6 +932,15 @@
 
 	function onBoardPointerUp(e: PointerEvent) {
 		if (isPanning) {
+			if (panRaf) {
+				cancelAnimationFrame(panRaf);
+				panRaf = 0;
+			}
+			if (pendingPan) {
+				panX = pendingPan.panX;
+				panY = pendingPan.panY;
+				pendingPan = null;
+			}
 			isPanning = false;
 			try {
 				boardEl?.releasePointerCapture(e.pointerId);
@@ -1662,7 +1689,7 @@
 
 	/** Cull cards far outside the viewport (keep a generous pad for smooth pan). */
 	let visibleItemIds = $derived.by(() => {
-		if (!boardEl || boardWidth <= 0 || boardHeight <= 0 || items.length < 40) {
+		if (!boardEl || boardWidth <= 0 || boardHeight <= 0 || items.length < CULL_ITEM_THRESHOLD) {
 			return new SvelteSet(items.map((i) => i.id));
 		}
 		const pad = 280;
@@ -1703,7 +1730,7 @@
 		? 'is-drop-target'
 		: ''} {snapEffective ? 'is-snap-on' : ''} {isPanning || spaceHeld
 		? 'cursor-grabbing'
-		: 'cursor-crosshair'}"
+		: 'cursor-crosshair'} {isPanning || dragItemId || resizeItemId ? 'is-gesture' : ''}"
 	onpointerdown={onBoardPointerDown}
 	onpointermove={onBoardPointerMove}
 	onpointerup={onBoardPointerUp}
@@ -2055,7 +2082,7 @@
 								{@const cardImage = parseEmbeddedNoteImage(note.body)}
 								{#if cardImage}
 									<div class="flex flex-col gap-1.5">
-										<img
+										<ResolvedNoteImage
 											src={cardImage.src}
 											alt={cardImage.alt || note.title}
 											class="max-h-36 w-full rounded-md object-contain"
@@ -2425,420 +2452,30 @@
 		</div>
 	{/if}
 
-	<div
-		data-canvas-chrome
-		class="mash-canvas-chrome-top pointer-events-none absolute top-3 right-3 z-10 flex flex-col items-end gap-1.5"
-	>
-		<div class="pointer-events-auto flex flex-wrap items-center justify-end gap-1.5">
-			<div class="mash-board-chip flex items-center rounded-full p-0.5 text-[10px]">
-				<button
-					type="button"
-					class="mash-board-chip-btn rounded-full px-2.5 py-1 {!snapEnabled ? 'is-active' : ''}"
-					onclick={(e) => {
-						e.stopPropagation();
-						if (snapEnabled) toggleSnap();
-					}}
-					title="Free placement — cards stay where you drop them"
-				>
-					Free
-				</button>
-				<button
-					type="button"
-					class="mash-board-chip-btn rounded-full px-2.5 py-1 {snapEnabled ? 'is-active' : ''}"
-					onclick={(e) => {
-						e.stopPropagation();
-						if (!snapEnabled) toggleSnap();
-					}}
-					title="Snap drags to the grid (does not clear overlaps — use Organize in View). Alt flips temporarily"
-				>
-					Snap
-				</button>
-			</div>
-			<button
-				type="button"
-				class="mash-board-chip mash-board-chip-btn rounded-full px-2.5 py-1 text-[10px] {flowMode
-					? 'is-active'
-					: ''}"
-				onclick={(e) => {
-					e.stopPropagation();
-					desktopViewOpen = false;
-					toggleFlowMode();
-				}}
-				title={flowMode
-					? flowConnecting
-						? 'Linking pages…'
-						: 'Done — exit sequence mode'
-					: 'Link pages in order: click last page, then next (keeps chaining)'}
-				aria-pressed={flowMode}
-				aria-busy={flowConnecting}
-				data-testid="board-sequence"
-			>
-				{flowMode
-					? flowConnecting
-						? 'Linking…'
-						: flowFromItemId
-							? 'Pick next…'
-							: 'Done'
-					: 'Sequence'}
-			</button>
-			<button
-				type="button"
-				class="mash-board-chip mash-board-chip-btn rounded-full px-2.5 py-1 text-[10px]"
-				onclick={(e) => {
-					e.stopPropagation();
-					zoomToFit(false);
-				}}
-				title="Fit all cards (⌘1)"
-			>
-				Fit
-			</button>
-			<button
-				type="button"
-				class="mash-board-chip mash-board-chip-btn rounded-full px-2.5 py-1 text-[10px] disabled:opacity-35"
-				disabled={!canUndo}
-				onclick={(e) => {
-					e.stopPropagation();
-					onUndo?.();
-				}}
-				title="Undo layout (⌘Z)"
-			>
-				Undo
-			</button>
-			<button
-				type="button"
-				class="mash-board-chip mash-board-chip-btn rounded-full px-2.5 py-1 text-[10px] {desktopViewOpen
-					? 'is-active'
-					: ''}"
-				onclick={(e) => {
-					e.stopPropagation();
-					desktopViewOpen = !desktopViewOpen;
-				}}
-				title="View and board tools"
-				aria-label="View board tools"
-				aria-haspopup="menu"
-				aria-expanded={desktopViewOpen}
-				data-testid="board-view-toggle"
-			>
-				View
-			</button>
-		</div>
-
-		{#if desktopViewOpen}
-			<div
-				class="mash-board-view-menu pointer-events-auto grid w-52 grid-cols-1 gap-0.5 rounded-2xl border p-2 shadow-xl"
-				style="border-color: var(--mash-panel-border); background: var(--mash-panel); backdrop-filter: blur(10px);"
-				role="menu"
-				aria-label="Board view tools"
-				data-testid="board-view-menu"
-			>
-				<p
-					class="px-2 pb-1 text-[9px] font-semibold tracking-wide uppercase"
-					style="color: var(--mash-ink-muted);"
-				>
-					{Math.round(scale * 100)}%{altHeld ? ' · Alt' : ''}
-				</p>
-				<button
-					type="button"
-					role="menuitem"
-					class="mash-btn-ghost rounded-lg px-2.5 py-1.5 text-left text-[11px]"
-					disabled={items.length === 0}
-					onclick={(e) => {
-						e.stopPropagation();
-						organizeToSnap();
-						desktopViewOpen = false;
-					}}
-				>
-					Organize to grid
-				</button>
-				<button
-					type="button"
-					role="menuitem"
-					class="mash-btn-ghost rounded-lg px-2.5 py-1.5 text-left text-[11px]"
-					disabled={items.length === 0}
-					onclick={(e) => {
-						e.stopPropagation();
-						toggleSelectAllOnBoard();
-						desktopViewOpen = false;
-					}}
-				>
-					{allBoardNotesSelected ? 'Deselect all' : 'Select all'}
-				</button>
-				{#if selectedCount > 0}
-					<button
-						type="button"
-						role="menuitem"
-						class="mash-btn-ghost rounded-lg px-2.5 py-1.5 text-left text-[11px]"
-						onclick={(e) => {
-							e.stopPropagation();
-							zoomToFit(true);
-							desktopViewOpen = false;
-						}}
-					>
-						Fit selection
-					</button>
-				{/if}
-				<button
-					type="button"
-					role="menuitem"
-					class="mash-btn-ghost rounded-lg px-2.5 py-1.5 text-left text-[11px] disabled:opacity-35"
-					disabled={!canRedo}
-					onclick={(e) => {
-						e.stopPropagation();
-						onRedo?.();
-						desktopViewOpen = false;
-					}}
-				>
-					Redo layout
-				</button>
-				<button
-					type="button"
-					role="menuitem"
-					class="mash-btn-ghost rounded-lg px-2.5 py-1.5 text-left text-[11px]"
-					onclick={(e) => {
-						e.stopPropagation();
-						resetView();
-						desktopViewOpen = false;
-					}}
-				>
-					Reset pan & zoom
-				</button>
-				{#if onOpenShortcuts}
-					<button
-						type="button"
-						role="menuitem"
-						class="mash-btn-ghost rounded-lg px-2.5 py-1.5 text-left text-[11px]"
-						onclick={(e) => {
-							e.stopPropagation();
-							desktopViewOpen = false;
-							onOpenShortcuts();
-						}}
-					>
-						Keyboard shortcuts
-					</button>
-				{/if}
-			</div>
-		{/if}
-	</div>
-
-	<div
-		data-canvas-chrome
-		class="mash-canvas-chrome-mobile pointer-events-none absolute top-3 right-3 z-20"
-	>
-		<div class="mash-board-chip pointer-events-auto flex items-center gap-1 rounded-xl p-1 shadow">
-			<button
-				type="button"
-				class="mash-mobile-chrome-btn"
-				onclick={(e) => {
-					e.stopPropagation();
-					zoomToFit(false);
-				}}
-				disabled={items.length === 0}
-			>
-				Fit
-			</button>
-			<button
-				type="button"
-				class="mash-mobile-chrome-btn"
-				onclick={(e) => {
-					e.stopPropagation();
-					organizeToSnap();
-				}}
-				disabled={items.length === 0}
-			>
-				Organize
-			</button>
-			<button
-				type="button"
-				class="mash-mobile-chrome-icon-btn"
-				aria-label="More canvas tools"
-				aria-haspopup="menu"
-				aria-expanded={mobileToolsOpen}
-				onclick={(e) => {
-					e.stopPropagation();
-					mobileToolsOpen = !mobileToolsOpen;
-				}}
-			>
-				<MoreHorizontal size={20} strokeWidth={2} aria-hidden="true" />
-			</button>
-		</div>
-
-		{#if mobileToolsOpen}
-			<div
-				class="mash-mobile-tools-menu pointer-events-auto mt-2 grid grid-cols-2 gap-1 rounded-2xl p-2 shadow-xl"
-			>
-				<button
-					type="button"
-					class:active={!snapEnabled}
-					onclick={() => {
-						if (snapEnabled) toggleSnap();
-						mobileToolsOpen = false;
-					}}>Free placement</button
-				>
-				<button
-					type="button"
-					class:active={snapEnabled}
-					onclick={() => {
-						if (!snapEnabled) toggleSnap();
-						mobileToolsOpen = false;
-					}}>Snap to grid</button
-				>
-				<button
-					type="button"
-					disabled={items.length === 0}
-					onclick={() => {
-						toggleSelectAllOnBoard();
-						mobileToolsOpen = false;
-					}}>{allBoardNotesSelected ? 'Deselect all' : 'Select all'}</button
-				>
-				<button
-					type="button"
-					class:active={flowMode}
-					onclick={() => {
-						toggleFlowMode();
-						mobileToolsOpen = false;
-					}}>{flowMode ? 'End sequence' : 'Sequence'}</button
-				>
-				<button
-					type="button"
-					disabled={!canUndo}
-					onclick={() => {
-						onUndo?.();
-						mobileToolsOpen = false;
-					}}>Undo</button
-				>
-				<button
-					type="button"
-					disabled={!canRedo}
-					onclick={() => {
-						onRedo?.();
-						mobileToolsOpen = false;
-					}}>Redo</button
-				>
-				<button
-					type="button"
-					onclick={() => {
-						resetView();
-						mobileToolsOpen = false;
-					}}>Reset view</button
-				>
-				{#if onOpenShortcuts}
-					<button
-						type="button"
-						onclick={() => {
-							onOpenShortcuts();
-							mobileToolsOpen = false;
-						}}>Shortcuts</button
-					>
-				{/if}
-			</div>
-		{/if}
-	</div>
-
-	<!-- Pan / zoom pad -->
-	<div
-		data-canvas-chrome
-		class="mash-canvas-chrome-pan pointer-events-auto absolute right-3 bottom-3 z-10 flex flex-col items-center gap-1"
-	>
-		<div class="mash-board-chip grid grid-cols-3 gap-0.5 rounded-lg p-1 shadow">
-			<span class="col-start-2">
-				<button
-					type="button"
-					class="mash-pan-btn"
-					aria-label="Pan up"
-					onclick={(e) => {
-						e.stopPropagation();
-						panBy(0, 80);
-					}}
-				>
-					↑
-				</button>
-			</span>
-			<button
-				type="button"
-				class="mash-pan-btn col-start-1"
-				aria-label="Pan left"
-				onclick={(e) => {
-					e.stopPropagation();
-					panBy(80, 0);
-				}}
-			>
-				←
-			</button>
-			<button
-				type="button"
-				class="mash-pan-btn"
-				aria-label="Recenter on content"
-				title="Fit all"
-				onclick={(e) => {
-					e.stopPropagation();
-					zoomToFit(false);
-				}}
-			>
-				⌖
-			</button>
-			<button
-				type="button"
-				class="mash-pan-btn"
-				aria-label="Pan right"
-				onclick={(e) => {
-					e.stopPropagation();
-					panBy(-80, 0);
-				}}
-			>
-				→
-			</button>
-			<span class="col-start-2">
-				<button
-					type="button"
-					class="mash-pan-btn"
-					aria-label="Pan down"
-					onclick={(e) => {
-						e.stopPropagation();
-						panBy(0, -80);
-					}}
-				>
-					↓
-				</button>
-			</span>
-		</div>
-		<div class="mash-board-chip flex items-center gap-0.5 rounded-lg p-1 shadow">
-			<button
-				type="button"
-				class="mash-pan-btn"
-				aria-label="Zoom out"
-				onclick={(e) => {
-					e.stopPropagation();
-					zoomFromCenter(1 / ZOOM_BUTTON_FACTOR);
-				}}
-			>
-				−
-			</button>
-			<span
-				class="min-w-[2.5rem] text-center text-[10px] text-[var(--mash-chrome-muted)] tabular-nums"
-			>
-				{Math.round(scale * 100)}%
-			</span>
-			<button
-				type="button"
-				class="mash-pan-btn"
-				aria-label="Zoom in"
-				onclick={(e) => {
-					e.stopPropagation();
-					zoomFromCenter(ZOOM_BUTTON_FACTOR);
-				}}
-			>
-				+
-			</button>
-		</div>
-		<p
-			class="mash-chrome-hint max-w-[10rem] text-center text-[9px] leading-tight text-[var(--mash-chrome-muted)]"
-		>
-			{#if flowMode}
-				Click last page → next · keeps chaining · Unstitch clears links · Export PDF downloads a
-				file
-			{:else}
-				Drag to select · Edge = half editor · Drop into empty half to split · ⌘/Ctrl+scroll zoom
-			{/if}
-		</p>
-	</div>
+	<CanvasChrome
+		{snapEnabled}
+		{flowMode}
+		{flowConnecting}
+		{flowFromItemId}
+		{scale}
+		{altHeld}
+		itemCount={items.length}
+		{selectedCount}
+		{allBoardNotesSelected}
+		{canUndo}
+		{canRedo}
+		bind:desktopViewOpen
+		bind:mobileToolsOpen
+		{onOpenShortcuts}
+		{toggleSnap}
+		{toggleFlowMode}
+		{zoomToFit}
+		{organizeToSnap}
+		{toggleSelectAllOnBoard}
+		{resetView}
+		{zoomFromCenter}
+		{panBy}
+		{onUndo}
+		{onRedo}
+	/>
 </div>

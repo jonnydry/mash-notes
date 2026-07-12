@@ -1,4 +1,12 @@
 /** Quarter-turn rotation for embedded clipping images (browser canvas). */
+import {
+	blobIdFromRef,
+	composeMashBlobSrc,
+	deleteBlobIdsIfUnreferenced,
+	isMashBlobRef,
+	putNoteBlobFromDataUrl,
+	resolveToDataUrl
+} from './note-blobs';
 
 export type QuarterTurns = 1 | -1 | 2;
 
@@ -22,25 +30,30 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 }
 
 /**
- * Rotate a data-URL image by 90° increments and return a PNG data URL.
- * Mutates pixels so cards, preview, and export stay correct without CSS transforms.
+ * Rotate an image source (data URL or mash-blob:) by 90° increments.
+ * Returns a PNG data URL (caller may persist as a new blob).
  */
 export async function rotateImageDataUrl(
-	dataUrl: string,
+	src: string,
 	quarterTurns: QuarterTurns
 ): Promise<string> {
 	if (typeof document === 'undefined') {
 		throw new Error('Image rotation requires a browser');
 	}
-	const trimmed = dataUrl.trim();
-	if (!/^data:image\/(png|jpeg|jpg|webp|gif);base64,/i.test(trimmed)) {
-		throw new Error('Only embedded image data URLs can be rotated');
+	const trimmed = src.trim();
+	let loadSrc = trimmed;
+	if (isMashBlobRef(trimmed)) {
+		const dataUrl = await resolveToDataUrl(trimmed);
+		if (!dataUrl) throw new Error('Could not load image blob for rotation');
+		loadSrc = dataUrl;
+	} else if (!/^data:image\/(png|jpeg|jpg|webp|gif);base64,/i.test(trimmed)) {
+		throw new Error('Only embedded image data URLs or mash-blob refs can be rotated');
 	}
 
 	const turns = ((Math.trunc(quarterTurns) % 4) + 4) % 4;
-	if (turns === 0) return trimmed;
+	if (turns === 0) return loadSrc;
 
-	const img = await loadImage(trimmed);
+	const img = await loadImage(loadSrc);
 	const size = rotatedCanvasSize(img.naturalWidth || img.width, img.naturalHeight || img.height, turns);
 	if (size.width < 1 || size.height < 1) {
 		throw new Error('Image has no dimensions');
@@ -61,4 +74,38 @@ export async function rotateImageDataUrl(
 	} catch {
 		throw new Error('Could not export rotated image');
 	}
+}
+
+/**
+ * Rotate and persist a new mash-blob; returns the new mash-blob: src for note bodies.
+ *
+ * Call {@link releaseRotatedBlob} after the note body has been rewritten to the
+ * new src so the previous blob can be reclaimed.
+ */
+export async function rotateImageToBlobRef(
+	src: string,
+	quarterTurns: QuarterTurns
+): Promise<{ src: string; previousBlobId: string | null }> {
+	const previousBlobId = blobIdFromRef(src);
+	const dataUrl = await rotateImageDataUrl(src, quarterTurns);
+	const blob = await putNoteBlobFromDataUrl(dataUrl);
+	return {
+		src: composeMashBlobSrc(blob.id),
+		previousBlobId: previousBlobId && previousBlobId !== blob.id ? previousBlobId : null
+	};
+}
+
+/**
+ * Free the pre-rotate blob once no *other* active note still points at it.
+ * Pass the note id being rotated so a not-yet-persisted body rewrite does not
+ * keep the old id alive via the stale IDB row.
+ */
+export async function releaseRotatedBlob(
+	previousBlobId: string | null | undefined,
+	noteId?: string
+): Promise<void> {
+	if (!previousBlobId) return;
+	await deleteBlobIdsIfUnreferenced([previousBlobId], {
+		ignoreNoteIds: noteId ? [noteId] : undefined
+	});
 }

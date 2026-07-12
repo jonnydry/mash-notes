@@ -39,9 +39,9 @@ export function pdfRegionClippingTitle(fileName: string, page: number): string {
 	return `${base} · p. ${page}`;
 }
 
-export function pdfRegionClippingBody(imageDataUrl: string, fileName: string, page: number): string {
+export function pdfRegionClippingBody(imageSrc: string, fileName: string, page: number): string {
 	const safeName = fileName.trim() || 'PDF';
-	return `![PDF clipping from page ${page}](${imageDataUrl})\n\n_From ${safeName}, page ${page}._`;
+	return `![PDF clipping from page ${page}](${imageSrc})\n\n_From ${safeName}, page ${page}._`;
 }
 
 export type CssRect = { x: number; y: number; w: number; h: number };

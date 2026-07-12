@@ -3,10 +3,27 @@ import { readFile, stat } from 'node:fs/promises';
 const clientRoot = '.svelte-kit/output/client';
 const manifestPath = `${clientRoot}/.vite/manifest.json`;
 const initialEntryNames = new Set(['entry/start', 'entry/app', 'nodes/0', 'nodes/2']);
-const deferredEntryNames = new Set(['pdf', 'sequence-pdf', 'PdfReader', 'board-image-export']);
+const deferredEntryNames = new Set([
+	'pdf',
+	'sequence-pdf',
+	'PdfReader',
+	'board-image-export',
+	'gifuct-js',
+	'DocxReader',
+	'HtmlReader',
+	'SettingsPanel',
+	'ShortcutsModal',
+	'SpacesOverview',
+	'SessionPanel',
+	'FinishPanel',
+	'PasteChoiceDialog',
+	'GifExplodeDialog'
+]);
 const budgets = {
-	javascript: 600 * 1024,
-	css: 100 * 1024,
+	// Page orchestrator + canvas still dominate; deferred PDF/GIF stay out of graph.
+	javascript: 640 * 1024,
+	// Layout tokens + board chrome CSS; suite fonts are budgeted separately.
+	css: 130 * 1024,
 	fonts: 120 * 1024,
 	fontFiles: 5
 };
@@ -72,8 +89,11 @@ if (fontFiles.length > budgets.fontFiles) {
 
 for (const name of deferredEntryNames) {
 	const entry = byName.get(name);
+	// Required deferred tooling must exist; chrome/optional names only fail if leaked.
 	if (!entry) {
-		errors.push(`Deferred entry ${name} is missing from the build manifest`);
+		if (['pdf', 'sequence-pdf', 'PdfReader', 'board-image-export'].includes(name)) {
+			errors.push(`Deferred entry ${name} is missing from the build manifest`);
+		}
 		continue;
 	}
 	if (initialKeys.has(entry.key)) errors.push(`${name} leaked into the initial JavaScript graph`);

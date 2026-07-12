@@ -22,6 +22,24 @@ export function formatNoteTimestamp(ms: number, now = Date.now()): string {
 }
 
 export function notePreview(body: string, max = 92): string {
+	// Avoid scanning multi‑MB data-URL bodies; mash-blob: bodies are already short.
+	if (
+		body.startsWith('![') &&
+		(body.includes('data:image') || body.includes('mash-blob:'))
+	) {
+		const embedded = parseEmbeddedNoteImage(body);
+		if (embedded?.caption.trim()) {
+			const cap = embedded.caption
+				.replace(/\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g, '$1')
+				.replace(/^#+\s+/gm, '')
+				.replace(/\s+/g, ' ')
+				.trim();
+			if (cap) return cap.length <= max ? cap : cap.slice(0, max).trimEnd() + '…';
+		}
+		if (embedded?.alt.trim()) return embedded.alt.trim().slice(0, max);
+		return 'Image';
+	}
+
 	const embedded = parseEmbeddedNoteImage(body);
 	const flat = body
 		.replace(/!\[[^\]]*\]\([^)]+\)/g, ' ')

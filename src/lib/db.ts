@@ -11,6 +11,7 @@ import type {
 	CanvasEdge,
 	CanvasItem,
 	Note,
+	NoteBlob,
 	Operation,
 	Session,
 	SessionMode
@@ -31,6 +32,7 @@ class MashDB extends Dexie {
 	canvasItems!: Table<CanvasItem, string>;
 	canvasEdges!: Table<CanvasEdge, string>;
 	operations!: Table<Operation, string>;
+	noteBlobs!: Table<NoteBlob, string>;
 
 	constructor() {
 		super(DB_NAME);
@@ -144,6 +146,16 @@ class MashDB extends Dexie {
 			canvasItems: 'id, canvasId, noteId, &[canvasId+noteId]',
 			canvasEdges: 'id, canvasId, fromItemId, toItemId, &[canvasId+fromItemId+toItemId]',
 			operations: 'id, sessionId, type, created, revertedAt, *inputNoteIds, *outputNoteIds'
+		});
+		// Out-of-line image pixels (mash-blob: refs in note bodies).
+		this.version(9).stores({
+			notes: 'id, modified, folder, pinned, deletedAt, sessionId, scope, operationId, *tags',
+			sessions: 'id, mode, status, modified, lastMeaningfulActivityAt, expiresAt, recoveryUntil',
+			canvases: 'id, sessionId, folder, modified, &[sessionId+folder]',
+			canvasItems: 'id, canvasId, noteId, &[canvasId+noteId]',
+			canvasEdges: 'id, canvasId, fromItemId, toItemId, &[canvasId+fromItemId+toItemId]',
+			operations: 'id, sessionId, type, created, revertedAt, *inputNoteIds, *outputNoteIds',
+			noteBlobs: 'id, created, mime'
 		});
 	}
 }
@@ -367,6 +379,14 @@ export async function deleteSessionPermanently(
 			await db.sessions.delete(id);
 		}
 	);
+	// Hard-deleted notes leave unreferenced mash-blob rows; sweep outside the
+	// main transaction so noteBlobs is not required on every session path.
+	try {
+		const { gcOrphanNoteBlobs } = await import('./note-blobs');
+		await gcOrphanNoteBlobs();
+	} catch (e) {
+		console.error('Blob GC after session delete failed', e);
+	}
 }
 
 export async function createOperationRecord(
@@ -427,6 +447,11 @@ export async function deleteNote(id: string): Promise<void> {
 		await removeEdgesForItem(item.id);
 	}
 	await db.canvasItems.where('noteId').equals(id).delete();
+	// Orphan mash-blob: rows only if no remaining note references them.
+	if (existing.body.includes('mash-blob:')) {
+		const { gcBlobsAfterNoteDelete } = await import('./note-blobs');
+		await gcBlobsAfterNoteDelete(existing.body);
+	}
 }
 
 /**
@@ -547,16 +572,48 @@ export async function addNoteToCanvas(
 
 export async function updateCanvasItemPosition(
 	id: string,
-	pos: { x: number; y: number; w?: number; h?: number }
+	pos: { x: number; y: number; w?: number; h?: number },
+	opts?: { touchCanvas?: boolean }
 ): Promise<void> {
 	const item = await db.canvasItems.get(id);
 	const patch: Partial<CanvasItem> = { x: pos.x, y: pos.y };
 	if (pos.w !== undefined) patch.w = pos.w;
 	if (pos.h !== undefined) patch.h = pos.h;
 	await db.canvasItems.update(id, patch);
-	if (item) {
+	if (item && opts?.touchCanvas !== false) {
 		await db.canvases.update(item.canvasId, { modified: Date.now() });
 	}
+}
+
+/**
+ * Batch layout writes in one transaction; touch parent canvas once.
+ * Prefer this for multi-card arrange / drag-end.
+ */
+export async function bulkUpdateCanvasItemPositions(
+	moves: Array<{ itemId: string; x: number; y: number; w?: number; h?: number }>
+): Promise<void> {
+	if (moves.length === 0) return;
+	if (moves.length === 1) {
+		const m = moves[0]!;
+		await updateCanvasItemPosition(m.itemId, { x: m.x, y: m.y, w: m.w, h: m.h });
+		return;
+	}
+	await db.transaction('rw', db.canvasItems, db.canvases, async () => {
+		let canvasId: string | undefined;
+		for (const m of moves) {
+			const patch: Partial<CanvasItem> = { x: m.x, y: m.y };
+			if (m.w !== undefined) patch.w = m.w;
+			if (m.h !== undefined) patch.h = m.h;
+			if (!canvasId) {
+				const item = await db.canvasItems.get(m.itemId);
+				canvasId = item?.canvasId;
+			}
+			await db.canvasItems.update(m.itemId, patch);
+		}
+		if (canvasId) {
+			await db.canvases.update(canvasId, { modified: Date.now() });
+		}
+	});
 }
 
 export async function removeCanvasItem(id: string): Promise<void> {

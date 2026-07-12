@@ -134,10 +134,10 @@
 							class="mash-display text-base font-semibold tracking-tight"
 							style="color: var(--mash-ink);"
 						>
-							Screenplay
+							Open desks
 						</h2>
 						<p class="mash-dialog-subtitle">
-							Open folder boards — click to switch
+							Screenplay — open folder boards; click to switch
 							{#if loading}
 								<span class="opacity-60"> · loading…</span>
 							{/if}
@@ -150,7 +150,7 @@
 				type="button"
 				class="mash-peel-icon-btn"
 				onclick={onClose}
-				aria-label="Close Screenplay"
+				aria-label="Close open desks"
 			>
 				<X class="h-3.5 w-3.5" strokeWidth={2} />
 			</button>

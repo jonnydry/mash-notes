@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
 	GIF_EXPLODE_MAX_FRAMES,
-	gifFrameDraft,
+	gifFrameSource,
 	gifFrameTitle,
 	inspectGif,
 	isGifFile,
@@ -42,8 +42,8 @@ describe('gif-explode helpers', () => {
 	it('labels frames for the desk', () => {
 		expect(gifFrameTitle('dance', 3, 12)).toBe('dance · f. 3');
 		expect(gifFrameTitle('dance', 1, 1)).toBe('dance');
-		expect(gifFrameDraft('data:image/png;base64,xx', 'dance', 2, 8).title).toBe('dance · f. 2');
-		expect(gifFrameDraft('data:image/png;base64,xx', 'dance', 2, 8).source).toEqual({
+		expect(gifFrameTitle('dance', 2, 8)).toBe('dance · f. 2');
+		expect(gifFrameSource('dance', 2, 8)).toEqual({
 			kind: 'image',
 			title: 'dance · f. 2/8'
 		});

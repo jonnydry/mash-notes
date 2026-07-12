@@ -27,7 +27,7 @@
 
 	/* Chrome ink */
 	--mash-ink: #f0ebe3;
-	--mash-ink-muted: #9a9084;
+	--mash-ink-muted: #a89f93;
 
 	/* Chive action (lifted for dark grounds) + sprout mint soft */
 	--mash-accent: #6a9a52;
@@ -305,6 +305,17 @@ body {
 	background-size:
 		22px 22px,
 		100% 100%;
+}
+
+/* During pan/drag, drop expensive glass blur so compositing keeps up. */
+body:has(.mash-board-surface.is-gesture) .mash-side-dock,
+body:has(.mash-board-surface.is-gesture) .mash-peel,
+body:has(.mash-board-surface.is-gesture) .mash-canvas-chrome-top,
+body:has(.mash-board-surface.is-gesture) .mash-canvas-chrome-mobile,
+body:has(.mash-board-surface.is-gesture) .mash-selection-bar,
+body:has(.mash-board-surface.is-gesture) .mash-board-chip {
+	backdrop-filter: none !important;
+	-webkit-backdrop-filter: none !important;
 }
 
 .mash-board-surface.is-drop-target {
@@ -2979,16 +2990,26 @@ body {
 	.mash-selection-bar.mash-selection-bar--peel {
 		bottom: calc(min(48vh, 380px) + 6.25rem + env(safe-area-inset-bottom, 0px)) !important;
 	}
+	.mash-selection-bar.mash-dock,
 	.mash-selection-bar .mash-dock {
 		flex-wrap: wrap;
 		justify-content: center;
 		max-width: 100%;
 		row-gap: 4px;
 	}
+	.mash-selection-bar.mash-dock > span:first-child,
 	.mash-selection-bar .mash-dock > span:first-child {
 		width: 100%;
 		text-align: center;
 		padding-bottom: 2px;
+	}
+	/* Coarse-pointer: larger hit targets; demote secondary verbs into wrap row. */
+	.mash-selection-bar.mash-dock button,
+	.mash-selection-bar .mash-dock button {
+		min-height: 44px;
+		min-width: 44px;
+		padding-left: 0.75rem;
+		padding-right: 0.75rem;
 	}
 
 	.mash-canvas-title-chip {

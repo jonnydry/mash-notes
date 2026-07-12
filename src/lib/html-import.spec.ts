@@ -35,6 +35,16 @@ describe('html-import', () => {
 		expect(cleaned).toContain('Ok');
 	});
 
+	it('strips javascript and data href/src values', () => {
+		const cleaned = sanitizeHtmlFragment(
+			'<a href="javascript:alert(1)">x</a><a href="data:text/html,hi">y</a><a href="//evil.example">z</a><img src="data:image/png;base64,abc" />'
+		);
+		expect(cleaned.toLowerCase()).not.toContain('javascript:');
+		expect(cleaned.toLowerCase()).not.toContain('href="data:');
+		expect(cleaned.toLowerCase()).not.toContain('href="//evil');
+		expect(cleaned.toLowerCase()).not.toContain('src="data:');
+	});
+
 	it('converts a small html blob', async () => {
 		const file = new File(
 			['<!doctype html><html><title>Demo</title><body><p>Hello desk</p></body></html>'],

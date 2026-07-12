@@ -28,10 +28,14 @@
 	const visibleItems = $derived(items.slice(startIndex, endIndex));
 	const offsetY = $derived(startIndex * itemHeight);
 
+	let scrollRaf = 0;
+
 	function handleScroll() {
-		if (container) {
-			scrollTop = container.scrollTop;
-		}
+		if (!container || scrollRaf) return;
+		scrollRaf = requestAnimationFrame(() => {
+			scrollRaf = 0;
+			if (container) scrollTop = container.scrollTop;
+		});
 	}
 
 	function updateHeight() {
@@ -55,6 +59,7 @@
 	});
 
 	onDestroy(() => {
+		if (scrollRaf) cancelAnimationFrame(scrollRaf);
 		if (container) {
 			container.removeEventListener('scroll', handleScroll);
 		}

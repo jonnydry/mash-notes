@@ -124,8 +124,24 @@
 	 * overflow out of the pill. Distances use layout centers (not live
 	 * scaled rects) so the curve doesn't chase itself and jitter.
 	 */
+	function prefersReducedMotion(): boolean {
+		return (
+			typeof window !== 'undefined' &&
+			window.matchMedia('(prefers-reduced-motion: reduce)').matches
+		);
+	}
+
 	function applyMag(clientX: number | null, clientY: number | null) {
 		if (!dockEl) return;
+		if (prefersReducedMotion()) {
+			const buttons = [...dockEl.querySelectorAll<HTMLElement>('[data-dock-item]')];
+			for (const btn of buttons) {
+				btn.style.setProperty('--dock-scale', '1');
+				btn.classList.remove('is-hot');
+			}
+			dockEl.classList.remove('is-magnifying');
+			return;
+		}
 		const dockRect = dockEl.getBoundingClientRect();
 		const horizontal = dockRect.width > dockRect.height;
 		const buttons = [...dockEl.querySelectorAll<HTMLElement>('[data-dock-item]')];
@@ -161,7 +177,7 @@
 	}
 
 	function onPointerMove(e: PointerEvent) {
-		if (!dockEl) return;
+		if (!dockEl || prefersReducedMotion()) return;
 		if (leaveTimer) {
 			clearTimeout(leaveTimer);
 			leaveTimer = 0;
@@ -190,6 +206,30 @@
 		mobileMoreOpen = false;
 		dockSelect(action);
 	}
+
+	$effect(() => {
+		if (!mobileMoreOpen) return;
+		function onKey(e: KeyboardEvent) {
+			if (e.key === 'Escape') {
+				e.preventDefault();
+				mobileMoreOpen = false;
+			}
+		}
+		function onPointerDown(e: PointerEvent) {
+			const t = e.target as Node | null;
+			if (!t) return;
+			const menu = document.querySelector('.mash-dock-more-menu');
+			const moreBtn = document.querySelector('.mash-dock-more');
+			if (menu?.contains(t) || moreBtn?.contains(t)) return;
+			mobileMoreOpen = false;
+		}
+		window.addEventListener('keydown', onKey, true);
+		window.addEventListener('pointerdown', onPointerDown, true);
+		return () => {
+			window.removeEventListener('keydown', onKey, true);
+			window.removeEventListener('pointerdown', onPointerDown, true);
+		};
+	});
 </script>
 
 <nav
@@ -240,10 +280,11 @@
 		</span>
 	</button>
 	{#if mobileMoreOpen}
-		<div class="mash-dock-more-menu">
+		<div class="mash-dock-more-menu" role="menu" aria-label="More navigation">
 			{#if openDesks}
 				<button
 					type="button"
+					role="menuitem"
 					onclick={() => {
 						mobileMoreOpen = false;
 						openDesks();
@@ -255,7 +296,12 @@
 			{/if}
 			{#each items.filter((item) => !['all', 'new', 'search'].includes(item.id)) as item (item.id)}
 				{@const MenuIcon = iconFor(item.id)}
-				<button type="button" class:is-active={item.active} onclick={() => choose(item.id)}>
+				<button
+					type="button"
+					role="menuitem"
+					class:is-active={item.active}
+					onclick={() => choose(item.id)}
+				>
 					<MenuIcon size={18} strokeWidth={2} aria-hidden="true" />
 					<span>{item.label}</span>
 				</button>

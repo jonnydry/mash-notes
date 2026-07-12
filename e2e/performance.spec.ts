@@ -8,7 +8,22 @@ const manifest = JSON.parse(
 const deferredFeatureFiles = new Set(
 	Object.values(manifest)
 		.filter((entry) =>
-			['pdf', 'sequence-pdf', 'PdfReader', 'board-image-export'].includes(entry.name ?? '')
+			[
+				'pdf',
+				'sequence-pdf',
+				'PdfReader',
+				'board-image-export',
+				'gifuct-js',
+				'DocxReader',
+				'HtmlReader',
+				'SettingsPanel',
+				'ShortcutsModal',
+				'SpacesOverview',
+				'SessionPanel',
+				'FinishPanel',
+				'PasteChoiceDialog',
+				'GifExplodeDialog'
+			].includes(entry.name ?? '')
 		)
 		.flatMap((entry) => [entry.file, ...(entry.css ?? []), ...(entry.assets ?? [])])
 		.map((file) => file.split('/').at(-1))

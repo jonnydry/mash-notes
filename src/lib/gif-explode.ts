@@ -1,16 +1,19 @@
 /**
  * Explode animated GIFs into desk-ready frame stickies.
- * Uses gifuct-js for decode; composites disposal methods onto a full canvas.
+ * gifuct-js is loaded dynamically so it stays off the initial JS graph.
  */
-import { parseGIF, decompressFrames } from 'gifuct-js';
 import {
 	DESK_IMAGE_MAX_EDGE,
 	DESK_IMAGE_MAX_ORIGINAL_BYTES,
-	imageNoteBody,
 	imageNoteSource,
-	imageTitleFromFileName
+	imageTitleFromFileName,
+	persistImageNoteBody
 } from './desk-image';
 import type { NoteSource } from './types';
+
+async function loadGifuct() {
+	return import('gifuct-js');
+}
 
 export const GIF_EXPLODE_MAX_FRAMES = 36;
 
@@ -53,11 +56,7 @@ export type GifCardDraft = {
 	source: NoteSource;
 };
 
-export function isGifFile(file: Pick<File, 'name' | 'type'>): boolean {
-	const name = file.name.trim().toLowerCase();
-	const type = file.type.toLowerCase();
-	return /\.gif$/i.test(name) || type === 'image/gif';
-}
+export { isGifFile } from './desk-image';
 
 /** Evenly pick up to `max` indices from `0 .. total-1`. */
 export function sampleFrameIndices(total: number, max: number): number[] {
@@ -95,17 +94,19 @@ export function gifFrameSource(
 	};
 }
 
-export function gifFrameDraft(
+export async function gifFrameDraft(
 	dataUrl: string,
 	baseTitle: string,
 	frameNumber: number,
 	sourceFrameCount: number,
-	caption = ''
-): GifCardDraft {
+	caption = '',
+	dims?: { width: number; height: number }
+): Promise<GifCardDraft> {
 	const title = gifFrameTitle(baseTitle, frameNumber, sourceFrameCount);
+	const { body } = await persistImageNoteBody(dataUrl, title, caption, dims);
 	return {
 		title,
-		body: imageNoteBody(dataUrl, title, caption),
+		body,
 		source: gifFrameSource(baseTitle, frameNumber, sourceFrameCount)
 	};
 }
@@ -130,6 +131,7 @@ export async function inspectGif(input: Blob): Promise<GifInspectResult> {
 		return { ok: false, error: 'too-large' };
 	}
 	try {
+		const { parseGIF, decompressFrames } = await loadGifuct();
 		const buffer = await input.arrayBuffer();
 		const gif = parseGIF(buffer);
 		const frames = decompressFrames(gif, true) as ParsedFrame[];
@@ -166,6 +168,7 @@ export async function explodeGifFrames(
 	let fullW = 0;
 	let fullH = 0;
 	try {
+		const { parseGIF, decompressFrames } = await loadGifuct();
 		const buffer = await input.arrayBuffer();
 		const gif = parseGIF(buffer);
 		rawFrames = decompressFrames(gif, true) as ParsedFrame[];
@@ -275,21 +278,29 @@ export async function draftsFromGif(
 
 	const frames =
 		mode === 'still' ? exploded.frames.slice(0, 1) : exploded.frames;
-	const drafts = frames.map((frame) =>
-		mode === 'still' && frames.length === 1
-			? {
-					title: baseTitle,
-					body: imageNoteBody(frame.dataUrl, baseTitle, caption),
-					source: imageNoteSource(fileName || baseTitle)
-				}
-			: gifFrameDraft(
+	const drafts: GifCardDraft[] = [];
+	for (const frame of frames) {
+		const dims = { width: frame.width, height: frame.height };
+		if (mode === 'still' && frames.length === 1) {
+			const { body } = await persistImageNoteBody(frame.dataUrl, baseTitle, caption, dims);
+			drafts.push({
+				title: baseTitle,
+				body,
+				source: imageNoteSource(fileName || baseTitle)
+			});
+		} else {
+			drafts.push(
+				await gifFrameDraft(
 					frame.dataUrl,
 					baseTitle,
 					frame.frameNumber,
 					frame.sourceFrameCount,
-					caption
+					caption,
+					dims
 				)
-	);
+			);
+		}
+	}
 
 	return {
 		ok: true,

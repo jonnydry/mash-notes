@@ -210,7 +210,14 @@ function drawNoteMeta(page: PDFPage, ctx: DrawCtx, label: string, y: number): nu
 }
 
 async function embedDataUrlImage(pdf: PDFDocument, src: string): Promise<PDFImage | null> {
-	const decoded = decodeDataUrlImage(src);
+	let dataUrl = src;
+	if (src.trim().toLowerCase().startsWith('mash-blob:')) {
+		const { resolveToDataUrl } = await import('./note-blobs');
+		const resolved = await resolveToDataUrl(src);
+		if (!resolved) return null;
+		dataUrl = resolved;
+	}
+	const decoded = decodeDataUrlImage(dataUrl);
 	if (!decoded) return null;
 	try {
 		return decoded.format === 'png'

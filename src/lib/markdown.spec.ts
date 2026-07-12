@@ -36,16 +36,23 @@ describe('markdown', () => {
 		expect(isSafeHref('javascript:alert(1)')).toBe(false);
 		expect(isSafeHref('JAVASCRIPT:alert(1)')).toBe(false);
 		expect(isSafeHref('data:text/html,hi')).toBe(false);
+		expect(isSafeHref('//evil.example/phish')).toBe(false);
 		const html = renderMarkdown('[x](javascript:alert(1))');
 		expect(html).toContain('href="#"');
+		const protocolRelative = renderMarkdown('[x](//evil.example)');
+		expect(protocolRelative).toContain('href="#"');
 	});
 
 	it('allows data-image clipping sources in markdown images', () => {
 		expect(isSafeImageSrc('data:image/png;base64,abc')).toBe(true);
 		expect(isSafeImageSrc('data:text/html,hi')).toBe(false);
+		expect(isSafeImageSrc('mash-blob:abc-12345')).toBe(true);
+		expect(isSafeImageSrc('mash-blob:../evil')).toBe(false);
 		const html = renderMarkdown('![clip](data:image/png;base64,abc)');
 		expect(html).toContain('src="data:image/png;base64,abc"');
 		expect(html).toContain('alt="clip"');
+		const blobHtml = renderMarkdown('![clip](mash-blob:abc-12345)');
+		expect(blobHtml).toContain('src="mash-blob:abc-12345"');
 		const blocked = renderMarkdown('![x](javascript:alert(1))');
 		expect(blocked).not.toContain('javascript:');
 	});

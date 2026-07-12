@@ -34,12 +34,14 @@ function escapeHtml(s: string): string {
 		.replace(/"/g, '&quot;');
 }
 
-/** Allow http(s), mailto, relative paths; block javascript/data/vbscript. */
+/** Allow http(s), mailto, relative paths; block javascript/data/vbscript and protocol-relative URLs. */
 export function isSafeHref(href: string | undefined | null): boolean {
 	if (!href) return false;
 	const trimmed = href.trim();
 	if (!trimmed || trimmed.startsWith('#')) return true;
 	const lower = trimmed.toLowerCase();
+	// Protocol-relative URLs (//evil.example) inherit the page scheme and can phish.
+	if (trimmed.startsWith('//')) return false;
 	if (
 		lower.startsWith('javascript:') ||
 		lower.startsWith('data:') ||
@@ -54,14 +56,16 @@ export function isSafeHref(href: string | undefined | null): boolean {
 		lower.startsWith('/') ||
 		lower.startsWith('./') ||
 		lower.startsWith('../') ||
+		// Relative paths without a scheme (no "word:")
 		!/^[a-z][a-z0-9+.-]*:/i.test(trimmed)
 	);
 }
 
-/** Safe image sources for sticky preview — allows local data-URL clipping PNGs. */
+/** Safe image sources for sticky preview — data URLs (legacy) and mash-blob: refs. */
 export function isSafeImageSrc(href: string | undefined | null): boolean {
 	if (!href) return false;
-	const lower = href.trim().toLowerCase();
+	const trimmed = href.trim();
+	const lower = trimmed.toLowerCase();
 	if (
 		lower.startsWith('data:image/png;base64,') ||
 		lower.startsWith('data:image/jpeg;base64,') ||
@@ -69,6 +73,11 @@ export function isSafeImageSrc(href: string | undefined | null): boolean {
 		lower.startsWith('data:image/gif;base64,')
 	) {
 		return true;
+	}
+	// Out-of-line IndexedDB blobs: mash-blob:<id> (strict id charset).
+	if (lower.startsWith('mash-blob:')) {
+		const id = trimmed.slice('mash-blob:'.length);
+		return /^[A-Za-z0-9_-]{8,128}$/.test(id);
 	}
 	return isSafeHref(href);
 }

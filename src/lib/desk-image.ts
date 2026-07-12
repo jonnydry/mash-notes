@@ -1,8 +1,9 @@
 /**
  * Prepare screenshots and photos for visual stickies on the desk.
- * Soft-resizes large images; embeds as markdown data URLs (PDF clipping pattern).
+ * Soft-resizes large images; persists pixels as noteBlobs + mash-blob: body refs.
  */
 import { composeEmbeddedNoteImage } from './markdown';
+import { imageNoteBodyFromBlob, putNoteBlobFromDataUrl } from './note-blobs';
 import type { NoteSource } from './types';
 
 export const DESK_IMAGE_MAX_ORIGINAL_BYTES = 20 * 1024 * 1024;
@@ -30,14 +31,38 @@ export function isImageFile(file: Pick<File, 'name' | 'type'>): boolean {
 	return IMAGE_EXT.test(name) || IMAGE_MIME.test(type);
 }
 
+/** Lightweight GIF detection — does not load the gifuct decoder. */
+export function isGifFile(file: Pick<File, 'name' | 'type'>): boolean {
+	const name = file.name.trim().toLowerCase();
+	const type = file.type.toLowerCase();
+	return /\.gif$/i.test(name) || type === 'image/gif';
+}
+
 export function imageTitleFromFileName(name: string): string {
 	const base = name.trim().replace(/^.*[/\\]/, '');
 	const withoutExt = base.replace(/\.(png|jpe?g|webp|gif)$/i, '').trim();
 	return (withoutExt || 'Image').slice(0, 200);
 }
 
+/** @deprecated Prefer imageNoteBodyFromBlob after persist; kept for tests/legacy data URLs. */
 export function imageNoteBody(dataUrl: string, alt: string, caption = ''): string {
 	return composeEmbeddedNoteImage(alt.slice(0, 200) || 'Image', dataUrl, caption);
+}
+
+/**
+ * Persist a prepared data URL as a NoteBlob and return a short mash-blob body.
+ */
+export async function persistImageNoteBody(
+	dataUrl: string,
+	alt: string,
+	caption = '',
+	dims?: { width: number; height: number }
+): Promise<{ body: string; blobId: string }> {
+	const blob = await putNoteBlobFromDataUrl(dataUrl, dims);
+	return {
+		body: imageNoteBodyFromBlob(blob.id, alt, caption),
+		blobId: blob.id
+	};
 }
 
 export function imageNoteSource(title: string): NoteSource {

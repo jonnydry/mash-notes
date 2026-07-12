@@ -179,7 +179,7 @@
 </script>
 
 {#if open}
-	<aside class="mash-peel" aria-label="Note scanner">
+	<aside class="mash-peel" aria-label="Ingredients">
 		<div class="mash-peel-header">
 			<div class="min-w-0 flex-1">
 				<div class="mash-peel-title truncate">{title}</div>
@@ -205,7 +205,7 @@
 				type="button"
 				class="mash-peel-icon-btn"
 				onclick={onTogglePin}
-				aria-label={pinned ? 'Unpin scanner' : 'Pin scanner open'}
+				aria-label={pinned ? 'Unpin ingredients' : 'Keep ingredients open'}
 				title={pinned ? 'Unpin' : 'Keep open'}
 			>
 				{#if pinned}
@@ -214,7 +214,7 @@
 					<LockOpen class="h-3.5 w-3.5" />
 				{/if}
 			</button>
-			<button type="button" class="mash-peel-icon-btn" onclick={onClose} aria-label="Close scanner">
+			<button type="button" class="mash-peel-icon-btn" onclick={onClose} aria-label="Close ingredients">
 				<X class="h-3.5 w-3.5" />
 			</button>
 		</div>
