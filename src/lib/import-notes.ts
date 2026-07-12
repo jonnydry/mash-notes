@@ -87,6 +87,11 @@ export function normalizeImportedNote(raw: unknown, index: number): Note | strin
 				url
 			};
 		}
+	} else if (sourceRaw?.kind === 'html' && typeof sourceRaw.title === 'string') {
+		source = {
+			kind: 'html',
+			title: sourceRaw.title.trim().slice(0, 300) || 'HTML document'
+		};
 	}
 	return {
 		id,

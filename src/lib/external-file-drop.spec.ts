@@ -24,6 +24,9 @@ describe('external file drops', () => {
 				file('memo', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
 			)
 		).toBe('docx');
+		expect(externalImportKind(file('page.html'))).toBe('html');
+		expect(externalImportKind(file('page.HTM'))).toBe('html');
+		expect(externalImportKind(file('x', 'text/html'))).toBe('html');
 		expect(externalImportKind(file('photo.png', 'image/png'))).toBe('image');
 		expect(externalImportKind(file('shot.JPEG'))).toBe('image');
 		expect(externalImportKind(file('clip.webp', 'image/webp'))).toBe('image');
@@ -40,11 +43,13 @@ describe('external file drops', () => {
 		const d = file('d.txt');
 		const e = file('e.docx');
 		const f = file('f.png', 'image/png');
-		expect(splitExternalImportFiles([a, b, c, d, e, f])).toEqual({
+		const g = file('g.html');
+		expect(splitExternalImportFiles([a, b, c, d, e, f, g])).toEqual({
 			noteTextFiles: [a, d],
 			jsonFiles: [b],
 			pdfFiles: [c],
 			docxFiles: [e],
+			htmlFiles: [g],
 			imageFiles: [f],
 			unsupportedFiles: []
 		});

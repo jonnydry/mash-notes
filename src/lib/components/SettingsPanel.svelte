@@ -20,6 +20,7 @@
 		onImportSync: () => void;
 		onExportSync: () => void;
 		onOpenDocx?: () => void;
+		onOpenHtml?: () => void;
 		onOpenImage?: () => void;
 		conflictCount?: number;
 		onOpenConflicts?: () => void;
@@ -39,6 +40,7 @@
 		onImportSync,
 		onExportSync,
 		onOpenDocx,
+		onOpenHtml,
 		onOpenImage,
 		conflictCount = 0,
 		onOpenConflicts
@@ -224,6 +226,16 @@
 						onclick={onOpenDocx}
 					>
 						Open Word document…
+					</button>
+				{/if}
+				{#if onOpenHtml}
+					<button
+						type="button"
+						class="mash-settings-action"
+						data-testid="settings-open-html"
+						onclick={onOpenHtml}
+					>
+						Open HTML document…
 					</button>
 				{/if}
 				{#if onOpenImage}

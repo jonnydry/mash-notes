@@ -42,6 +42,10 @@ export type NoteSource =
 			kind: 'url';
 			title: string;
 			url: string;
+	  }
+	| {
+			kind: 'html';
+			title: string;
 	  };
 
 export interface Note {
