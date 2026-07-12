@@ -39,7 +39,7 @@ export async function wipeIndexedDb(page: Page) {
 	// Wait for initial loadNotes (seed welcome notes) so later imports aren't raced.
 	await page.getByRole('button', { name: 'Desk' }).click();
 	const peel = page.getByRole('complementary', { name: 'Note scanner' });
-	await expect(peel.getByText('A quick hello from Scoop')).toBeVisible({
+	await expect(peel.getByText("Hi — I'm Scoop")).toBeVisible({
 		timeout: 15_000
 	});
 }

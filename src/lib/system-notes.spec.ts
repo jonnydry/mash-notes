@@ -27,9 +27,10 @@ describe('Mash team welcome note', () => {
 		expect(note.sessionId).toBe(KEPT_COLLECTION_SESSION_ID);
 		expect(note.title).toBe(MASH_TEAM_WELCOME_TITLE);
 		expect(note.body).toBe(MASH_TEAM_WELCOME_BODY);
-		expect(note.body).toContain('Scoop here');
-		expect(note.body).toContain('I believe in you');
-		expect(note.body).toContain('Clip a region');
+		expect(note.body).toContain("I'm Scoop");
+		expect(note.body).toContain("I'll be right here");
+		expect(note.body).toContain('Mash');
+		expect(note.body).toContain('Finish');
 		expect(note.body).toContain('Scratch desks');
 		expect(note.body).not.toContain('Spoon');
 		expect(note.body).not.toContain('Jonathan');
@@ -67,7 +68,7 @@ Go make a beautiful mess. Scoop believes in you.`
 		expect(refreshed.id).toBe(note.id);
 		expect(refreshed.title).toBe(MASH_TEAM_WELCOME_TITLE);
 		expect(refreshed.body).toBe(MASH_TEAM_WELCOME_BODY);
-		expect(refreshed.body).toContain('Scoop here');
+		expect(refreshed.body).toContain("I'm Scoop");
 		expect(refreshed.body).not.toContain('Spoon');
 	});
 

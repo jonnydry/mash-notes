@@ -28,7 +28,7 @@ describe('canvas empty state', () => {
 		expect(
 			isMashWelcomeForPinnedEmptyState({
 				id: 'mash-team-welcome-v1',
-				title: 'A quick hello from Scoop',
+				title: "Hi — I'm Scoop",
 				tags: ['welcome', 'mash-team']
 			})
 		).toBe(true);
@@ -52,7 +52,7 @@ describe('canvas empty state', () => {
 		expect(
 			isPermanentMashWelcomeNote({
 				id: 'mash-team-welcome-v1',
-				title: 'A quick hello from Scoop',
+				title: "Hi — I'm Scoop",
 				tags: ['welcome', 'mash-team']
 			})
 		).toBe(true);

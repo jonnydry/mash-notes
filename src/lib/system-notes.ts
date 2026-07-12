@@ -79,12 +79,8 @@ Think of this as a kitchen counter for half-baked thoughts: scraps, PDFs, ramble
 - Everything lives in this browser — Settings has a sync-bundle backup when you want a spare serving.
 - Trash is recoverable. Pin the good stuff. Folders and tags are optional seasoning.
 
-Go make a beautiful mess. Scoop believes in you.`
-] as const;
-
-export const MASH_TEAM_WELCOME_TITLE = 'A quick hello from Scoop';
-
-export const MASH_TEAM_WELCOME_BODY = `Hey — Scoop here.
+Go make a beautiful mess. Scoop believes in you.`,
+	`Hey — Scoop here.
 
 This desk is my favorite counter for half-baked thoughts: scraps, PDFs, rambles, and the surprisingly good bits stuck to them. I will cheer from the sidelines and never judge your pile.
 
@@ -102,7 +98,26 @@ This desk is my favorite counter for half-baked thoughts: scraps, PDFs, rambles,
 - Everything lives in this browser — Settings has a sync-bundle backup when you want a spare serving.
 - Trash is recoverable. Pin the good stuff. Folders and tags are optional seasoning.
 
-Go make a beautiful mess. I believe in you.`;
+Go make a beautiful mess. I believe in you.`
+] as const;
+
+export const MASH_TEAM_WELCOME_TITLE = "Hi — I'm Scoop";
+
+export const MASH_TEAM_WELCOME_BODY = `I'm Scoop. Little potato. Big spoon energy.
+
+This desk is my favorite place for half-baked thoughts — scraps, PDFs, rambles, and the good bits stuck to them. Drop whatever you've got. I won't judge the pile.
+
+**How I like to cook**
+
+Start a note, paste a blob, or drop a file onto the board. Spread things out until the mess looks honest. Open stickies side by side, leave [[wikilinks]], or stitch a Sequence when order matters.
+
+When a few notes feel related, **Mash** them into one draft. Unmash if you get ambitious and want the ingredients back. From a PDF or document, Clip the parts worth keeping. When you're ready to leave the kitchen, **Finish** and take Markdown, a PDF, a board image, or a full backup with you.
+
+**House rules (from me)**
+
+Scratch desks are for experiments. Kept desks stick around. Everything lives in this browser — Settings has a sync-bundle backup if you want a spare serving. Trash is recoverable. Pin the keepers. Folders and tags are optional seasoning.
+
+Anyway — make a beautiful mess. I'll be right here.`;
 
 export function isMashTeamWelcomeNote(note: Pick<Note, 'id'> & { system?: string }): boolean {
 	return note.id === MASH_TEAM_WELCOME_ID || note.system === MASH_TEAM_WELCOME_SYSTEM;
@@ -115,6 +130,7 @@ export function isMashTeamWelcomeCandidate(
 	if (isMashTeamWelcomeNote(note)) return true;
 	if (
 		(note.title === MASH_TEAM_WELCOME_TITLE ||
+			note.title === 'A quick hello from Scoop' ||
 			note.title === 'A quick welcome from the Mash team') &&
 		note.body === MASH_TEAM_WELCOME_BODY
 	) {
@@ -123,6 +139,7 @@ export function isMashTeamWelcomeCandidate(
 	if (
 		(note.title === 'Welcome to Mash' ||
 			note.title === 'A quick welcome from the Mash team' ||
+			note.title === 'A quick hello from Scoop' ||
 			note.title === MASH_TEAM_WELCOME_TITLE) &&
 		LEGACY_WELCOME_BODIES.some((body) => body === note.body)
 	) {
