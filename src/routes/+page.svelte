@@ -124,6 +124,8 @@
 		imageNoteSource,
 		prepareDeskImage
 	} from '$lib/desk-image';
+	import { draftsFromGif, inspectGif, isGifFile, type GifExplodeMode } from '$lib/gif-explode';
+	import GifExplodeDialog from '$lib/components/GifExplodeDialog.svelte';
 	import { draftsFromUrlOnlyText, URL_SOURCE_MAX_PER_PASTE } from '$lib/url-source';
 	import {
 		splitNoteFragments,
@@ -162,6 +164,14 @@
 	let finishSnapshot = $state<FinishSnapshot | null>(null);
 	let pasteAnalysis = $state<PasteAnalysis | null>(null);
 	let pasteDialogOpen = $state(false);
+	let gifExplodePending = $state<{
+		blob: Blob;
+		fileName: string;
+		frameCount: number;
+		origin?: { x: number; y: number };
+		caption?: string;
+	} | null>(null);
+	const gifExplodeDialogOpen = $derived(Boolean(gifExplodePending));
 	let spacesOverviewIgnoreUntil = 0;
 	/** Sync from localStorage at init (ssr=false) so CanvasBoard never paints Free first. */
 	let snapEnabled = $state(loadSnapPref());
@@ -1220,6 +1230,63 @@
 		return createdNotes;
 	}
 
+	async function placeGifAsDrafts(
+		blob: Blob,
+		mode: GifExplodeMode,
+		opts: { fileName: string; origin?: { x: number; y: number }; caption?: string }
+	): Promise<number> {
+		const result = await draftsFromGif(blob, mode, {
+			fileName: opts.fileName,
+			caption: opts.caption
+		});
+		if (!result.ok) {
+			if (result.error === 'too-large') {
+				flashToast('Image too large to import (max 20 MB)', 3200);
+			} else {
+				flashToast("Couldn't explode that GIF — try another file", 3200);
+			}
+			return 0;
+		}
+		const notes = await placeNoteDraftsOnDesk(result.drafts, opts.origin);
+		if (notes.length === 0) return 0;
+		const parts: string[] = [];
+		if (mode === 'still') {
+			parts.push('Added 1 image card');
+		} else {
+			parts.push(
+				notes.length === 1
+					? 'Exploded 1 frame'
+					: `Exploded ${notes.length} frames`
+			);
+			if (result.sampled) {
+				parts.push(`sampled from ${result.frameCount}`);
+			}
+		}
+		flashToast(parts.join(' · '), 3600);
+		return notes.length;
+	}
+
+	function queueGifExplodeChoice(file: File | Blob, fileName: string, frameCount: number, origin?: { x: number; y: number }, caption?: string) {
+		gifExplodePending = {
+			blob: file,
+			fileName,
+			frameCount,
+			origin,
+			caption
+		};
+	}
+
+	async function handleGifExplodeChoice(mode: GifExplodeMode) {
+		const pending = gifExplodePending;
+		gifExplodePending = null;
+		if (!pending) return;
+		await placeGifAsDrafts(pending.blob, mode, {
+			fileName: pending.fileName,
+			origin: pending.origin,
+			caption: pending.caption
+		});
+	}
+
 	async function createVisualStickiesFromFiles(
 		files: File[],
 		origin?: { x: number; y: number },
@@ -1230,7 +1297,16 @@
 		const drafts: Array<{ title: string; body: string; source?: Note['source'] }> = [];
 		let compacted = 0;
 		let failed = 0;
+		const animatedGifs: File[] = [];
+
 		for (const file of capped) {
+			if (isGifFile(file)) {
+				const inspected = await inspectGif(file);
+				if (inspected.ok && inspected.animated) {
+					animatedGifs.push(file);
+					continue;
+				}
+			}
 			const prepared = await prepareDeskImage(file, {
 				fileName: file.name,
 				titleHint: options?.titleOverride
@@ -1253,8 +1329,41 @@
 				source: imageNoteSource(sourceTitle)
 			});
 		}
+
 		const notes = await placeNoteDraftsOnDesk(drafts, origin);
-		return { created: notes.length, compacted, failed, skippedCap };
+		let created = notes.length;
+
+		if (animatedGifs.length === 1) {
+			const gif = animatedGifs[0]!;
+			const inspected = await inspectGif(gif);
+			if (inspected.ok) {
+				queueGifExplodeChoice(
+					gif,
+					gif.name || 'animation.gif',
+					inspected.frameCount,
+					origin,
+					options?.caption
+				);
+			} else {
+				failed++;
+			}
+		} else if (animatedGifs.length > 1) {
+			// Avoid dialog spam: still each, hint to drop one at a time for explode.
+			for (const gif of animatedGifs) {
+				const n = await placeGifAsDrafts(gif, 'still', {
+					fileName: gif.name || 'animation.gif',
+					origin,
+					caption: options?.caption
+				});
+				created += n;
+			}
+			flashToast(
+				`Imported ${animatedGifs.length} GIFs as stills — drop one GIF to explode frames`,
+				4200
+			);
+		}
+
+		return { created, compacted, failed, skippedCap };
 	}
 
 	async function handleDroppedFiles(files: File[], x: number, y: number) {
@@ -1411,6 +1520,7 @@
 			spacesOverviewOpen ||
 			sessionPanelOpen ||
 			pasteDialogOpen ||
+			gifExplodeDialogOpen ||
 			documentReaderOpen ||
 			editorStage.open
 		) {
@@ -1421,8 +1531,22 @@
 		if (imageBlob) {
 			event.preventDefault();
 			void (async () => {
+				const caption = text.trim();
+				const fileName =
+					imageBlob instanceof File && imageBlob.name
+						? imageBlob.name
+						: isGifFile({ name: '', type: imageBlob.type })
+							? 'clipboard.gif'
+							: 'clipboard.png';
+				if (isGifFile({ name: fileName, type: imageBlob.type })) {
+					const inspected = await inspectGif(imageBlob);
+					if (inspected.ok && inspected.animated) {
+						queueGifExplodeChoice(imageBlob, fileName, inspected.frameCount, undefined, caption);
+						return;
+					}
+				}
 				const prepared = await prepareDeskImage(imageBlob, {
-					fileName: imageBlob instanceof File ? imageBlob.name : 'clipboard.png',
+					fileName,
 					titleHint: 'Pasted image'
 				});
 				if (!prepared.ok) {
@@ -1433,7 +1557,6 @@
 					}
 					return;
 				}
-				const caption = text.trim();
 				const title = prepared.titleHint || 'Pasted image';
 				const notes = await placeNoteDraftsOnDesk([
 					{
@@ -1445,7 +1568,9 @@
 					}
 				]);
 				if (notes.length > 0) {
-					const bits = [notes.length === 1 ? 'Pasted image card' : `Pasted ${notes.length} image cards`];
+					const bits = [
+						notes.length === 1 ? 'Pasted image card' : `Pasted ${notes.length} image cards`
+					];
 					if (prepared.compacted) bits.push('Image resized for the desk');
 					flashToast(bits.join(' · '));
 				}
@@ -1497,9 +1622,8 @@
 		}
 	}
 
-	async function handleOpenImageFiles(fileList: FileList | null) {
-		if (!fileList?.length) return;
-		const files = [...fileList];
+	async function handleOpenImageFiles(files: File[]) {
+		if (!files.length) return;
 		const result = await createVisualStickiesFromFiles(files);
 		const parts: string[] = [];
 		if (result.created > 0) {
@@ -3611,9 +3735,10 @@
 		class="hidden"
 		onchange={(e) => {
 			const input = e.currentTarget as HTMLInputElement;
-			const list = input.files;
+			// Snapshot files before clearing — FileList is live and empties with value=''.
+			const files = input.files ? [...input.files] : [];
 			input.value = '';
-			void handleOpenImageFiles(list);
+			void handleOpenImageFiles(files);
 		}}
 	/>
 	<input
@@ -3712,6 +3837,15 @@
 		onClose={() => {
 			pasteDialogOpen = false;
 			pasteAnalysis = null;
+		}}
+	/>
+	<GifExplodeDialog
+		open={gifExplodeDialogOpen}
+		fileName={gifExplodePending?.fileName ?? ''}
+		frameCount={gifExplodePending?.frameCount ?? 0}
+		onChoose={(mode) => void handleGifExplodeChoice(mode)}
+		onClose={() => {
+			gifExplodePending = null;
 		}}
 	/>
 </div>
