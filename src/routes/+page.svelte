@@ -34,7 +34,8 @@
 		BookOpen,
 		ChevronDown,
 		FileDown,
-		Printer
+		Printer,
+		Pin
 	} from 'lucide-svelte';
 	import MashDock from '$lib/components/MashDock.svelte';
 	import PeelScanner from '$lib/components/PeelScanner.svelte';
@@ -127,6 +128,7 @@
 	import { draftsFromGif, inspectGif, isGifFile, type GifExplodeMode } from '$lib/gif-explode';
 	import GifExplodeDialog from '$lib/components/GifExplodeDialog.svelte';
 	import { draftsFromUrlOnlyText, URL_SOURCE_MAX_PER_PASTE } from '$lib/url-source';
+	import { keepSelectionToast, keepableNoteIds } from '$lib/keep-selection';
 	import {
 		splitNoteFragments,
 		type ContentSplitMode,
@@ -780,6 +782,24 @@
 		flashToast(
 			`Removed ${result.removed} duplicate card${result.removed === 1 ? '' : 's'} — notes remain in the library`
 		);
+	}
+
+	const keepableSelectionIds = $derived(
+		keepableNoteIds(library.selectionIds, library.notesById)
+	);
+
+	/** Promote selected scratch cards to durable kept notes without finishing the desk. */
+	async function keepSelection() {
+		const ids = keepableNoteIds(library.selectionIds, library.notesById);
+		if (ids.length === 0) {
+			flashToast(keepSelectionToast(0));
+			return;
+		}
+		const promoted = await sessionManager.keepTakeaway(ids);
+		library.applyPromotedNotes(promoted);
+		void sessionManager.recordMeaningfulActivity();
+		library.bulkMenu = null;
+		flashToast(keepSelectionToast(promoted.length));
 	}
 
 	function splitCandidate(
@@ -2526,6 +2546,15 @@
 			available: () => selectedCanvasItems().length >= 2,
 			undo: 'content',
 			action: deduplicateSelection
+		},
+		{
+			id: 'keep-selection',
+			label: 'Keep selected on this device',
+			shortcut: '',
+			mutation: 'content',
+			surfaces: ['palette', 'selection'],
+			available: () => keepableNoteIds(library.selectionIds, library.notesById).length > 0,
+			action: () => void keepSelection()
 		}
 	]);
 
@@ -3431,6 +3460,18 @@
 					>
 						{library.selectionIds.length} selected
 					</span>
+					{#if keepableSelectionIds.length > 0}
+						<button
+							type="button"
+							data-testid="keep-selection"
+							onclick={() => void keepSelection()}
+							class="mash-btn-ghost flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs"
+							title="Keep on this device — survives clearing this scratch desk"
+						>
+							<Pin class="h-3.5 w-3.5" />
+							Keep
+						</button>
+					{/if}
 					<div class="mash-btn-split flex items-stretch overflow-hidden rounded-xl">
 						<button
 							type="button"
