@@ -106,6 +106,12 @@
 		type DocxClipping
 	} from '$lib/docx-clipping';
 	import {
+		htmlClippingTitle,
+		normalizeHtmlExcerpt,
+		type HtmlClipPayload,
+		type HtmlClipping
+	} from '$lib/html-clipping';
+	import {
 		analyzePastedText,
 		draftsFromPastedText,
 		type PasteAnalysis,
@@ -118,6 +124,7 @@
 		imageNoteSource,
 		prepareDeskImage
 	} from '$lib/desk-image';
+	import { draftsFromUrlOnlyText, URL_SOURCE_MAX_PER_PASTE } from '$lib/url-source';
 	import {
 		splitNoteFragments,
 		type ContentSplitMode,
@@ -197,6 +204,7 @@
 	let syncInputEl: HTMLInputElement | undefined = $state();
 	let pdfInputEl: HTMLInputElement | undefined = $state();
 	let docxInputEl: HTMLInputElement | undefined = $state();
+	let htmlInputEl: HTMLInputElement | undefined = $state();
 	let imageInputEl: HTMLInputElement | undefined = $state();
 	let pdfReaderFile: File | null = $state(null);
 	let pdfReaderOpen = $state(false);
@@ -213,7 +221,14 @@
 	>(null);
 	let docxReaderModuleLoading = $state(false);
 	let docxClippings = $state<DocxClipping[]>([]);
-	const documentReaderOpen = $derived(pdfReaderOpen || docxReaderOpen);
+	let htmlReaderFile: File | null = $state(null);
+	let htmlReaderOpen = $state(false);
+	let LazyHtmlReader = $state<
+		(typeof import('$lib/components/HtmlReader.svelte'))['default'] | null
+	>(null);
+	let htmlReaderModuleLoading = $state(false);
+	let htmlClippings = $state<HtmlClipping[]>([]);
+	const documentReaderOpen = $derived(pdfReaderOpen || docxReaderOpen || htmlReaderOpen);
 
 	function flashToast(msg: string, ms = 1600) {
 		actionToast = msg;
@@ -898,10 +913,26 @@
 		}
 	}
 
+	async function ensureHtmlReaderModule() {
+		if (LazyHtmlReader || htmlReaderModuleLoading) return;
+		htmlReaderModuleLoading = true;
+		try {
+			const { loadHtmlReader } = await import('$lib/lazy-html-reader');
+			LazyHtmlReader = await loadHtmlReader();
+		} catch (error) {
+			console.error('Failed to load HTML document tools', error);
+			htmlReaderOpen = false;
+			flashToast('Couldn’t load HTML document tools', 3600);
+		} finally {
+			htmlReaderModuleLoading = false;
+		}
+	}
+
 	function openPdfReader(file: File) {
 		pdfReaderFile = file;
 		pdfReaderOpen = true;
 		docxReaderOpen = false;
+		htmlReaderOpen = false;
 		pdfReaderView = { page: 1, zoom: 1 };
 		pdfClippings = [];
 		showPalette = false;
@@ -917,6 +948,7 @@
 		docxReaderFile = file;
 		docxReaderOpen = true;
 		pdfReaderOpen = false;
+		htmlReaderOpen = false;
 		docxClippings = [];
 		showPalette = false;
 		settingsOpen = false;
@@ -927,10 +959,26 @@
 		void ensureDocxReaderModule();
 	}
 
+	function openHtmlReader(file: File) {
+		htmlReaderFile = file;
+		htmlReaderOpen = true;
+		pdfReaderOpen = false;
+		docxReaderOpen = false;
+		htmlClippings = [];
+		showPalette = false;
+		settingsOpen = false;
+		peel.closePeel(true);
+		library.clearSelection();
+		if (canvas.expandedNoteId) canvas.collapseSticky();
+		if (editorStage.open) editorStage.dismissAll();
+		void ensureHtmlReaderModule();
+	}
+
 	function resumePdfReader() {
 		if (!pdfReaderFile) return;
 		pdfReaderOpen = true;
 		docxReaderOpen = false;
+		htmlReaderOpen = false;
 		settingsOpen = false;
 		peel.closePeel(true);
 		library.clearSelection();
@@ -943,6 +991,7 @@
 		if (!docxReaderFile) return;
 		docxReaderOpen = true;
 		pdfReaderOpen = false;
+		htmlReaderOpen = false;
 		settingsOpen = false;
 		peel.closePeel(true);
 		library.clearSelection();
@@ -951,12 +1000,29 @@
 		void ensureDocxReaderModule();
 	}
 
+	function resumeHtmlReader() {
+		if (!htmlReaderFile) return;
+		htmlReaderOpen = true;
+		pdfReaderOpen = false;
+		docxReaderOpen = false;
+		settingsOpen = false;
+		peel.closePeel(true);
+		library.clearSelection();
+		if (canvas.expandedNoteId) canvas.collapseSticky();
+		if (editorStage.open) editorStage.dismissAll();
+		void ensureHtmlReaderModule();
+	}
+
 	function hidePdfReader() {
 		pdfReaderOpen = false;
 	}
 
 	function hideDocxReader() {
 		docxReaderOpen = false;
+	}
+
+	function hideHtmlReader() {
+		htmlReaderOpen = false;
 	}
 
 	async function savePdfClipping(excerpt: PdfClipPayload) {
@@ -1042,6 +1108,31 @@
 		flashToast('Saved excerpt from Word document');
 	}
 
+	async function saveHtmlClipping(excerpt: HtmlClipPayload) {
+		if (!htmlReaderFile) return;
+		const text = normalizeHtmlExcerpt(excerpt.text ?? '');
+		if (!text) return;
+		const note = await createNote({
+			...activeNoteOwnership(),
+			title: htmlClippingTitle(text),
+			body: text,
+			folder: peel.canvasFolder,
+			tags: ['html-clipping'],
+			links: [],
+			source: {
+				kind: 'html',
+				title: htmlReaderFile.name
+			}
+		});
+		addNoteToSearch(note);
+		library.notes = [note, ...library.notes];
+		htmlClippings = [
+			...htmlClippings,
+			{ id: crypto.randomUUID(), noteId: note.id, text }
+		];
+		flashToast('Saved excerpt from HTML document');
+	}
+
 	async function openPdfClippingsOnCanvas(noteIds: string[]) {
 		if (noteIds.length === 0) return;
 		const spawn = canvas.canvasBoard?.getSpawnPoint(COLLAPSED_CARD, canvas.canvasItems.length) ?? {
@@ -1061,6 +1152,18 @@
 			y: 80
 		};
 		docxReaderOpen = false;
+		await tick();
+		await canvas.handleDropNotes(noteIds, spawn.x, spawn.y);
+		flashToast(`Opened ${noteIds.length} clipping${noteIds.length === 1 ? '' : 's'} on canvas`);
+	}
+
+	async function openHtmlClippingsOnCanvas(noteIds: string[]) {
+		if (noteIds.length === 0) return;
+		const spawn = canvas.canvasBoard?.getSpawnPoint(COLLAPSED_CARD, canvas.canvasItems.length) ?? {
+			x: 80,
+			y: 80
+		};
+		htmlReaderOpen = false;
 		await tick();
 		await canvas.handleDropNotes(noteIds, spawn.x, spawn.y);
 		flashToast(`Opened ${noteIds.length} clipping${noteIds.length === 1 ? '' : 's'} on canvas`);
@@ -1161,13 +1264,17 @@
 			batch.jsonFiles.length +
 			batch.pdfFiles.length +
 			batch.docxFiles.length +
+			batch.htmlFiles.length +
 			batch.imageFiles.length;
 		if (supportedCount === 0) {
 			const names = batch.unsupportedFiles.map((f) => f.name).filter(Boolean);
 			if (names.length === 1) {
-				flashToast(`Can't import ${names[0]} — try PNG, JPEG, WebP, GIF, PDF, Word, or text`, 3600);
+				flashToast(
+					`Can't import ${names[0]} — try PNG, JPEG, WebP, GIF, PDF, Word, HTML, or text`,
+					3600
+				);
 			} else {
-				flashToast('Drop a PDF, Word, image, text note, or Mash JSON file', 3000);
+				flashToast('Drop a PDF, Word, HTML, image, text note, or Mash JSON file', 3000);
 			}
 			return;
 		}
@@ -1187,10 +1294,16 @@
 			openedDocName = batch.pdfFiles[0]!.name;
 			if (batch.pdfFiles.length > 1) failedCount += batch.pdfFiles.length - 1;
 			if (batch.docxFiles.length > 0) failedCount += batch.docxFiles.length;
+			if (batch.htmlFiles.length > 0) failedCount += batch.htmlFiles.length;
 		} else if (batch.docxFiles.length > 0) {
 			openDocxReader(batch.docxFiles[0]!);
 			openedDocName = batch.docxFiles[0]!.name;
 			if (batch.docxFiles.length > 1) failedCount += batch.docxFiles.length - 1;
+			if (batch.htmlFiles.length > 0) failedCount += batch.htmlFiles.length;
+		} else if (batch.htmlFiles.length > 0) {
+			openHtmlReader(batch.htmlFiles[0]!);
+			openedDocName = batch.htmlFiles[0]!.name;
+			if (batch.htmlFiles.length > 1) failedCount += batch.htmlFiles.length - 1;
 		}
 
 		if (batch.imageFiles.length > 0) {
@@ -1336,6 +1449,27 @@
 					if (prepared.compacted) bits.push('Image resized for the desk');
 					flashToast(bits.join(' · '));
 				}
+			})();
+			return;
+		}
+		const urlDrafts = draftsFromUrlOnlyText(text);
+		if (urlDrafts) {
+			event.preventDefault();
+			void (async () => {
+				const notes = await placeNoteDraftsOnDesk(urlDrafts);
+				if (notes.length === 0) return;
+				const totalLines = text
+					.replace(/\r\n?/g, '\n')
+					.split('\n')
+					.map((l) => l.trim())
+					.filter(Boolean).length;
+				const parts = [
+					notes.length === 1 ? 'Pasted 1 link card' : `Pasted ${notes.length} link cards`
+				];
+				if (totalLines > URL_SOURCE_MAX_PER_PASTE) {
+					parts.push(`Imported ${URL_SOURCE_MAX_PER_PASTE} of ${totalLines} links`);
+				}
+				flashToast(parts.join(' · '));
 			})();
 			return;
 		}
@@ -1889,6 +2023,10 @@
 				hideDocxReader();
 				return;
 			}
+			if (htmlReaderOpen) {
+				hideHtmlReader();
+				return;
+			}
 			if (confirmDialog) {
 				confirmDialog = null;
 				return;
@@ -1950,6 +2088,14 @@
 			action: () => {
 				showPalette = false;
 				docxInputEl?.click();
+			},
+			shortcut: ''
+		},
+		{
+			label: 'Open HTML document…',
+			action: () => {
+				showPalette = false;
+				htmlInputEl?.click();
 			},
 			shortcut: ''
 		},
@@ -2700,6 +2846,27 @@
 						</div>
 					</section>
 				{/if}
+				{#if htmlReaderFile && LazyHtmlReader}
+					{#key htmlReaderFile}
+						<LazyHtmlReader
+							file={htmlReaderFile}
+							clippings={htmlClippings}
+							open={htmlReaderOpen}
+							onClose={hideHtmlReader}
+							onClip={saveHtmlClipping}
+							onOpenClippings={openHtmlClippingsOnCanvas}
+						/>
+					{/key}
+				{:else if htmlReaderOpen && htmlReaderModuleLoading}
+					<section class="mash-pdf-reader" aria-label="HTML document reader">
+						<div
+							class="flex h-full items-center justify-center text-sm"
+							style="color: var(--mash-ink-muted);"
+						>
+							Loading HTML document tools…
+						</div>
+					</section>
+				{/if}
 				{#if !documentReaderOpen}
 					<EditorStage
 						stage={editorStage}
@@ -2763,6 +2930,10 @@
 					onOpenDocx={() => {
 						settingsOpen = false;
 						docxInputEl?.click();
+					}}
+					onOpenHtml={() => {
+						settingsOpen = false;
+						htmlInputEl?.click();
 					}}
 					onOpenImage={() => {
 						settingsOpen = false;
@@ -3416,6 +3587,19 @@
 			const file = input.files?.[0];
 			input.value = '';
 			if (file) openDocxReader(file);
+		}}
+	/>
+	<input
+		bind:this={htmlInputEl}
+		data-testid="html-reader-input"
+		type="file"
+		accept=".html,.htm,text/html,application/xhtml+xml"
+		class="hidden"
+		onchange={(e) => {
+			const input = e.currentTarget as HTMLInputElement;
+			const file = input.files?.[0];
+			input.value = '';
+			if (file) openHtmlReader(file);
 		}}
 	/>
 	<input

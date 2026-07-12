@@ -74,6 +74,24 @@ export function normalizeImportedNote(raw: unknown, index: number): Note | strin
 			kind: 'image',
 			title: sourceRaw.title.trim().slice(0, 300) || 'Image'
 		};
+	} else if (
+		sourceRaw?.kind === 'url' &&
+		typeof sourceRaw.title === 'string' &&
+		typeof sourceRaw.url === 'string'
+	) {
+		const url = sourceRaw.url.trim().slice(0, 2000);
+		if (/^https?:\/\//i.test(url)) {
+			source = {
+				kind: 'url',
+				title: sourceRaw.title.trim().slice(0, 300) || 'Link',
+				url
+			};
+		}
+	} else if (sourceRaw?.kind === 'html' && typeof sourceRaw.title === 'string') {
+		source = {
+			kind: 'html',
+			title: sourceRaw.title.trim().slice(0, 300) || 'HTML document'
+		};
 	}
 	return {
 		id,

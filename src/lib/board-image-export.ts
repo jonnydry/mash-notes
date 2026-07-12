@@ -127,7 +127,10 @@ export function buildBoardImagePlan(input: BoardImageInput): BoardImagePlan | nu
 			sourceLabel:
 				note.source?.kind === 'pdf'
 					? `${note.source.title} · p. ${note.source.page}`
-					: note.source?.kind === 'docx' || note.source?.kind === 'image'
+					: note.source?.kind === 'docx' ||
+						  note.source?.kind === 'image' ||
+						  note.source?.kind === 'url' ||
+						  note.source?.kind === 'html'
 						? note.source.title
 						: undefined,
 			provenanceCount: note.mashedFrom?.length ?? 0
