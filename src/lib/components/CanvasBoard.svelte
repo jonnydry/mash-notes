@@ -256,6 +256,8 @@
 	let lastMobileAutoFitKey: string | null = null;
 	let lastOffscreenFitKey: string | null = null;
 	let mobileToolsOpen = $state(false);
+	/** Desktop board chrome: secondary tools under View. */
+	let desktopViewOpen = $state(false);
 	let moveRaf = 0;
 	let pendingMoves: Array<{ itemId: string; x: number; y: number }> | null = null;
 
@@ -589,6 +591,7 @@
 		if (target.closest('[data-canvas-card]')) return;
 		if (target.closest('[data-mash-confirm]')) return;
 		if (target.closest('[data-canvas-chrome]')) return;
+		if (desktopViewOpen) desktopViewOpen = false;
 		if (target.closest('[data-flow-edge]')) return;
 
 		if (flowFromItemId) {
@@ -2369,157 +2372,196 @@
 
 	<div
 		data-canvas-chrome
-		class="mash-canvas-chrome-top pointer-events-none absolute top-3 right-3 z-10 flex flex-wrap items-center justify-end gap-1.5"
+		class="mash-canvas-chrome-top pointer-events-none absolute top-3 right-3 z-10 flex flex-col items-end gap-1.5"
 	>
-		<div class="mash-board-chip pointer-events-auto flex items-center rounded-full p-0.5 text-[10px]">
+		<div class="pointer-events-auto flex flex-wrap items-center justify-end gap-1.5">
+			<div class="mash-board-chip flex items-center rounded-full p-0.5 text-[10px]">
+				<button
+					type="button"
+					class="mash-board-chip-btn rounded-full px-2.5 py-1 {!snapEnabled ? 'is-active' : ''}"
+					onclick={(e) => {
+						e.stopPropagation();
+						if (snapEnabled) toggleSnap();
+					}}
+					title="Free placement — cards stay where you drop them"
+				>
+					Free
+				</button>
+				<button
+					type="button"
+					class="mash-board-chip-btn rounded-full px-2.5 py-1 {snapEnabled ? 'is-active' : ''}"
+					onclick={(e) => {
+						e.stopPropagation();
+						if (!snapEnabled) toggleSnap();
+					}}
+					title="Snap drags to the grid (does not clear overlaps — use Organize in View). Alt flips temporarily"
+				>
+					Snap
+				</button>
+			</div>
 			<button
 				type="button"
-				class="mash-board-chip-btn rounded-full px-2.5 py-1 {!snapEnabled ? 'is-active' : ''}"
+				class="mash-board-chip mash-board-chip-btn rounded-full px-2.5 py-1 text-[10px] {flowMode
+					? 'is-active'
+					: ''}"
 				onclick={(e) => {
 					e.stopPropagation();
-					if (snapEnabled) toggleSnap();
+					desktopViewOpen = false;
+					toggleFlowMode();
 				}}
-				title="Free placement — cards stay where you drop them"
+				title={flowMode
+					? flowConnecting
+						? 'Linking pages…'
+						: 'Done — exit sequence mode'
+					: 'Link pages in order: click last page, then next (keeps chaining)'}
+				aria-pressed={flowMode}
+				aria-busy={flowConnecting}
+				data-testid="board-sequence"
 			>
-				Free
+				{flowMode
+					? flowConnecting
+						? 'Linking…'
+						: flowFromItemId
+							? 'Pick next…'
+							: 'Done'
+					: 'Sequence'}
 			</button>
 			<button
 				type="button"
-				class="mash-board-chip-btn rounded-full px-2.5 py-1 {snapEnabled ? 'is-active' : ''}"
+				class="mash-board-chip mash-board-chip-btn rounded-full px-2.5 py-1 text-[10px]"
 				onclick={(e) => {
 					e.stopPropagation();
-					if (!snapEnabled) toggleSnap();
+					zoomToFit(false);
 				}}
-				title="Snap drags to the grid (does not clear overlaps — use Organize). Alt flips temporarily"
+				title="Fit all cards (⌘1)"
 			>
-				Snap
+				Fit
+			</button>
+			<button
+				type="button"
+				class="mash-board-chip mash-board-chip-btn rounded-full px-2.5 py-1 text-[10px] disabled:opacity-35"
+				disabled={!canUndo}
+				onclick={(e) => {
+					e.stopPropagation();
+					onUndo?.();
+				}}
+				title="Undo layout (⌘Z)"
+			>
+				Undo
+			</button>
+			<button
+				type="button"
+				class="mash-board-chip mash-board-chip-btn rounded-full px-2.5 py-1 text-[10px] {desktopViewOpen
+					? 'is-active'
+					: ''}"
+				onclick={(e) => {
+					e.stopPropagation();
+					desktopViewOpen = !desktopViewOpen;
+				}}
+				title="View and board tools"
+				aria-label="View board tools"
+				aria-haspopup="menu"
+				aria-expanded={desktopViewOpen}
+				data-testid="board-view-toggle"
+			>
+				View
 			</button>
 		</div>
-		<button
-			type="button"
-			class="mash-board-chip mash-board-chip-btn pointer-events-auto rounded-full px-2.5 py-1 text-[10px]"
-			onclick={(e) => {
-				e.stopPropagation();
-				organizeToSnap();
-			}}
-			title="Tidy: snap every card to the grid and clear overlaps"
-			disabled={items.length === 0}
-		>
-			Organize
-		</button>
-		<button
-			type="button"
-			class="mash-board-chip mash-board-chip-btn pointer-events-auto rounded-full px-2.5 py-1 text-[10px]"
-			onclick={(e) => {
-				e.stopPropagation();
-				toggleSelectAllOnBoard();
-			}}
-			title={allBoardNotesSelected
-				? 'Clear canvas selection'
-				: 'Select every note on this desk (⌘A)'}
-			disabled={items.length === 0}
-		>
-			{allBoardNotesSelected ? 'Deselect' : 'Select all'}
-		</button>
-		<button
-			type="button"
-			class="mash-board-chip mash-board-chip-btn pointer-events-auto rounded-full px-2.5 py-1 text-[10px] {flowMode
-				? 'is-active'
-				: ''}"
-			onclick={(e) => {
-				e.stopPropagation();
-				toggleFlowMode();
-			}}
-			title={flowMode
-				? flowConnecting
-					? 'Linking pages…'
-					: 'Done — exit sequence mode'
-				: 'Link pages in order: click last page, then next (keeps chaining)'}
-			aria-pressed={flowMode}
-			aria-busy={flowConnecting}
-		>
-			{flowMode
-				? flowConnecting
-					? 'Linking…'
-					: flowFromItemId
-						? 'Pick next page…'
-						: 'Done'
-				: 'Sequence'}
-		</button>
-		<span class="mash-board-chip-soft rounded-full px-2.5 py-1 text-[10px]">
-			{Math.round(scale * 100)}%{altHeld ? ' · Alt' : ''}
-		</span>
-		<button
-			type="button"
-			class="mash-board-chip mash-board-chip-btn pointer-events-auto rounded-full px-2.5 py-1 text-[10px]"
-			onclick={(e) => {
-				e.stopPropagation();
-				zoomToFit(false);
-			}}
-			title="Fit all cards (⌘1)"
-		>
-			Fit
-		</button>
-		{#if selectedCount > 0}
-			<button
-				type="button"
-				class="mash-board-chip mash-board-chip-btn pointer-events-auto rounded-full px-2.5 py-1 text-[10px]"
-				onclick={(e) => {
-					e.stopPropagation();
-					zoomToFit(true);
-				}}
-				title="Fit selection"
+
+		{#if desktopViewOpen}
+			<div
+				class="mash-board-view-menu pointer-events-auto grid w-52 grid-cols-1 gap-0.5 rounded-2xl border p-2 shadow-xl"
+				style="border-color: var(--mash-panel-border); background: var(--mash-panel); backdrop-filter: blur(10px);"
+				role="menu"
+				aria-label="Board view tools"
+				data-testid="board-view-menu"
 			>
-				Fit sel
-			</button>
-		{/if}
-		<button
-			type="button"
-			class="mash-board-chip mash-board-chip-btn pointer-events-auto rounded-full px-2.5 py-1 text-[10px] disabled:opacity-35"
-			disabled={!canUndo}
-			onclick={(e) => {
-				e.stopPropagation();
-				onUndo?.();
-			}}
-			title="Undo layout (⌘Z)"
-		>
-			Undo
-		</button>
-		<button
-			type="button"
-			class="mash-board-chip mash-board-chip-btn pointer-events-auto rounded-full px-2.5 py-1 text-[10px] disabled:opacity-35"
-			disabled={!canRedo}
-			onclick={(e) => {
-				e.stopPropagation();
-				onRedo?.();
-			}}
-			title="Redo layout (⇧⌘Z)"
-		>
-			Redo
-		</button>
-		<button
-			type="button"
-			class="mash-board-chip mash-board-chip-btn pointer-events-auto rounded-full px-2.5 py-1 text-[10px]"
-			onclick={(e) => {
-				e.stopPropagation();
-				resetView();
-			}}
-			title="Reset pan & zoom (⌘0)"
-		>
-			Reset
-		</button>
-		{#if onOpenShortcuts}
-			<button
-				type="button"
-				class="mash-board-chip mash-board-chip-btn pointer-events-auto rounded-full px-2.5 py-1 text-[10px]"
-				onclick={(e) => {
-					e.stopPropagation();
-					onOpenShortcuts();
-				}}
-				title="Keyboard shortcuts (?)"
-			>
-				?
-			</button>
+				<p
+					class="px-2 pb-1 text-[9px] font-semibold tracking-wide uppercase"
+					style="color: var(--mash-ink-muted);"
+				>
+					{Math.round(scale * 100)}%{altHeld ? ' · Alt' : ''}
+				</p>
+				<button
+					type="button"
+					role="menuitem"
+					class="mash-btn-ghost rounded-lg px-2.5 py-1.5 text-left text-[11px]"
+					disabled={items.length === 0}
+					onclick={(e) => {
+						e.stopPropagation();
+						organizeToSnap();
+						desktopViewOpen = false;
+					}}
+				>
+					Organize to grid
+				</button>
+				<button
+					type="button"
+					role="menuitem"
+					class="mash-btn-ghost rounded-lg px-2.5 py-1.5 text-left text-[11px]"
+					disabled={items.length === 0}
+					onclick={(e) => {
+						e.stopPropagation();
+						toggleSelectAllOnBoard();
+						desktopViewOpen = false;
+					}}
+				>
+					{allBoardNotesSelected ? 'Deselect all' : 'Select all'}
+				</button>
+				{#if selectedCount > 0}
+					<button
+						type="button"
+						role="menuitem"
+						class="mash-btn-ghost rounded-lg px-2.5 py-1.5 text-left text-[11px]"
+						onclick={(e) => {
+							e.stopPropagation();
+							zoomToFit(true);
+							desktopViewOpen = false;
+						}}
+					>
+						Fit selection
+					</button>
+				{/if}
+				<button
+					type="button"
+					role="menuitem"
+					class="mash-btn-ghost rounded-lg px-2.5 py-1.5 text-left text-[11px] disabled:opacity-35"
+					disabled={!canRedo}
+					onclick={(e) => {
+						e.stopPropagation();
+						onRedo?.();
+						desktopViewOpen = false;
+					}}
+				>
+					Redo layout
+				</button>
+				<button
+					type="button"
+					role="menuitem"
+					class="mash-btn-ghost rounded-lg px-2.5 py-1.5 text-left text-[11px]"
+					onclick={(e) => {
+						e.stopPropagation();
+						resetView();
+						desktopViewOpen = false;
+					}}
+				>
+					Reset pan & zoom
+				</button>
+				{#if onOpenShortcuts}
+					<button
+						type="button"
+						role="menuitem"
+						class="mash-btn-ghost rounded-lg px-2.5 py-1.5 text-left text-[11px]"
+						onclick={(e) => {
+							e.stopPropagation();
+							desktopViewOpen = false;
+							onOpenShortcuts();
+						}}
+					>
+						Keyboard shortcuts
+					</button>
+				{/if}
+			</div>
 		{/if}
 	</div>
 
