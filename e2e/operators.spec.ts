@@ -4,9 +4,10 @@ import { modKey, openPalette, wipeIndexedDb } from './helpers';
 async function pasteText(page: Page, text: string) {
 	await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
 	await page.evaluate((value) => navigator.clipboard.writeText(value), text);
-	await page
-		.getByRole('application', { name: 'Mash canvas' })
-		.click({ position: { x: 340, y: 320 } });
+	// Close peel if open so it doesn't intercept canvas clicks (wipe opens Desk peel).
+	await page.keyboard.press('Escape');
+	const canvas = page.getByRole('application', { name: 'Mash canvas' });
+	await canvas.click({ position: { x: 520, y: 360 }, force: true });
 	await page.keyboard.press(`${modKey()}+V`);
 }
 
@@ -15,8 +16,6 @@ test.describe('Set operators', () => {
 		page
 	}) => {
 		await wipeIndexedDb(page);
-		await page.getByRole('button', { name: 'Open session manager' }).click();
-		await page.getByRole('button', { name: 'New scratch desk' }).click();
 
 		await pasteText(page, 'Alpha\nBeta\nGamma');
 		await page
@@ -24,13 +23,18 @@ test.describe('Set operators', () => {
 			.getByRole('button', { name: 'One card' })
 			.click();
 		await expect(page.locator('.mash-note-card')).toHaveCount(1);
-		await page.getByRole('button', { name: 'Transform' }).click();
+		await page.getByTestId('operator-kitchen-toggle').click();
+		await expect(page.getByTestId('operator-kitchen')).toBeVisible();
+		await expect(page.getByTestId('operator-kitchen').getByText('Shape')).toBeVisible();
 		await expect(page.locator('[data-action-id="split-selection-lines"]')).toBeVisible();
 		await page.locator('[data-action-id="split-selection-lines"]').click();
 		await expect(page.locator('.mash-note-card')).toHaveCount(3);
-		await expect(page.getByTestId('action-status')).toContainText('Split into 3 cards by lines');
+		await expect(page.getByTestId('action-status')).toContainText('Split by lines');
+		await expect(page.getByTestId('operator-receipt')).toBeVisible();
+		await expect(page.getByTestId('operator-receipt-summary')).toContainText('1 → 3');
 
-		await page.getByRole('button', { name: 'Undo', exact: true }).click();
+		// Prefer receipt undo when the durable op is top of stack (disambiguates board chrome Undo).
+		await page.getByTestId('operator-receipt-undo').click();
 		await expect(page.locator('.mash-note-card')).toHaveCount(1);
 		await expect(page.getByTestId('action-status')).toHaveText('Undo Split');
 
@@ -43,8 +47,6 @@ test.describe('Set operators', () => {
 		page
 	}) => {
 		await wipeIndexedDb(page);
-		await page.getByRole('button', { name: 'Open session manager' }).click();
-		await page.getByRole('button', { name: 'New scratch desk' }).click();
 
 		await pasteText(page, 'Zulu\nSame\nAlpha\nSame');
 		await page
@@ -113,9 +115,7 @@ test.describe('Set operators', () => {
 		await page.getByRole('button', { name: 'Transform' }).click();
 		await page.locator('[data-action-id="sequence-selection"]').click();
 		await expect(page.locator('.mash-flow-page-badge')).toHaveCount(3);
-		await expect(page.getByTestId('action-status')).toContainText(
-			'Sequenced 3 cards in reading order'
-		);
+		await expect(page.getByTestId('action-status')).toContainText('Sequenced 3 cards');
 		await page.getByRole('button', { name: 'Undo', exact: true }).click();
 		await expect(page.locator('.mash-flow-page-badge')).toHaveCount(0);
 		await expect(page.getByTestId('action-status')).toHaveText('Undo Sequence');
