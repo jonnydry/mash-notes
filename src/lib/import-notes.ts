@@ -69,6 +69,11 @@ export function normalizeImportedNote(raw: unknown, index: number): Note | strin
 			kind: 'docx',
 			title: sourceRaw.title.trim().slice(0, 300) || 'Untitled document'
 		};
+	} else if (sourceRaw?.kind === 'image' && typeof sourceRaw.title === 'string') {
+		source = {
+			kind: 'image',
+			title: sourceRaw.title.trim().slice(0, 300) || 'Image'
+		};
 	}
 	return {
 		id,

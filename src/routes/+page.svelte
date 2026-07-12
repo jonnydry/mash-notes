@@ -112,6 +112,13 @@
 		type PasteSplitMode
 	} from '$lib/paste-cards';
 	import {
+		DESK_IMAGE_MAX_PER_ACTION,
+		clipboardImageBlob,
+		imageNoteBody,
+		imageNoteSource,
+		prepareDeskImage
+	} from '$lib/desk-image';
+	import {
 		splitNoteFragments,
 		type ContentSplitMode,
 		type SplitFragment
@@ -190,6 +197,7 @@
 	let syncInputEl: HTMLInputElement | undefined = $state();
 	let pdfInputEl: HTMLInputElement | undefined = $state();
 	let docxInputEl: HTMLInputElement | undefined = $state();
+	let imageInputEl: HTMLInputElement | undefined = $state();
 	let pdfReaderFile: File | null = $state(null);
 	let pdfReaderOpen = $state(false);
 	let pdfReaderView = $state({ page: 1, zoom: 1 });
@@ -1058,15 +1066,109 @@
 		flashToast(`Opened ${noteIds.length} clipping${noteIds.length === 1 ? '' : 's'} on canvas`);
 	}
 
+	async function placeNoteDraftsOnDesk(
+		drafts: Array<{ title: string; body: string; source?: Note['source'] }>,
+		origin?: { x: number; y: number }
+	): Promise<Note[]> {
+		if (!canvas.activeCanvas) {
+			flashToast('Desk is still getting ready');
+			return [];
+		}
+		if (drafts.length === 0) return [];
+		const spawn =
+			origin ??
+			canvas.canvasBoard?.getSpawnPoint(COLLAPSED_CARD, canvas.canvasItems.length) ?? {
+				x: 80,
+				y: 80
+			};
+		const columns = Math.min(3, Math.max(1, drafts.length));
+		const createdNotes: Note[] = [];
+		const placedIds: string[] = [];
+		for (let index = 0; index < drafts.length; index++) {
+			const draft = drafts[index]!;
+			const note = await createNote({
+				...activeNoteOwnership(),
+				title: draft.title,
+				body: draft.body,
+				folder: peel.canvasFolder,
+				links: extractWikilinks(draft.body),
+				...(draft.source ? { source: draft.source } : {})
+			});
+			addNoteToSearch(note);
+			createdNotes.push(note);
+			const item = await addNoteToCanvas(canvas.activeCanvas.id, note.id, {
+				x: spawn.x + (index % columns) * (COLLAPSED_CARD.w + 24),
+				y: spawn.y + Math.floor(index / columns) * (COLLAPSED_CARD.h + 24),
+				w: COLLAPSED_CARD.w,
+				h: COLLAPSED_CARD.h
+			});
+			placedIds.push(item.id);
+		}
+		library.notes = [...createdNotes, ...library.notes];
+		await canvas.refreshCanvasItems();
+		library.selectionIds = createdNotes.map((note) => note.id);
+		library.selectedId = createdNotes[0]?.id ?? null;
+		canvas.settlingIds = new Set(placedIds);
+		setTimeout(() => {
+			canvas.settlingIds = new Set();
+		}, 320);
+		canvas.canvasBoard?.ensureNoteVisible(createdNotes[0]!.id);
+		void sessionManager.recordMeaningfulActivity();
+		return createdNotes;
+	}
+
+	async function createVisualStickiesFromFiles(
+		files: File[],
+		origin?: { x: number; y: number },
+		options?: { caption?: string; titleOverride?: string }
+	): Promise<{ created: number; compacted: number; failed: number; skippedCap: number }> {
+		const capped = files.slice(0, DESK_IMAGE_MAX_PER_ACTION);
+		const skippedCap = Math.max(0, files.length - capped.length);
+		const drafts: Array<{ title: string; body: string; source?: Note['source'] }> = [];
+		let compacted = 0;
+		let failed = 0;
+		for (const file of capped) {
+			const prepared = await prepareDeskImage(file, {
+				fileName: file.name,
+				titleHint: options?.titleOverride
+			});
+			if (!prepared.ok) {
+				failed++;
+				if (prepared.error === 'too-large') {
+					flashToast(`Image too large to import (max 20 MB): ${file.name}`, 3200);
+				} else if (prepared.error === 'unsupported') {
+					flashToast(`Can't import ${file.name} — try PNG, JPEG, WebP, or GIF`, 3200);
+				}
+				continue;
+			}
+			if (prepared.compacted) compacted++;
+			const title = options?.titleOverride?.trim() || prepared.titleHint;
+			const sourceTitle = file.name?.trim() || title;
+			drafts.push({
+				title,
+				body: imageNoteBody(prepared.dataUrl, title, options?.caption ?? ''),
+				source: imageNoteSource(sourceTitle)
+			});
+		}
+		const notes = await placeNoteDraftsOnDesk(drafts, origin);
+		return { created: notes.length, compacted, failed, skippedCap };
+	}
+
 	async function handleDroppedFiles(files: File[], x: number, y: number) {
 		const batch = splitExternalImportFiles(files);
 		const supportedCount =
 			batch.noteTextFiles.length +
 			batch.jsonFiles.length +
 			batch.pdfFiles.length +
-			batch.docxFiles.length;
+			batch.docxFiles.length +
+			batch.imageFiles.length;
 		if (supportedCount === 0) {
-			flashToast('Drop a PDF, Word (.docx), text note, or Mash JSON file', 3000);
+			const names = batch.unsupportedFiles.map((f) => f.name).filter(Boolean);
+			if (names.length === 1) {
+				flashToast(`Can't import ${names[0]} — try PNG, JPEG, WebP, GIF, PDF, Word, or text`, 3600);
+			} else {
+				flashToast('Drop a PDF, Word, image, text note, or Mash JSON file', 3000);
+			}
 			return;
 		}
 
@@ -1077,6 +1179,8 @@
 		let failedCount = 0;
 		let waitingForConfirmation = false;
 		let openedDocName = '';
+		let imageCreated = 0;
+		let imageCompacted = 0;
 
 		if (batch.pdfFiles.length > 0) {
 			openPdfReader(batch.pdfFiles[0]!);
@@ -1087,6 +1191,16 @@
 			openDocxReader(batch.docxFiles[0]!);
 			openedDocName = batch.docxFiles[0]!.name;
 			if (batch.docxFiles.length > 1) failedCount += batch.docxFiles.length - 1;
+		}
+
+		if (batch.imageFiles.length > 0) {
+			const imageResult = await createVisualStickiesFromFiles(batch.imageFiles, { x, y });
+			imageCreated = imageResult.created;
+			imageCompacted = imageResult.compacted;
+			failedCount += imageResult.failed;
+			if (imageResult.skippedCap > 0) {
+				flashToast(`Imported ${DESK_IMAGE_MAX_PER_ACTION} of ${batch.imageFiles.length} images`, 3600);
+			}
 		}
 
 		if (batch.noteTextFiles.length > 0) {
@@ -1145,6 +1259,16 @@
 		const skippedCount = batch.unsupportedFiles.length + failedCount;
 		const parts: string[] = [];
 		if (openedDocName) parts.push(`Opened ${openedDocName}`);
+		if (imageCreated > 0) {
+			parts.push(
+				imageCreated === 1 ? 'Added 1 image card' : `Added ${imageCreated} image cards`
+			);
+		}
+		if (imageCompacted > 0) {
+			parts.push(
+				imageCompacted === 1 ? 'Image resized for the desk' : `${imageCompacted} images resized for the desk`
+			);
+		}
 		if (uniqueNoteIds.length > 0) {
 			parts.push(
 				`Imported ${uniqueNoteIds.length} note${uniqueNoteIds.length === 1 ? '' : 's'} from ${importedFileCount} file${importedFileCount === 1 ? '' : 's'}`
@@ -1179,7 +1303,42 @@
 		) {
 			return;
 		}
+		const imageBlob = clipboardImageBlob(event.clipboardData);
 		const text = event.clipboardData?.getData('text/plain') ?? '';
+		if (imageBlob) {
+			event.preventDefault();
+			void (async () => {
+				const prepared = await prepareDeskImage(imageBlob, {
+					fileName: imageBlob instanceof File ? imageBlob.name : 'clipboard.png',
+					titleHint: 'Pasted image'
+				});
+				if (!prepared.ok) {
+					if (prepared.error === 'too-large') {
+						flashToast('Image too large to import (max 20 MB)', 3200);
+					} else {
+						flashToast("Can't import that image — try PNG, JPEG, WebP, or GIF", 3200);
+					}
+					return;
+				}
+				const caption = text.trim();
+				const title = prepared.titleHint || 'Pasted image';
+				const notes = await placeNoteDraftsOnDesk([
+					{
+						title,
+						body: imageNoteBody(prepared.dataUrl, title, caption),
+						source: imageNoteSource(
+							imageBlob instanceof File && imageBlob.name ? imageBlob.name : 'Clipboard'
+						)
+					}
+				]);
+				if (notes.length > 0) {
+					const bits = [notes.length === 1 ? 'Pasted image card' : `Pasted ${notes.length} image cards`];
+					if (prepared.compacted) bits.push('Image resized for the desk');
+					flashToast(bits.join(' · '));
+				}
+			})();
+			return;
+		}
 		const analysis = analyzePastedText(text);
 		if (!analysis.text) return;
 		event.preventDefault();
@@ -1192,51 +1351,42 @@
 	}
 
 	async function createCardsFromPaste(analysis: PasteAnalysis, mode: PasteSplitMode) {
-		if (!canvas.activeCanvas) {
-			flashToast('Desk is still getting ready');
-			return;
-		}
 		const drafts = draftsFromPastedText(analysis.text, mode);
 		if (drafts.length === 0) return;
-		const spawn = canvas.canvasBoard?.getSpawnPoint(COLLAPSED_CARD, canvas.canvasItems.length) ?? {
-			x: 80,
-			y: 80
-		};
-		const columns = Math.min(3, Math.max(1, drafts.length));
-		const createdNotes: Note[] = [];
-		const placedIds: string[] = [];
-		for (let index = 0; index < drafts.length; index++) {
-			const draft = drafts[index]!;
-			const note = await createNote({
-				...activeNoteOwnership(),
-				title: draft.title,
-				body: draft.body,
-				folder: peel.canvasFolder,
-				links: extractWikilinks(draft.body)
-			});
-			addNoteToSearch(note);
-			createdNotes.push(note);
-			const item = await addNoteToCanvas(canvas.activeCanvas.id, note.id, {
-				x: spawn.x + (index % columns) * (COLLAPSED_CARD.w + 24),
-				y: spawn.y + Math.floor(index / columns) * (COLLAPSED_CARD.h + 24),
-				w: COLLAPSED_CARD.w,
-				h: COLLAPSED_CARD.h
-			});
-			placedIds.push(item.id);
-		}
-		library.notes = [...createdNotes, ...library.notes];
-		await canvas.refreshCanvasItems();
-		library.selectionIds = createdNotes.map((note) => note.id);
-		library.selectedId = createdNotes[0]?.id ?? null;
-		canvas.settlingIds = new Set(placedIds);
-		setTimeout(() => {
-			canvas.settlingIds = new Set();
-		}, 320);
-		canvas.canvasBoard?.ensureNoteVisible(createdNotes[0]!.id);
+		const createdNotes = await placeNoteDraftsOnDesk(drafts);
 		pasteDialogOpen = false;
 		pasteAnalysis = null;
-		void sessionManager.recordMeaningfulActivity();
-		flashToast(createdNotes.length === 1 ? 'Pasted 1 card' : `Pasted ${createdNotes.length} cards`);
+		if (createdNotes.length > 0) {
+			flashToast(
+				createdNotes.length === 1 ? 'Pasted 1 card' : `Pasted ${createdNotes.length} cards`
+			);
+		}
+	}
+
+	async function handleOpenImageFiles(fileList: FileList | null) {
+		if (!fileList?.length) return;
+		const files = [...fileList];
+		const result = await createVisualStickiesFromFiles(files);
+		const parts: string[] = [];
+		if (result.created > 0) {
+			parts.push(
+				result.created === 1 ? 'Added 1 image card' : `Added ${result.created} image cards`
+			);
+		}
+		if (result.compacted > 0) {
+			parts.push(
+				result.compacted === 1
+					? 'Image resized for the desk'
+					: `${result.compacted} images resized for the desk`
+			);
+		}
+		if (result.skippedCap > 0) {
+			parts.push(`Imported ${DESK_IMAGE_MAX_PER_ACTION} of ${files.length} images`);
+		}
+		if (result.created === 0 && result.failed > 0) {
+			parts.push('No images imported');
+		}
+		if (parts.length > 0) flashToast(parts.join(' · '), 3600);
 	}
 
 	/** Desk/folders/tags peels sit above the stage and steal clicks — dismiss unless Linked. */
@@ -1800,6 +1950,14 @@
 			action: () => {
 				showPalette = false;
 				docxInputEl?.click();
+			},
+			shortcut: ''
+		},
+		{
+			label: 'Open image…',
+			action: () => {
+				showPalette = false;
+				imageInputEl?.click();
 			},
 			shortcut: ''
 		},
@@ -2606,6 +2764,10 @@
 						settingsOpen = false;
 						docxInputEl?.click();
 					}}
+					onOpenImage={() => {
+						settingsOpen = false;
+						imageInputEl?.click();
+					}}
 					conflictCount={syncConflicts.count}
 					onOpenConflicts={() => {
 						settingsOpen = false;
@@ -3254,6 +3416,20 @@
 			const file = input.files?.[0];
 			input.value = '';
 			if (file) openDocxReader(file);
+		}}
+	/>
+	<input
+		bind:this={imageInputEl}
+		data-testid="image-sticky-input"
+		type="file"
+		accept="image/png,image/jpeg,image/webp,image/gif,.png,.jpg,.jpeg,.webp,.gif"
+		multiple
+		class="hidden"
+		onchange={(e) => {
+			const input = e.currentTarget as HTMLInputElement;
+			const list = input.files;
+			input.value = '';
+			void handleOpenImageFiles(list);
 		}}
 	/>
 	<input

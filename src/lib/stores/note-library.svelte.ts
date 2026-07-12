@@ -747,7 +747,8 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 			typeof localValue === 'object' &&
 			localValue !== null &&
 			((localValue as { kind?: unknown }).kind === 'pdf' ||
-				(localValue as { kind?: unknown }).kind === 'docx')
+				(localValue as { kind?: unknown }).kind === 'docx' ||
+				(localValue as { kind?: unknown }).kind === 'image')
 		) {
 			updated = { ...target, source: localValue as Note['source'], modified: Date.now() };
 		} else {

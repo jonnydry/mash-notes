@@ -10,7 +10,7 @@ function file(name: string, type = ''): File {
 }
 
 describe('external file drops', () => {
-	it('recognizes note text, JSON, PDF, docx, and unsupported files', () => {
+	it('recognizes note text, JSON, PDF, docx, images, and unsupported files', () => {
 		expect(externalImportKind(file('idea.md'))).toBe('note-text');
 		expect(externalImportKind(file('idea.MARKDOWN'))).toBe('note-text');
 		expect(externalImportKind(file('scratch.txt', 'text/plain'))).toBe('note-text');
@@ -24,8 +24,13 @@ describe('external file drops', () => {
 				file('memo', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
 			)
 		).toBe('docx');
+		expect(externalImportKind(file('photo.png', 'image/png'))).toBe('image');
+		expect(externalImportKind(file('shot.JPEG'))).toBe('image');
+		expect(externalImportKind(file('clip.webp', 'image/webp'))).toBe('image');
+		expect(externalImportKind(file('anim.gif'))).toBe('image');
+		expect(externalImportKind(file('pic', 'image/jpeg'))).toBe('image');
 		expect(externalImportKind(file('essay.pages'))).toBe('unsupported');
-		expect(externalImportKind(file('photo.png', 'image/png'))).toBe('unsupported');
+		expect(externalImportKind(file('vector.svg', 'image/svg+xml'))).toBe('unsupported');
 	});
 
 	it('partitions mixed file drops without losing order within a format', () => {
@@ -34,11 +39,13 @@ describe('external file drops', () => {
 		const c = file('c.pdf');
 		const d = file('d.txt');
 		const e = file('e.docx');
-		expect(splitExternalImportFiles([a, b, c, d, e])).toEqual({
+		const f = file('f.png', 'image/png');
+		expect(splitExternalImportFiles([a, b, c, d, e, f])).toEqual({
 			noteTextFiles: [a, d],
 			jsonFiles: [b],
 			pdfFiles: [c],
 			docxFiles: [e],
+			imageFiles: [f],
 			unsupportedFiles: []
 		});
 	});
