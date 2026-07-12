@@ -5,7 +5,8 @@ import {
 	ensureMashTeamWelcomeNote,
 	isMashTeamWelcomeNote,
 	MASH_TEAM_WELCOME_BODY,
-	MASH_TEAM_WELCOME_IMAGE
+	MASH_TEAM_WELCOME_IMAGE,
+	MASH_TEAM_WELCOME_TITLE
 } from './system-notes';
 
 describe('Mash team welcome note', () => {
@@ -24,8 +25,10 @@ describe('Mash team welcome note', () => {
 		expect(note.system).toBe('mash-team-welcome');
 		expect(note.scope).toBe('kept');
 		expect(note.sessionId).toBe(KEPT_COLLECTION_SESSION_ID);
+		expect(note.title).toBe(MASH_TEAM_WELCOME_TITLE);
 		expect(note.body).toBe(MASH_TEAM_WELCOME_BODY);
-		expect(note.body).toContain('Scoop');
+		expect(note.body).toContain('Scoop here');
+		expect(note.body).toContain('I believe in you');
 		expect(note.body).toContain('Clip a region');
 		expect(note.body).toContain('Scratch desks');
 		expect(note.body).not.toContain('Spoon');
@@ -39,30 +42,32 @@ describe('Mash team welcome note', () => {
 		const note = await ensureMashTeamWelcomeNote();
 		await db.notes.put({
 			...note,
-			body: `Hey — welcome to Mash.
+			title: 'A quick welcome from the Mash team',
+			body: `Hey — you found Mash.
 
-This is a desk for the half-formed stuff: scraps, PDFs, rambles, and the good ideas hiding inside them. Spoon (our little potato friend) is here for moral support.
+Think of this as a kitchen counter for half-baked thoughts: scraps, PDFs, rambles, and the surprisingly good bits stuck to them. Scoop, our cheerful potato pal, will cheer from the sidelines (and never judge your pile).
 
 ## How the kitchen works
 
-1. **Drop it in** — New note, paste a pile of text, or toss a PDF onto the board.
-2. **Spread it out** — pull notes from the Library, then pan, zoom, and snap until the mess looks honest.
-3. **Stir gently** — open stickies side by side, leave [[wikilinks]], or stitch cards into a Sequence when the order matters.
-4. **Mash** — select a few notes and combine them into one draft. Unmash brings the ingredients back. Transform can split, stack, or sequence a set when you need finer cuts.
-5. **Clip & plate** — in a PDF, grab text or Clip a region. When you are ready, Finish to export Markdown, PDF, a board image, or a full backup.
+1. **Toss it in** — hit New, paste a chaotic blob, or drop a PDF on the board like it belongs there.
+2. **Spread the mess** — drag notes out of the Library, then pan, zoom, and snap until it looks deliciously intentional.
+3. **Stir it around** — open stickies side by side, leave [[wikilinks]] like breadcrumbs, or stitch cards into a Sequence when the story needs an order.
+4. **Mash time** — pick a few notes and mash them into one draft. Unmash brings the ingredients back if you get ambitious. Transform can split, stack, or sequence when you want finer cuts.
+5. **Clip & plate** — in a PDF, snag text or Clip a region. When dinner is ready, Finish with Markdown, PDF, a board image, or a full backup for later.
 
 ## House rules
 
-- Scratch desks are for trying things; kept desks are for what you want to keep.
-- It all lives in this browser — Settings has sync-bundle backup when you want a spare copy.
-- Trash is recoverable. Pin the keepers. Folders and tags are seasoning, not the meal.
+- Scratch desks are for experiments. Kept desks are for the keepers.
+- Everything lives in this browser — Settings has a sync-bundle backup when you want a spare serving.
+- Trash is recoverable. Pin the good stuff. Folders and tags are optional seasoning.
 
-Have fun — and if it gets messy, that is kind of the point.`
+Go make a beautiful mess. Scoop believes in you.`
 		});
 		const refreshed = await ensureMashTeamWelcomeNote();
 		expect(refreshed.id).toBe(note.id);
+		expect(refreshed.title).toBe(MASH_TEAM_WELCOME_TITLE);
 		expect(refreshed.body).toBe(MASH_TEAM_WELCOME_BODY);
-		expect(refreshed.body).toContain('Scoop');
+		expect(refreshed.body).toContain('Scoop here');
 		expect(refreshed.body).not.toContain('Spoon');
 	});
 
@@ -72,7 +77,7 @@ Have fun — and if it gets messy, that is kind of the point.`
 		await syncNoteUpdateAsync(note.id, { body: 'Changed' });
 		await deleteNote(note.id);
 		const stored = await db.notes.get(note.id);
-		expect(stored?.title).toBe('A quick welcome from the Mash team');
+		expect(stored?.title).toBe(MASH_TEAM_WELCOME_TITLE);
 		expect(stored?.body).toBe(MASH_TEAM_WELCOME_BODY);
 		expect(stored?.pinned).toBe(1);
 		expect(stored?.deletedAt).toBeUndefined();

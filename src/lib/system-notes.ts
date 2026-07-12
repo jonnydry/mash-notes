@@ -60,10 +60,8 @@ This is a desk for the half-formed stuff: scraps, PDFs, rambles, and the good id
 - It all lives in this browser — Settings has sync-bundle backup when you want a spare copy.
 - Trash is recoverable. Pin the keepers. Folders and tags are seasoning, not the meal.
 
-Have fun — and if it gets messy, that is kind of the point.`
-] as const;
-
-export const MASH_TEAM_WELCOME_BODY = `Hey — you found Mash.
+Have fun — and if it gets messy, that is kind of the point.`,
+	`Hey — you found Mash.
 
 Think of this as a kitchen counter for half-baked thoughts: scraps, PDFs, rambles, and the surprisingly good bits stuck to them. Scoop, our cheerful potato pal, will cheer from the sidelines (and never judge your pile).
 
@@ -81,7 +79,30 @@ Think of this as a kitchen counter for half-baked thoughts: scraps, PDFs, ramble
 - Everything lives in this browser — Settings has a sync-bundle backup when you want a spare serving.
 - Trash is recoverable. Pin the good stuff. Folders and tags are optional seasoning.
 
-Go make a beautiful mess. Scoop believes in you.`;
+Go make a beautiful mess. Scoop believes in you.`
+] as const;
+
+export const MASH_TEAM_WELCOME_TITLE = 'A quick hello from Scoop';
+
+export const MASH_TEAM_WELCOME_BODY = `Hey — Scoop here.
+
+This desk is my favorite counter for half-baked thoughts: scraps, PDFs, rambles, and the surprisingly good bits stuck to them. I will cheer from the sidelines and never judge your pile.
+
+## How the kitchen works
+
+1. **Toss it in** — hit New, paste a chaotic blob, or drop a PDF on the board like it belongs there.
+2. **Spread the mess** — drag notes out of the Library, then pan, zoom, and snap until it looks deliciously intentional.
+3. **Stir it around** — open stickies side by side, leave [[wikilinks]] like breadcrumbs, or stitch cards into a Sequence when the story needs an order.
+4. **Mash time** — pick a few notes and mash them into one draft. Unmash brings the ingredients back if you get ambitious. Transform can split, stack, or sequence when you want finer cuts.
+5. **Clip & plate** — in a PDF, snag text or Clip a region. When dinner is ready, Finish with Markdown, PDF, a board image, or a full backup for later.
+
+## House rules
+
+- Scratch desks are for experiments. Kept desks are for the keepers.
+- Everything lives in this browser — Settings has a sync-bundle backup when you want a spare serving.
+- Trash is recoverable. Pin the good stuff. Folders and tags are optional seasoning.
+
+Go make a beautiful mess. I believe in you.`;
 
 export function isMashTeamWelcomeNote(note: Pick<Note, 'id'> & { system?: string }): boolean {
 	return note.id === MASH_TEAM_WELCOME_ID || note.system === MASH_TEAM_WELCOME_SYSTEM;
@@ -92,10 +113,19 @@ export function isMashTeamWelcomeCandidate(
 	note: Pick<Note, 'id' | 'title' | 'body'> & { system?: string; tags?: string[] }
 ): boolean {
 	if (isMashTeamWelcomeNote(note)) return true;
-	if (note.title === 'A quick welcome from the Mash team' && note.body === MASH_TEAM_WELCOME_BODY) {
+	if (
+		(note.title === MASH_TEAM_WELCOME_TITLE ||
+			note.title === 'A quick welcome from the Mash team') &&
+		note.body === MASH_TEAM_WELCOME_BODY
+	) {
 		return true;
 	}
-	if (note.title === 'Welcome to Mash' && LEGACY_WELCOME_BODIES.some((body) => body === note.body)) {
+	if (
+		(note.title === 'Welcome to Mash' ||
+			note.title === 'A quick welcome from the Mash team' ||
+			note.title === MASH_TEAM_WELCOME_TITLE) &&
+		LEGACY_WELCOME_BODIES.some((body) => body === note.body)
+	) {
 		return true;
 	}
 	const tags = new Set((note.tags ?? []).map((tag) => tag.trim().toLowerCase()));
@@ -111,7 +141,7 @@ export async function ensureMashTeamWelcomeNote(): Promise<Note> {
 	const now = Date.now();
 	const desired: Note = {
 		id: existing?.id ?? MASH_TEAM_WELCOME_ID,
-		title: 'A quick welcome from the Mash team',
+		title: MASH_TEAM_WELCOME_TITLE,
 		body: MASH_TEAM_WELCOME_BODY,
 		folder: '',
 		tags: ['welcome', 'mash-team'],

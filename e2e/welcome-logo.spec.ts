@@ -13,7 +13,7 @@ test.describe('Permanent welcome branding', () => {
 			notes: [
 				{
 					id: 'mash-team-welcome-v1',
-					title: 'A quick welcome from the Mash team',
+					title: 'A quick hello from Scoop',
 					body: 'Welcome to Mash. Arrange, connect, and mash your ideas.',
 					folder: '',
 					tags: ['welcome', 'mash-team'],
@@ -39,7 +39,7 @@ test.describe('Permanent welcome branding', () => {
 		await expect(card.getByAltText('Scoop, the Mash mascot')).toBeVisible();
 
 		const peel = page.getByRole('complementary', { name: 'Note scanner' });
-		const row = peel.getByRole('option').filter({ hasText: 'A quick welcome from the Mash team' });
+		const row = peel.getByRole('option').filter({ hasText: 'A quick hello from Scoop' });
 		await expect(row.getByAltText('Scoop, the Mash mascot')).toBeVisible();
 		await row.dblclick();
 
