@@ -18,6 +18,7 @@ Fast, cute, minimal web notes — a canvas-first, local-only PWA. Open in any br
 - Freeform canvas: pan, zoom, snap, align, expand/bump neighbors, layout undo
 - Drag-to-mash, selection Mash (with confirm), unmash, bulk tag/folder/copy/export
 - **Keep** selected cards mid-desk (promote scratch ingredients to durable kept notes without Finish)
+- **Operator kitchen** (Transform) — Shape / Arrange groups with plain subtitles, plus a last **receipt** strip (inputs → outputs, Undo when available)
 - Sticky editor with markdown preview + `[[wikilink]]` navigation (missing targets ask before create) and Linked peel / backlinks
 - File sync bundles via Settings or ⌘K — **Export / Import sync bundle…** (notes + canvases + placements + edges + dismissals, LWW merge; body conflicts offer Restore local)
 - **Import markdown vault…** — pick an Obsidian vault folder or Bear `.md` export; folders, YAML frontmatter, `[[wikilinks]]`, and `#tags` map into Mash

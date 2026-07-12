@@ -56,6 +56,18 @@
 		spreadSetMoves,
 		stackedSetMoves
 	} from '$lib/set-operators';
+	import {
+		KITCHEN_GROUPS,
+		formatContentOperatorToast,
+		formatLayoutOperatorToast,
+		kitchenActionSubtitle,
+		kitchenActionTitle,
+		kitchenGroupForActionId,
+		latestActiveOperation,
+		operationReceiptView
+	} from '$lib/operator-kitchen';
+	import OperatorReceiptStrip from '$lib/components/OperatorReceiptStrip.svelte';
+
 	import { extractWikilinks } from '$lib/markdown';
 	import {
 		combineNotes,
@@ -728,7 +740,7 @@
 			affectedNoteIds: library.selectionIds
 		});
 		library.bulkMenu = null;
-		flashToast(`${label} — Undo restores the prior arrangement`);
+		flashToast(formatLayoutOperatorToast(label));
 	}
 
 	async function sortSelection(mode: 'title' | 'created') {
@@ -763,11 +775,11 @@
 			flashToast('Could not sequence these cards');
 			return;
 		}
-		flashToast(
+		const label =
 			result.replacedLinks > 0
-				? `Sequenced ${result.sequenced} cards · replaced ${result.replacedLinks} prior link${result.replacedLinks === 1 ? '' : 's'}`
-				: `Sequenced ${result.sequenced} cards in reading order`
-		);
+				? `Sequenced ${result.sequenced} · replaced ${result.replacedLinks} prior link${result.replacedLinks === 1 ? '' : 's'}`
+				: `Sequenced ${result.sequenced} cards`;
+		flashToast(formatLayoutOperatorToast(label));
 	}
 
 	async function deduplicateSelection() {
@@ -855,7 +867,8 @@
 			if (!applied) throw new Error('Canvas split was not applied');
 			library.adoptNotes(outputs);
 			library.bulkMenu = null;
-			flashToast(`Split into ${outputs.length} cards by ${mode} — Undo restores the source card`);
+			await refreshOperationHistory();
+			flashToast(formatContentOperatorToast(`Split by ${mode}`, 1, outputs.length));
 		} catch (error) {
 			console.error('Failed to split note', error);
 			await replaceNoteSubset(
@@ -1869,7 +1882,8 @@
 				canvas.settlingIds = new Set();
 			}, 320);
 			openInStage(mashed.id, 'maximize');
-			flashToast('Mashed — Undo or Unmash restores the sources');
+			await refreshOperationHistory();
+			flashToast(formatContentOperatorToast('Mash', sourceIds.length, 1));
 			return true;
 		} catch (error) {
 			console.error('Failed to Mash notes', error);
@@ -2570,6 +2584,29 @@
 		return action.action();
 	}
 
+	const selectionKitchenActions = $derived(actionsForSurface(operatorActions, 'selection'));
+
+	const kitchenMenuSections = $derived.by(() => {
+		const actions = selectionKitchenActions;
+		return KITCHEN_GROUPS.map((group) => ({
+			...group,
+			actions: actions.filter((action) => kitchenGroupForActionId(action.id) === group.id)
+		})).filter((section) => section.actions.length > 0);
+	});
+
+	const latestKitchenReceipt = $derived.by(() => {
+		const op = latestActiveOperation(operationHistory);
+		return op ? operationReceiptView(op) : null;
+	});
+
+	const canUndoKitchenReceipt = $derived(
+		Boolean(
+			latestKitchenReceipt &&
+				canvas.canvasUndoOperationId &&
+				latestKitchenReceipt.id === canvas.canvasUndoOperationId
+		)
+	);
+
 	let paletteActions = $derived.by(() => [
 		...basePaletteActions,
 		...actionsForSurface(operatorActions, 'palette')
@@ -3190,12 +3227,21 @@
 			</div>
 		{/if}
 
-		{#if library.selectionIds.length > 0 && !documentReaderOpen}
+		{#if (library.selectionIds.length > 0 || latestKitchenReceipt) && !documentReaderOpen}
 			<div
 				class="mash-selection-bar absolute bottom-5 left-1/2 z-20 flex -translate-x-1/2 flex-col items-center gap-2"
 				class:mash-selection-bar--peel={peel.peelOpen || settingsOpen}
 			>
-				{#if library.bulkMenu === 'tag'}
+				{#if latestKitchenReceipt}
+					<OperatorReceiptStrip
+						receipt={latestKitchenReceipt}
+						canUndo={canUndoKitchenReceipt}
+						onUndo={() => void canvas.undoCanvasLayout()}
+					/>
+				{/if}
+				{#if library.selectionIds.length === 0}
+					<!-- Receipt-only strip when nothing is selected -->
+				{:else if library.bulkMenu === 'tag'}
 					<div
 						class="w-64 rounded-xl border p-3 shadow-xl"
 						style="border-color: var(--mash-panel-border); background: var(--mash-panel); backdrop-filter: blur(10px);"
@@ -3327,32 +3373,50 @@
 					</div>
 				{:else if library.bulkMenu === 'operators'}
 					<div
-						class="grid w-72 grid-cols-1 gap-1 rounded-xl border p-2 shadow-xl sm:grid-cols-2"
+						class="mash-operator-kitchen flex w-[min(92vw,22rem)] flex-col gap-2 rounded-xl border p-2 shadow-xl sm:w-[28rem]"
 						style="border-color: var(--mash-panel-border); background: var(--mash-panel); backdrop-filter: blur(10px);"
-						aria-label="Transform selected cards"
+						aria-label="Operator kitchen — transform selected cards"
+						data-testid="operator-kitchen"
 					>
-						{#each actionsForSurface(operatorActions, 'selection') as operator (operator.id)}
-							<button
-								type="button"
-								class="mash-btn-ghost rounded-lg px-3 py-2 text-left text-xs"
-								data-action-id={operator.id}
-								onclick={() => {
-									library.bulkMenu = null;
-									void operator.action();
-								}}
-							>
-								<strong class="block">{operator.label.replace(' selected', '')}</strong>
-								<small style="color: var(--mash-ink-muted);"
-									>{operator.id.startsWith('split-selection-')
-										? 'Creates traced fragments · fully undoable'
-										: operator.mutation === 'none'
-											? 'Leaves notes unchanged'
-											: operator.undo === 'content'
-												? 'Cards only · notes stay in Library'
-												: 'Undoable layout'}</small
-								>
-							</button>
+						{#each kitchenMenuSections as section (section.id)}
+							<section class="min-w-0" aria-label={section.label}>
+								<div class="mb-1 flex items-baseline justify-between gap-2 px-1">
+									<span
+										class="text-[10px] font-semibold tracking-wide uppercase"
+										style="color: var(--mash-accent-bright);"
+										>{section.label}</span
+									>
+									<span class="truncate text-[9px]" style="color: var(--mash-ink-muted);"
+										>{section.hint}</span
+									>
+								</div>
+								<div class="grid grid-cols-1 gap-1 sm:grid-cols-2">
+									{#each section.actions as operator (operator.id)}
+										<button
+											type="button"
+											class="mash-btn-ghost rounded-lg px-3 py-2 text-left text-xs"
+											data-action-id={operator.id}
+											onclick={() => {
+												library.bulkMenu = null;
+												void operator.action();
+											}}
+										>
+											<strong class="block"
+												>{kitchenActionTitle(operator.id, operator.label)}</strong
+											>
+											<small style="color: var(--mash-ink-muted);"
+												>{kitchenActionSubtitle(operator.id)}</small
+											>
+										</button>
+									{/each}
+								</div>
+							</section>
 						{/each}
+						{#if kitchenMenuSections.length === 0}
+							<p class="px-2 py-3 text-center text-[11px]" style="color: var(--mash-ink-muted);">
+								Select cards on the desk to open the kitchen toolkit.
+							</p>
+						{/if}
 					</div>
 				{:else if library.bulkMenu === 'align'}
 					<div
@@ -3456,6 +3520,7 @@
 					</div>
 				{/if}
 
+				{#if library.selectionIds.length > 0}
 				<div
 					class="mash-dock flex items-center gap-1 rounded-2xl border px-2 py-1.5 shadow-xl"
 					style="border-color: var(--mash-panel-border); background: var(--mash-panel); backdrop-filter: blur(10px);"
@@ -3504,7 +3569,7 @@
 							<ChevronDown class="h-3.5 w-3.5" />
 						</button>
 					</div>
-					{#if actionsForSurface(operatorActions, 'selection').length > 0}
+					{#if kitchenMenuSections.length > 0}
 						<button
 							type="button"
 							onclick={() =>
@@ -3513,7 +3578,8 @@
 							'operators'
 								? 'border-[var(--mash-accent)] text-[var(--mash-accent-bright)]'
 								: ''}"
-							title="Split, arrange, sequence, or clean up the selected set"
+							title="Operator kitchen — shape or arrange the selected set"
+							data-testid="operator-kitchen-toggle"
 						>
 							<Layers class="h-3.5 w-3.5" />
 							Transform
@@ -3634,6 +3700,7 @@
 						<X class="h-3.5 w-3.5" />
 					</button>
 				</div>
+				{/if}
 			</div>
 		{/if}
 	</div>
