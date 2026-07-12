@@ -34,6 +34,9 @@ async function excludeDeferredFeaturesFromPrecache(
 }
 
 export default defineConfig({
+	optimizeDeps: {
+		include: ['gifuct-js', 'js-binary-schema-parser']
+	},
 	plugins: [
 		tailwindcss(),
 		sveltekit(),
