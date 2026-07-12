@@ -749,7 +749,8 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 			((localValue as { kind?: unknown }).kind === 'pdf' ||
 				(localValue as { kind?: unknown }).kind === 'docx' ||
 				(localValue as { kind?: unknown }).kind === 'image' ||
-				(localValue as { kind?: unknown }).kind === 'url')
+				(localValue as { kind?: unknown }).kind === 'url' ||
+				(localValue as { kind?: unknown }).kind === 'html')
 		) {
 			updated = { ...target, source: localValue as Note['source'], modified: Date.now() };
 		} else {
