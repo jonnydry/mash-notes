@@ -16,7 +16,8 @@ Fast, cute, minimal web notes — a canvas-first, local-only PWA. Open in any br
 - Vertical dock (Desk, Pinned, Folders, Tags, Linked, New, Search, Settings) with peel scanner tray
 - **Settings** tray — theme, snap, import/export (JSON + markdown vault + sync bundle), keyboard shortcuts, about
 - Freeform canvas: pan, zoom, snap, align, expand/bump neighbors, layout undo
-- Drag-to-mash, selection Mash (with confirm), unmash, bulk tag/folder/copy/export
+- Drag-to-mash, selection Mash (with confirm), unmash
+- Selection bar: primary kitchen verbs (Keep · Mash · Transform · Pack · Edit · Delete); Tag/Folder/Copy/export under **More**
 - **Keep** selected cards mid-desk (promote scratch ingredients to durable kept notes without Finish)
 - **Operator kitchen** (Transform) — Shape / Arrange groups with plain subtitles, plus a last **receipt** strip (inputs → outputs, Undo when available)
 - Sticky editor with markdown preview + `[[wikilink]]` navigation (missing targets ask before create) and Linked peel / backlinks
