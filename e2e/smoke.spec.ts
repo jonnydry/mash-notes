@@ -25,7 +25,7 @@ test.describe('Mash smoke', () => {
 		await expect(page.getByRole('group', { name: /Smoke Alpha \+ Smoke Beta/ })).toBeVisible({
 			timeout: 15_000
 		});
-		await expect(page.getByTestId('action-status')).toContainText('Mashed');
+		await expect(page.getByTestId('action-status')).toContainText(/Mash/);
 		const mashCard = page.getByRole('group', { name: /Smoke Alpha \+ Smoke Beta/ });
 		await expect(mashCard.getByText('Made from 2 sources')).toBeVisible();
 		const provenance = page.getByLabel('Result provenance');

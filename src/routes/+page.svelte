@@ -32,10 +32,10 @@
 		LayoutGrid,
 		Columns2,
 		BookOpen,
-		ChevronDown,
 		FileDown,
 		Printer,
-		Bookmark
+		Bookmark,
+		MoreHorizontal
 	} from 'lucide-svelte';
 	import MashDock from '$lib/components/MashDock.svelte';
 	import PeelScanner from '$lib/components/PeelScanner.svelte';
@@ -1928,16 +1928,16 @@
 		return `Mash · ${notes.length} notes`;
 	}
 
-	function toggleMashMenu() {
-		library.bulkMenu = library.bulkMenu === 'mash' ? null : 'mash';
-	}
-
 	function onMashButtonClick() {
-		if (library.selectionIds.length >= 2) {
-			void invokeOperatorAction('combine-selection');
+		if (library.selectionIds.length < 2) {
+			flashToast('Select at least 2 cards to mash');
 			return;
 		}
-		toggleMashMenu();
+		void invokeOperatorAction('combine-selection');
+	}
+
+	function toggleMoreMenu() {
+		library.bulkMenu = library.bulkMenu === 'more' ? null : 'more';
 	}
 
 	async function exportSelectionPdf() {
@@ -3317,48 +3317,41 @@
 							{/each}
 						</div>
 					</div>
-				{:else if library.bulkMenu === 'mash'}
+				{:else if library.bulkMenu === 'more'}
 					<div
 						class="grid w-64 grid-cols-1 gap-1 rounded-xl border p-2 shadow-xl"
 						style="border-color: var(--mash-panel-border); background: var(--mash-panel); backdrop-filter: blur(10px);"
-						aria-label="Mash and export"
+						aria-label="More selection actions"
+						data-testid="selection-more-menu"
 					>
-						{#if library.selectionIds.length >= 2}
-							<button
-								type="button"
-								class="mash-btn-ghost rounded-lg px-3 py-2 text-left text-xs"
-								onclick={() => {
-									library.bulkMenu = null;
-									void invokeOperatorAction('combine-selection');
-								}}
-							>
-								<strong class="block">Mash into one sticky</strong>
-								<small style="color: var(--mash-ink-muted);">Combine selected notes</small>
-							</button>
-						{/if}
 						<button
 							type="button"
 							class="mash-btn-ghost rounded-lg px-3 py-2 text-left text-xs"
-							onclick={() => void exportSelectionPdf()}
+							onclick={() => (library.bulkMenu = 'tag')}
 						>
-							<strong class="flex items-center gap-1.5"
-								><FileDown class="h-3.5 w-3.5" /> Export PDF</strong
-							>
-							<small style="color: var(--mash-ink-muted);"
-								>{library.selectionIds.length === 1
-									? 'Download this note as a PDF'
-									: `Download ${library.selectionIds.length} notes as a PDF`}</small
-							>
+							<strong class="flex items-center gap-1.5"><Tag class="h-3.5 w-3.5" /> Tag…</strong>
+							<small style="color: var(--mash-ink-muted);">Add or apply tags</small>
 						</button>
 						<button
 							type="button"
 							class="mash-btn-ghost rounded-lg px-3 py-2 text-left text-xs"
-							onclick={printSelection}
+							onclick={() => (library.bulkMenu = 'folder')}
 						>
 							<strong class="flex items-center gap-1.5"
-								><Printer class="h-3.5 w-3.5" /> Print</strong
+								><Folder class="h-3.5 w-3.5" /> Folder…</strong
 							>
-							<small style="color: var(--mash-ink-muted);">Open the system print dialog</small>
+							<small style="color: var(--mash-ink-muted);">Move to a folder</small>
+						</button>
+						<button
+							type="button"
+							class="mash-btn-ghost rounded-lg px-3 py-2 text-left text-xs"
+							onclick={() => {
+								library.bulkMenu = null;
+								void library.copySelection();
+							}}
+						>
+							<strong class="flex items-center gap-1.5"><Copy class="h-3.5 w-3.5" /> Copy</strong>
+							<small style="color: var(--mash-ink-muted);">Copy as Markdown</small>
 						</button>
 						<button
 							type="button"
@@ -3369,6 +3362,26 @@
 								><Download class="h-3.5 w-3.5" /> Download Markdown</strong
 							>
 							<small style="color: var(--mash-ink-muted);">Save as a .md file</small>
+						</button>
+						<button
+							type="button"
+							class="mash-btn-ghost rounded-lg px-3 py-2 text-left text-xs"
+							onclick={() => void exportSelectionPdf()}
+						>
+							<strong class="flex items-center gap-1.5"
+								><FileDown class="h-3.5 w-3.5" /> Export PDF</strong
+							>
+							<small style="color: var(--mash-ink-muted);">Quick export · or use Finish</small>
+						</button>
+						<button
+							type="button"
+							class="mash-btn-ghost rounded-lg px-3 py-2 text-left text-xs"
+							onclick={printSelection}
+						>
+							<strong class="flex items-center gap-1.5"
+								><Printer class="h-3.5 w-3.5" /> Print</strong
+							>
+							<small style="color: var(--mash-ink-muted);">System print dialog</small>
 						</button>
 					</div>
 				{:else if library.bulkMenu === 'operators'}
@@ -3544,31 +3557,18 @@
 							Keep
 						</button>
 					{/if}
-					<div class="mash-btn-split flex items-stretch overflow-hidden rounded-xl">
+					{#if library.selectionIds.length >= 2}
 						<button
 							type="button"
 							onclick={onMashButtonClick}
-							class="mash-btn flex items-center gap-1.5 rounded-none px-3 py-1.5 text-xs font-semibold"
-							class:is-open={library.bulkMenu === 'mash' && library.selectionIds.length < 2}
-							title={library.selectionIds.length >= 2
-								? 'Combine into one sticky — sources leave the desk until Unmash'
-								: 'Export this note as PDF, print, or Markdown'}
+							class="mash-btn flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold"
+							title="Combine into one sticky — sources leave the desk until Unmash"
+							data-testid="selection-mash"
 						>
 							<Layers class="h-3.5 w-3.5" />
 							Mash
 						</button>
-						<button
-							type="button"
-							onclick={toggleMashMenu}
-							class="mash-btn mash-btn-split-chevron flex items-center rounded-none px-1.5 py-1.5"
-							class:is-open={library.bulkMenu === 'mash'}
-							aria-label="Mash and export options"
-							aria-expanded={library.bulkMenu === 'mash'}
-							title="Export PDF, print, or Markdown"
-						>
-							<ChevronDown class="h-3.5 w-3.5" />
-						</button>
-					</div>
+					{/if}
 					{#if kitchenMenuSections.length > 0}
 						<button
 							type="button"
@@ -3583,6 +3583,20 @@
 						>
 							<Layers class="h-3.5 w-3.5" />
 							Transform
+						</button>
+					{/if}
+					{#if library.selectionIds.length >= 2}
+						<button
+							type="button"
+							onclick={() => (library.bulkMenu = library.bulkMenu === 'align' ? null : 'align')}
+							class="mash-btn-ghost flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs {library.bulkMenu ===
+							'align'
+								? 'border-[var(--mash-accent)] text-[var(--mash-accent-bright)]'
+								: ''}"
+							title="Pack selected into a column, row, stack, or grid"
+						>
+							<AlignLeft class="h-3.5 w-3.5" />
+							Pack
 						</button>
 					{/if}
 					{#if library.selectionIds.length >= 2}
@@ -3629,65 +3643,31 @@
 							Unmash
 						</button>
 					{/if}
-					{#if library.selectionIds.length >= 2}
-						<button
-							type="button"
-							onclick={() => (library.bulkMenu = library.bulkMenu === 'align' ? null : 'align')}
-							class="mash-btn-ghost flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs {library.bulkMenu ===
-							'align'
-								? 'border-[var(--mash-accent)] text-[var(--mash-accent-bright)]'
-								: ''}"
-							title="Pack selected into a column, row, stack, or grid"
-						>
-							<AlignLeft class="h-3.5 w-3.5" />
-							Pack
-						</button>
-					{/if}
 					<button
 						type="button"
-						onclick={() => (library.bulkMenu = library.bulkMenu === 'tag' ? null : 'tag')}
+						onclick={toggleMoreMenu}
 						class="mash-btn-ghost flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs {library.bulkMenu ===
-						'tag'
+							'more' ||
+						library.bulkMenu === 'tag' ||
+						library.bulkMenu === 'folder'
 							? 'border-[var(--mash-accent)] text-[var(--mash-accent-bright)]'
 							: ''}"
-						title="Tag selected"
+						title="Tag, folder, copy, and export"
+						aria-label="More selection actions"
+						aria-expanded={library.bulkMenu === 'more' ||
+							library.bulkMenu === 'tag' ||
+							library.bulkMenu === 'folder'}
+						data-testid="selection-more-toggle"
 					>
-						<Tag class="h-3.5 w-3.5" />
-						Tag
-					</button>
-					<button
-						type="button"
-						onclick={() => (library.bulkMenu = library.bulkMenu === 'folder' ? null : 'folder')}
-						class="mash-btn-ghost flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs {library.bulkMenu ===
-						'folder'
-							? 'border-[var(--mash-accent)] text-[var(--mash-accent-bright)]'
-							: ''}"
-						title="Move to folder"
-					>
-						<Folder class="h-3.5 w-3.5" />
-						Folder
-					</button>
-					<button
-						type="button"
-						onclick={() => void library.copySelection()}
-						class="mash-btn-ghost flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs"
-					>
-						<Copy class="h-3.5 w-3.5" />
-						Copy
-					</button>
-					<button
-						type="button"
-						onclick={() => library.exportSelectionMarkdown()}
-						class="mash-btn-ghost flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs"
-					>
-						<Download class="h-3.5 w-3.5" />
-						MD
+						<MoreHorizontal class="h-3.5 w-3.5" />
+						More
 					</button>
 					<button
 						type="button"
 						onclick={() => void library.handleDelete()}
 						class="mash-btn-ghost flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs hover:text-[var(--mash-danger)]"
 						title="Delete selected"
+						aria-label="Delete selected"
 					>
 						<Trash2 class="h-3.5 w-3.5" />
 					</button>
