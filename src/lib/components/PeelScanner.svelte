@@ -4,6 +4,7 @@
 	import { formatNoteTimestamp, notePreview } from '$lib/format';
 	import { buildFolderTree, flattenFolderTree } from '$lib/folder-tree';
 	import { isPermanentMashWelcomeNote, MASH_SPOON_LOGO } from '$lib/canvas-empty-state';
+	import type { PeelScopeFilter } from '$lib/peel-hygiene';
 	import {
 		GripVertical,
 		Pin,
@@ -35,6 +36,8 @@
 		pinned?: boolean;
 		mode?: PeelMode;
 		title: string;
+		/** Override default “N notes” subtitle (ingredients counts, etc.). */
+		subtitle?: string;
 		notes: Note[];
 		/** Linked mode: notes this note links to */
 		outgoingNotes?: Note[];
@@ -49,6 +52,10 @@
 		saveStatus?: 'saved' | 'saving' | '';
 		filterText?: string;
 		isLoading?: boolean;
+		/** Ingredients tray scope chips (notes mode only). */
+		scopeFilter?: PeelScopeFilter;
+		scopeCounts?: { desk: number; kept: number; total: number };
+		onScopeFilter?: (scope: PeelScopeFilter) => void;
 		onClose: () => void;
 		onTogglePin: () => void;
 		onFilterText: (value: string) => void;
@@ -74,6 +81,7 @@
 		pinned = false,
 		mode = 'notes',
 		title,
+		subtitle,
 		notes,
 		outgoingNotes = [],
 		backlinkNotes = [],
@@ -86,6 +94,9 @@
 		saveStatus = '',
 		filterText = '',
 		isLoading = false,
+		scopeFilter = 'ingredients',
+		scopeCounts,
+		onScopeFilter,
 		onClose,
 		onTogglePin,
 		onFilterText,
@@ -174,7 +185,8 @@
 				<div class="mash-peel-title truncate">{title}</div>
 				{#if mode === 'notes'}
 					<div class="mash-peel-subtitle">
-						{notes.length} note{notes.length === 1 ? '' : 's'}
+						{subtitle ??
+							`${notes.length} note${notes.length === 1 ? '' : 's'}`}
 						{#if saveStatus}
 							· {saveStatus === 'saving' ? 'Saving' : 'Saved'}
 						{/if}
@@ -214,12 +226,54 @@
 					id="peel-filter"
 					type="text"
 					value={filterText}
-					placeholder="Filter in list…"
+					placeholder="Filter ingredients…"
 					class="mash-focus w-full rounded-md border bg-transparent px-2.5 py-1.5 text-xs outline-none"
 					style="border-color: var(--mash-tray-edge); color: var(--mash-ink);"
 					oninput={(e) => onFilterText((e.currentTarget as HTMLInputElement).value)}
 				/>
 			</div>
+			{#if onScopeFilter && scopeCounts}
+				<div
+					class="mash-peel-scope flex items-center gap-1 px-3 pb-2"
+					role="group"
+					aria-label="Ingredient scope"
+					data-testid="peel-scope-filter"
+				>
+					<button
+						type="button"
+						class="mash-chip mash-chip-hover rounded-full px-2 py-0.5 text-[10px] font-semibold"
+						class:is-active={scopeFilter === 'ingredients'}
+						data-testid="peel-scope-ingredients"
+						onclick={() => onScopeFilter('ingredients')}
+					>
+						All
+					</button>
+					<button
+						type="button"
+						class="mash-chip mash-chip-hover rounded-full px-2 py-0.5 text-[10px] font-semibold"
+						class:is-active={scopeFilter === 'desk'}
+						data-testid="peel-scope-desk"
+						onclick={() => onScopeFilter('desk')}
+					>
+						Desk
+						{#if scopeCounts.desk > 0}
+							<span class="opacity-70">{scopeCounts.desk}</span>
+						{/if}
+					</button>
+					<button
+						type="button"
+						class="mash-chip mash-chip-hover rounded-full px-2 py-0.5 text-[10px] font-semibold"
+						class:is-active={scopeFilter === 'kept'}
+						data-testid="peel-scope-kept"
+						onclick={() => onScopeFilter('kept')}
+					>
+						Kept
+						{#if scopeCounts.kept > 0}
+							<span class="opacity-70">{scopeCounts.kept}</span>
+						{/if}
+					</button>
+				</div>
+			{/if}
 		{/if}
 
 		<div class="mash-peel-body">
