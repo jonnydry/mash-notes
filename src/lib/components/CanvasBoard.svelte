@@ -1992,6 +1992,21 @@
 								{/if}
 								{#if isMash}<span class="mr-0.5 text-[var(--mash-accent)]">◎</span>{/if}
 								<span class="truncate">{note.title}</span>
+								{#if note.scope === 'kept' && !isPermanentWelcome}
+									<span
+										class="mash-card-scope shrink-0 rounded px-1 py-px text-[8px] font-semibold tracking-wide uppercase"
+										style="background: color-mix(in srgb, var(--mash-accent) 16%, transparent); color: var(--mash-accent);"
+										title="Kept on this device"
+										>Kept</span
+									>
+								{:else if note.scope === 'session' && !isPermanentWelcome}
+									<span
+										class="mash-card-scope shrink-0 rounded px-1 py-px text-[8px] font-semibold tracking-wide uppercase"
+										style="background: color-mix(in srgb, var(--mash-card-muted) 18%, transparent); color: var(--mash-card-muted);"
+										title="Scratch desk ingredient — clear with the desk unless you Keep"
+										>Desk</span
+									>
+								{/if}
 							</span>
 							<button
 								type="button"
