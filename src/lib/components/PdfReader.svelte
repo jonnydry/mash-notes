@@ -158,7 +158,8 @@
 		textLayerTask = null;
 		const doc = pdfDocument;
 		pdfDocument = null;
-		void doc?.destroy();
+		// pdfjs 6: PDFDocumentProxy exposes cleanup(); destroy() is on the loading task.
+		void doc?.cleanup();
 		void loadingTask?.destroy();
 		loadingTask = null;
 	});

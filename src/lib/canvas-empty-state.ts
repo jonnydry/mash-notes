@@ -23,7 +23,14 @@ export function isPermanentMashWelcomeNote(note: WelcomeIdentityNote): boolean {
  * visible before, during, and after that migration.
  */
 export function isMashWelcomeForPinnedEmptyState(note: WelcomeIdentityNote): boolean {
-	return isMashTeamWelcomeCandidate(note);
+	// Candidate check requires body: string; UI callers may omit body.
+	return isMashTeamWelcomeCandidate({
+		id: note.id,
+		title: note.title,
+		body: note.body ?? '',
+		system: note.system,
+		tags: note.tags
+	});
 }
 
 /**

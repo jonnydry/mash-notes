@@ -69,5 +69,5 @@ export function shouldOfferTryAMash(opts: {
 }
 
 export function tryAMashSuccessToast(): string {
-	return 'Select both cards · Mash — Undo anytime';
+	return 'Both selected · Mash — Undo anytime';
 }

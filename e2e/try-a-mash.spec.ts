@@ -26,7 +26,7 @@ test.describe('Try a mash teaching', () => {
 			timeout: 10_000
 		});
 		await expect(page.getByRole('group', { name: /Another scrap/ })).toBeVisible();
-		await expect(page.getByTestId('action-status')).toContainText(/Select both|Mash/i);
+		await expect(page.getByTestId('action-status')).toContainText(/Both selected|Mash/i);
 		await expect(page.getByTestId('try-a-mash')).toBeHidden();
 
 		await expect(page.getByTestId('selection-mash')).toBeVisible();

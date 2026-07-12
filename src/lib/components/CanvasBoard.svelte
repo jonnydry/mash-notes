@@ -2331,11 +2331,7 @@
 
 	{#if emptyStateVisible}
 		<div
-			class="absolute inset-0 flex items-center justify-center p-6 sm:p-8 {showTryAMash &&
-			!isExternalDragOver &&
-			!isFileDragOver
-				? 'pointer-events-auto'
-				: 'pointer-events-none'}"
+			class="pointer-events-none absolute inset-0 flex items-center justify-center p-6 sm:p-8"
 		>
 			<div
 				class="mash-empty-state flex max-w-sm flex-col items-center text-center transition-transform duration-200
@@ -2366,10 +2362,11 @@
 						{emptyMascot.copy}
 					</p>
 					{#if showTryAMash && tryAMash}
-						<!-- data-canvas-chrome: board pointerdown must not marquee/capture over these buttons -->
+						<!-- Only the CTA is interactive; empty overlay stays pass-through for pan/marquee.
+						     data-canvas-chrome: board pointerdown must not marquee/capture over these buttons -->
 						<div
 							data-canvas-chrome
-							class="mt-5 flex flex-col items-center gap-2"
+							class="pointer-events-auto mt-5 flex flex-col items-center gap-2"
 						>
 							<button
 								type="button"

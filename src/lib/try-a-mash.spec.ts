@@ -66,6 +66,7 @@ describe('try-a-mash', () => {
 	});
 
 	it('has a short success toast', () => {
+		expect(tryAMashSuccessToast()).toMatch(/Both selected/i);
 		expect(tryAMashSuccessToast()).toMatch(/Mash/i);
 	});
 });

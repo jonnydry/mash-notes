@@ -162,19 +162,20 @@ export async function explodeGifFrames(
 	const maxFrames = options?.maxFrames ?? GIF_EXPLODE_MAX_FRAMES;
 	const maxEdge = options?.maxEdge ?? DESK_IMAGE_MAX_EDGE;
 
-	let gif: { lsd?: { width: number; height: number } };
 	let rawFrames: ParsedFrame[];
+	let fullW = 0;
+	let fullH = 0;
 	try {
 		const buffer = await input.arrayBuffer();
-		gif = parseGIF(buffer);
+		const gif = parseGIF(buffer);
 		rawFrames = decompressFrames(gif, true) as ParsedFrame[];
+		fullW = gif.lsd?.width ?? 0;
+		fullH = gif.lsd?.height ?? 0;
 	} catch (error) {
 		console.error('explodeGifFrames failed', error);
 		return { ok: false, error: 'undecodable' };
 	}
 
-	const fullW = gif.lsd?.width ?? 0;
-	const fullH = gif.lsd?.height ?? 0;
 	if (!rawFrames.length || !fullW || !fullH) return { ok: false, error: 'empty' };
 
 	if (typeof document === 'undefined') {

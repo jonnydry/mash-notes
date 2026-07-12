@@ -1762,11 +1762,19 @@
 		tryAMashDismissed = true;
 	}
 
+	let tryAMashBusy = $state(false);
+
 	async function runTryAMash() {
-		const notes = await placeNoteDraftsOnDesk(tryAMashDrafts());
-		if (notes.length === 0) return;
-		dismissTryAMashForever();
-		flashToast(tryAMashSuccessToast(), 4200);
+		if (tryAMashBusy || tryAMashDismissed) return;
+		tryAMashBusy = true;
+		try {
+			const notes = await placeNoteDraftsOnDesk(tryAMashDrafts());
+			if (notes.length === 0) return;
+			dismissTryAMashForever();
+			flashToast(tryAMashSuccessToast(), 4200);
+		} finally {
+			tryAMashBusy = false;
+		}
 	}
 	let peelScopeStats = $derived(peelScopeCounts(filteredNotes));
 	let peelNotes = $derived(
