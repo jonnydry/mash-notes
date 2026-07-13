@@ -60,7 +60,11 @@
 	import { downloadSyncBundle } from '$lib/sync-file';
 	import { readSyncHygiene, recordSyncExport, shouldRemindSyncBackup } from '$lib/sync-hygiene';
 	import { loadSnapPref, saveSnapPref } from '$lib/canvas-geom';
-	import { COLLAPSED_CARD, createCanvasSession } from '$lib/stores/canvas-session.svelte';
+	import {
+		COLLAPSED_CARD,
+		EXPANDED_CARD,
+		createCanvasSession
+	} from '$lib/stores/canvas-session.svelte';
 	import {
 		createNoteLibrary,
 		filterNotes,
@@ -1300,11 +1304,11 @@
 		library.notes = [note, ...library.notes];
 		void sessionManager.recordMeaningfulActivity();
 		if (canvas.activeCanvas) {
+			// Settle the current editor before placement so repeated New-note actions
+			// cannot rehydrate its expanded dimensions during the canvas refresh.
+			await canvas.collapseSticky();
 			// Place via drop path (bumps load seq) and expand in-place — stage is for explicit Edit.
-			const spawn = canvas.canvasBoard?.getSpawnPoint(
-				COLLAPSED_CARD,
-				canvas.canvasItems.length
-			) ?? {
+			const spawn = canvas.canvasBoard?.getSpawnPoint(EXPANDED_CARD, canvas.canvasItems.length) ?? {
 				x: 80,
 				y: 80
 			};
