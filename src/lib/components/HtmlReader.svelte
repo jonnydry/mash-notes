@@ -124,7 +124,7 @@
 	clippingsCountLabel={`${clippings.length} saved from this document`}
 	emptyClippingsHint="Select text to capture an excerpt."
 	clippings={shellClippings}
-	onClose={onClose}
+	{onClose}
 	onOpenClippings={() => void onOpenClippings(clippings.map((clipping) => clipping.noteId))}
 >
 	{#snippet stage()}
@@ -143,11 +143,8 @@
 				<div class="mash-docx-loading">Opening document…</div>
 			{:else}
 				<div bind:this={pageShellEl} class="mash-docx-page">
-					<article
-						bind:this={articleEl}
-						class="mash-docx-article"
-						data-testid="html-reader-stage"
-					>
+					<article bind:this={articleEl} class="mash-docx-article" data-testid="html-reader-stage">
+						<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 						{@html html}
 					</article>
 					{#if selectionText}

@@ -61,17 +61,12 @@ export function isSafeHref(href: string | undefined | null): boolean {
 	);
 }
 
-/** Safe image sources for sticky preview — data URLs (legacy) and mash-blob: refs. */
+/** Safe image sources for sticky preview — local raster data and mash-blob refs only. */
 export function isSafeImageSrc(href: string | undefined | null): boolean {
 	if (!href) return false;
 	const trimmed = href.trim();
 	const lower = trimmed.toLowerCase();
-	if (
-		lower.startsWith('data:image/png;base64,') ||
-		lower.startsWith('data:image/jpeg;base64,') ||
-		lower.startsWith('data:image/webp;base64,') ||
-		lower.startsWith('data:image/gif;base64,')
-	) {
+	if (/^data:image\/(?:png|jpeg|webp|gif);base64,[a-z0-9+/=\s]+$/i.test(trimmed)) {
 		return true;
 	}
 	// Out-of-line IndexedDB blobs: mash-blob:<id> (strict id charset).
@@ -79,7 +74,8 @@ export function isSafeImageSrc(href: string | undefined | null): boolean {
 		const id = trimmed.slice('mash-blob:'.length);
 		return /^[A-Za-z0-9_-]{8,128}$/.test(id);
 	}
-	return isSafeHref(href);
+	// Remote images would make opening an imported note leak the reader's IP and referrer.
+	return false;
 }
 
 /** Replace wikilinks with placeholders before markdown, restore as buttons after. */

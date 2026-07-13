@@ -3,7 +3,7 @@
 	import { FileText } from 'lucide-svelte';
 	import type { DocxClipPayload, DocxClipping } from '$lib/docx-clipping';
 	import { normalizeDocxExcerpt } from '$lib/docx-clipping';
-	import { convertDocxToHtml } from '$lib/docx-import';
+	import { convertDocxToHtml, MAX_DOCX_BYTES } from '$lib/docx-import';
 	import { sanitizeHtmlFragment } from '$lib/html-import';
 	import DocumentReaderShell from './DocumentReaderShell.svelte';
 
@@ -53,6 +53,10 @@
 		html = '';
 		selectionText = '';
 		try {
+			if (currentFile.size > MAX_DOCX_BYTES) {
+				error = 'This Word document is too large to open (max 8 MB).';
+				return;
+			}
 			const buffer = await currentFile.arrayBuffer();
 			if (disposed || generation !== loadGeneration) return;
 			const result = await convertDocxToHtml(buffer, currentFile.name);
@@ -147,8 +151,9 @@
 				<div class="mash-docx-loading">Opening document…</div>
 			{:else}
 				<div bind:this={pageShellEl} class="mash-docx-page">
-					<!-- Local user-chosen file: trust model for mammoth HTML (no remote content). -->
+					<!-- Sanitized with the strict local-document allowlist before this rendering sink. -->
 					<article bind:this={articleEl} class="mash-docx-article" data-testid="docx-reader-stage">
+						<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 						{@html html}
 					</article>
 					{#if selectionText}

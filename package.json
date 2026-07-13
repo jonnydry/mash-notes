@@ -1,9 +1,23 @@
 {
 	"name": "mash-notes",
 	"private": true,
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"type": "module",
-	"description": "Mash — Cute, fast, minimal web notes. Mash your ideas together in a reliable place. Open source Obsidian-light PWA.",
+	"description": "A fast, local-first scratch workbench for turning messy text and files into useful, portable results.",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/jonnydry/mash-notes.git"
+	},
+	"bugs": {
+		"url": "https://github.com/jonnydry/mash-notes/issues"
+	},
+	"engines": {
+		"node": ">=22"
+	},
+	"overrides": {
+		"cookie": "^0.7.2"
+	},
 	"scripts": {
 		"dev": "node scripts/sync-pdfjs-assets.mjs && vite dev",
 		"build": "node scripts/sync-pdfjs-assets.mjs && vite build",
@@ -16,9 +30,10 @@
 		"format": "prettier --write .",
 		"test:unit": "vitest",
 		"test": "npm run test:unit -- --run",
-		"test:e2e": "playwright test",
+		"test:e2e": "playwright test --project=chromium",
+		"test:e2e:cross-browser": "playwright test e2e/smoke.spec.ts --project=firefox --project=webkit",
 		"perf:budget": "node scripts/check-performance-budget.mjs",
-		"ci": "npm run check && npm run build && npm run perf:budget && npm run test && npm run test:e2e"
+		"ci": "npm run lint && npm run check && npm run build && npm run perf:budget && npm run test && npm run test:e2e && npm run test:e2e:cross-browser"
 	},
 	"devDependencies": {
 		"@eslint/compat": "^2.0.4",

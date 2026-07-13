@@ -5,7 +5,10 @@
 import { extractWikilinks } from './markdown';
 import type { Note } from './types';
 
-const MAX_NOTES = 5000;
+export const MARKDOWN_IMPORT_MAX_NOTES = 5000;
+export const MARKDOWN_IMPORT_MAX_FILE_BYTES = 1_000_000;
+export const MARKDOWN_IMPORT_MAX_TOTAL_BYTES = 64 * 1024 * 1024;
+const MAX_NOTES = MARKDOWN_IMPORT_MAX_NOTES;
 const MAX_BODY = 500_000;
 const MAX_TITLE = 200;
 const MAX_TAGS = 50;
@@ -236,12 +239,17 @@ export function parseMarkdownVault(files: MarkdownImportFile[]): MarkdownImportR
 
 	const notes: Note[] = [];
 	const now = Date.now();
+	let totalChars = 0;
 	for (const file of mdFiles) {
 		if (file.text.length > MAX_BODY * 2) {
 			return {
 				ok: false,
 				error: `Note “${pathToFolderAndTitle(file.path).title}” is too large`
 			};
+		}
+		totalChars += file.text.length;
+		if (totalChars > MARKDOWN_IMPORT_MAX_TOTAL_BYTES) {
+			return { ok: false, error: 'Markdown import is too large (max 64 MB total)' };
 		}
 		notes.push(markdownFileToNote(file, now));
 	}
@@ -257,6 +265,7 @@ export async function filesFromFileList(
 ): Promise<MarkdownImportFile[]> {
 	const files = Array.from(list);
 	const out: MarkdownImportFile[] = [];
+	let totalBytes = 0;
 	for (const file of files) {
 		let path = ('webkitRelativePath' in file && file.webkitRelativePath) || file.name;
 		if (opts?.allowPlainText && /\.(markdown|txt)$/i.test(path)) {
@@ -264,6 +273,16 @@ export async function filesFromFileList(
 			path = path.replace(/\.(markdown|txt)$/i, '.md');
 		}
 		if (!isMarkdownNotePath(path)) continue;
+		if (out.length >= MARKDOWN_IMPORT_MAX_NOTES) {
+			throw new Error(`Too many notes (max ${MARKDOWN_IMPORT_MAX_NOTES})`);
+		}
+		if (file.size > MARKDOWN_IMPORT_MAX_FILE_BYTES) {
+			throw new Error(`Note “${pathToFolderAndTitle(path).title}” is too large`);
+		}
+		totalBytes += file.size;
+		if (totalBytes > MARKDOWN_IMPORT_MAX_TOTAL_BYTES) {
+			throw new Error('Markdown import is too large (max 64 MB total)');
+		}
 		out.push({
 			path,
 			text: await file.text(),

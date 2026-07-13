@@ -3,12 +3,7 @@
  * Keeps +page free of the operator method cluster.
  */
 import type { CanvasItem, Note } from './types';
-import {
-	shuffledSetMoves,
-	sortedSetMoves,
-	spreadSetMoves,
-	stackedSetMoves
-} from './set-operators';
+import { shuffledSetMoves, sortedSetMoves, spreadSetMoves, stackedSetMoves } from './set-operators';
 import { formatLayoutOperatorToast } from './operator-kitchen';
 import { keepableNoteIds, keepSelectionToast } from './keep-selection';
 

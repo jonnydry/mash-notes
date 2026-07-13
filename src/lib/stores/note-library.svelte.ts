@@ -21,7 +21,7 @@ import {
 import type { Note } from '$lib/types';
 import type { NavFilter } from '$lib/note-ui';
 import { extractWikilinks } from '$lib/markdown';
-import { parseNotesJson } from '$lib/import-notes';
+import { NOTES_IMPORT_MAX_CHARS, parseNotesJson } from '$lib/import-notes';
 import { filesFromFileList, parseMarkdownVault } from '$lib/import-markdown';
 import {
 	combineNotes,
@@ -34,7 +34,8 @@ import {
 	parseSyncBundle,
 	mergeSyncBundle,
 	persistMergedSync,
-	formatConflictSummary
+	formatConflictSummary,
+	SYNC_BUNDLE_MAX_CHARS
 } from '$lib/sync-file';
 import type { SyncConflict } from '$lib/sync-model';
 import { isStaleSyncBundle, recordSyncImport } from '$lib/sync-hygiene';
@@ -83,10 +84,7 @@ export function peelSearchText(note: Note): string {
 	const folder = note.folder;
 	const tags = note.tags.join(' ');
 	const body = note.body;
-	if (
-		body.startsWith('![') &&
-		(body.includes('data:image') || body.includes('mash-blob:'))
-	) {
+	if (body.startsWith('![') && (body.includes('data:image') || body.includes('mash-blob:'))) {
 		const close = body.indexOf(')');
 		const altEnd = body.indexOf('](');
 		const alt = altEnd > 2 ? body.slice(2, altEnd) : '';
@@ -429,8 +427,7 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 		if (isMashTeamWelcomeNote(note)) return;
 		// Image bodies have no wikilinks — skip body matchAll.
 		const links =
-			body.startsWith('![') &&
-			(body.includes('data:image') || body.includes('mash-blob:'))
+			body.startsWith('![') && (body.includes('data:image') || body.includes('mash-blob:'))
 				? (note.links ?? [])
 				: extractWikilinks(body);
 		const updated = { ...note, body, links, modified: Date.now() };
@@ -527,9 +524,7 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 			// One-shot: move legacy data-URL image bodies into noteBlobs, then
 			// reclaim any orphans left by prior rotate/purge gaps.
 			try {
-				const { migrateDataUrlBodiesToBlobs, gcOrphanNoteBlobs } = await import(
-					'$lib/note-blobs'
-				);
+				const { migrateDataUrlBodiesToBlobs, gcOrphanNoteBlobs } = await import('$lib/note-blobs');
 				await migrateDataUrlBodiesToBlobs();
 				await gcOrphanNoteBlobs();
 			} catch (e) {
@@ -614,7 +609,7 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 		updated?: number;
 	}> {
 		try {
-			if (text.length > 8_000_000) {
+			if (text.length > SYNC_BUNDLE_MAX_CHARS) {
 				const message = 'Sync file too large';
 				opts.flashToast(message);
 				return { ok: false, message };
@@ -679,9 +674,7 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 			);
 			// Older bundles may still carry data-URL images — migrate after import.
 			try {
-				const { migrateDataUrlBodiesToBlobs, gcOrphanNoteBlobs } = await import(
-					'$lib/note-blobs'
-				);
+				const { migrateDataUrlBodiesToBlobs, gcOrphanNoteBlobs } = await import('$lib/note-blobs');
 				await migrateDataUrlBodiesToBlobs();
 				await gcOrphanNoteBlobs();
 			} catch {
@@ -749,6 +742,10 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 		input.value = '';
 		if (!file) return;
 		try {
+			if (file.size > SYNC_BUNDLE_MAX_CHARS) {
+				opts.flashToast('Sync file too large');
+				return;
+			}
 			const text = await file.text();
 			await importSyncText(text);
 		} catch {
@@ -877,7 +874,7 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 		importOpts?: { silent?: boolean }
 	): Promise<{ ok: boolean; message: string; notes?: Note[] }> {
 		try {
-			if (text.length > 8_000_000) {
+			if (text.length > NOTES_IMPORT_MAX_CHARS) {
 				const message = 'Import file too large';
 				if (!importOpts?.silent) opts.flashToast(message);
 				return { ok: false, message };
@@ -935,6 +932,10 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 		const file = input.files?.[0];
 		input.value = '';
 		if (!file) return;
+		if (file.size > NOTES_IMPORT_MAX_CHARS) {
+			opts.flashToast('Import file too large');
+			return;
+		}
 		await importNotesText(await file.text());
 	}
 
@@ -979,7 +980,11 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 			return { ok: true, message, notes: result.notes };
 		} catch (err) {
 			console.error(err);
-			const message = 'Markdown import failed';
+			const message =
+				err instanceof Error &&
+				/^(Too many notes|Note .+ is too large|Markdown import is too large)/.test(err.message)
+					? err.message
+					: 'Markdown import failed';
 			if (!importOpts?.silent) opts.flashToast(message);
 			return { ok: false, message };
 		}
@@ -994,12 +999,12 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 	}
 
 	async function handleDelete() {
-		const ids = (selectionIds.length > 0 ? [...selectionIds] : selectedId ? [selectedId] : []).filter(
-			(id) => {
-				const note = notes.find((n) => n.id === id);
-				return !note || !isMashTeamWelcomeNote(note);
-			}
-		);
+		const ids = (
+			selectionIds.length > 0 ? [...selectionIds] : selectedId ? [selectedId] : []
+		).filter((id) => {
+			const note = notes.find((n) => n.id === id);
+			return !note || !isMashTeamWelcomeNote(note);
+		});
 		if (ids.length === 0) {
 			opts.flashToast('The Mash team welcome is maintained in-house');
 			return;

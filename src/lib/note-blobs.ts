@@ -30,7 +30,11 @@ export function blobIdFromRef(src: string): string | null {
 }
 
 export function imageNoteBodyFromBlob(blobId: string, alt: string, caption = ''): string {
-	return composeEmbeddedNoteImage(alt.slice(0, 200) || 'Image', composeMashBlobSrc(blobId), caption);
+	return composeEmbeddedNoteImage(
+		alt.slice(0, 200) || 'Image',
+		composeMashBlobSrc(blobId),
+		caption
+	);
 }
 
 /** All mash-blob ids referenced anywhere in a body (leading + inline). */

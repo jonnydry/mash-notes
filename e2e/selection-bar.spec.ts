@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { createNamedNote, wipeIndexedDb } from './helpers';
+import { createNamedNote, selectNotesInPeel, wipeIndexedDb } from './helpers';
 
 test.describe('Selection bar primary verbs', () => {
 	test('shows kitchen primaries and parks secondary under More', async ({ page }) => {
@@ -9,10 +9,8 @@ test.describe('Selection bar primary verbs', () => {
 		await createNamedNote(page, 'Bar Alpha', 'One');
 		await createNamedNote(page, 'Bar Beta', 'Two');
 
-		await page.getByRole('group', { name: 'Bar Alpha' }).click();
-		await page.keyboard.down(process.platform === 'darwin' ? 'Meta' : 'Control');
-		await page.getByRole('group', { name: 'Bar Beta' }).click();
-		await page.keyboard.up(process.platform === 'darwin' ? 'Meta' : 'Control');
+		await selectNotesInPeel(page, ['Bar Alpha', 'Bar Beta']);
+		await page.getByRole('button', { name: 'Close ingredients' }).click();
 
 		const bar = page.locator('.mash-dock').filter({ hasText: '2 selected' });
 		await expect(bar).toBeVisible();
@@ -38,4 +36,3 @@ test.describe('Selection bar primary verbs', () => {
 		await expect(more.getByRole('button', { name: /Export PDF/ })).toBeVisible();
 	});
 });
-

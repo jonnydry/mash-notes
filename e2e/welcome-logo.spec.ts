@@ -38,7 +38,7 @@ test.describe('Permanent welcome branding', () => {
 		await expect(card).toBeVisible({ timeout: 15_000 });
 		await expect(card.getByAltText('Scoop, the Mash mascot')).toBeVisible();
 
-		const peel = page.getByRole('complementary', { name: 'Note scanner' });
+		const peel = page.getByRole('complementary', { name: 'Ingredients' });
 		const row = peel.getByRole('option').filter({ hasText: "Hi — I'm Scoop" });
 		await expect(row.getByAltText('Scoop, the Mash mascot')).toBeVisible();
 		await row.dblclick();

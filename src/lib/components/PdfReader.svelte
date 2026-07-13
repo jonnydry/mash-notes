@@ -17,6 +17,8 @@
 	/** Stay under common browser canvas limits (Safari is especially strict). */
 	const MAX_CANVAS_PIXELS = 16_777_216;
 	const MAX_CANVAS_EDGE = 8192;
+	const MAX_PDF_BYTES = 50 * 1024 * 1024;
+	const MAX_PDF_PAGES = 5000;
 	const MIN_REGION_PX = 12;
 
 	interface Props {
@@ -170,6 +172,9 @@
 		error = '';
 		pageError = '';
 		try {
+			if (file.size > MAX_PDF_BYTES) {
+				throw new Error('PDF exceeds the 50 MB safety limit');
+			}
 			ensurePdfJsMapPolyfills();
 			const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
 			pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -182,10 +187,14 @@
 				wasmUrl: assetUrl(PDFJS_WASM_URL),
 				iccUrl: assetUrl(PDFJS_ICC_URL),
 				useWorkerFetch: true,
-				isOffscreenCanvasSupported: true
+				isOffscreenCanvasSupported: true,
+				maxImageSize: MAX_CANVAS_PIXELS
 			});
 			pdfDocument = await loadingTask.promise;
 			if (disposed) return;
+			if (pdfDocument.numPages < 1 || pdfDocument.numPages > MAX_PDF_PAGES) {
+				throw new Error(`PDF page count exceeds the ${MAX_PDF_PAGES} page safety limit`);
+			}
 			pageCount = pdfDocument.numPages;
 			pageNumber = Math.min(Math.max(1, pageNumber), pageCount);
 			renderReadyTick++;
@@ -476,70 +485,68 @@
 	{onClose}
 	onOpenClippings={() => void onOpenClippings(clippings.map((clipping) => clipping.noteId))}
 >
-	{#snippet children()}
-		<div class="mash-pdf-page-controls" aria-label="PDF page controls">
-			<button
-				type="button"
-				onclick={() => changePage(-1)}
-				disabled={pageNumber <= 1}
-				aria-label="Previous page"
-			>
-				<ChevronLeft size={17} />
-			</button>
-			<label class="mash-pdf-page-jump">
-				<span class="sr-only">Go to page</span>
-				<input
-					type="number"
-					inputmode="numeric"
-					min="1"
-					max={pageCount || 1}
-					value={pageNumber}
-					disabled={!pageCount}
-					aria-label="Page number"
-					title="Jump to page"
-					onkeydown={(e) => {
-						if (e.key === 'Enter') {
-							e.preventDefault();
-							onPageInputCommit(e);
-							(e.currentTarget as HTMLInputElement).blur();
-						}
-					}}
-					onchange={onPageInputCommit}
-					onblur={onPageInputCommit}
-				/>
-				<span aria-hidden="true">/</span>
-				<span>{pageCount || '—'}</span>
-			</label>
-			<button
-				type="button"
-				onclick={() => changePage(1)}
-				disabled={pageNumber >= pageCount}
-				aria-label="Next page"
-			>
-				<ChevronRight size={17} />
-			</button>
-		</div>
-		<div class="mash-pdf-zoom" aria-label="PDF zoom controls">
-			<button type="button" onclick={() => changeZoom(-0.1)} aria-label="Zoom out"
-				><Minus size={15} /></button
-			>
-			<span>{Math.round(zoom * 100)}%</span>
-			<button type="button" onclick={() => changeZoom(0.1)} aria-label="Zoom in"
-				><Plus size={15} /></button
-			>
-		</div>
+	<div class="mash-pdf-page-controls" aria-label="PDF page controls">
 		<button
 			type="button"
-			class="mash-pdf-region-tool"
-			class:is-active={regionMode}
-			onclick={toggleRegionMode}
-			aria-pressed={regionMode}
-			aria-label={regionMode ? 'Exit clip region' : 'Clip region'}
-			title={regionMode ? 'Exit clip region (Esc)' : 'Clip a region from the page'}
+			onclick={() => changePage(-1)}
+			disabled={pageNumber <= 1}
+			aria-label="Previous page"
 		>
-			<Crop size={16} />
+			<ChevronLeft size={17} />
 		</button>
-	{/snippet}
+		<label class="mash-pdf-page-jump">
+			<span class="sr-only">Go to page</span>
+			<input
+				type="number"
+				inputmode="numeric"
+				min="1"
+				max={pageCount || 1}
+				value={pageNumber}
+				disabled={!pageCount}
+				aria-label="Page number"
+				title="Jump to page"
+				onkeydown={(e) => {
+					if (e.key === 'Enter') {
+						e.preventDefault();
+						onPageInputCommit(e);
+						(e.currentTarget as HTMLInputElement).blur();
+					}
+				}}
+				onchange={onPageInputCommit}
+				onblur={onPageInputCommit}
+			/>
+			<span aria-hidden="true">/</span>
+			<span>{pageCount || '—'}</span>
+		</label>
+		<button
+			type="button"
+			onclick={() => changePage(1)}
+			disabled={pageNumber >= pageCount}
+			aria-label="Next page"
+		>
+			<ChevronRight size={17} />
+		</button>
+	</div>
+	<div class="mash-pdf-zoom" aria-label="PDF zoom controls">
+		<button type="button" onclick={() => changeZoom(-0.1)} aria-label="Zoom out"
+			><Minus size={15} /></button
+		>
+		<span>{Math.round(zoom * 100)}%</span>
+		<button type="button" onclick={() => changeZoom(0.1)} aria-label="Zoom in"
+			><Plus size={15} /></button
+		>
+	</div>
+	<button
+		type="button"
+		class="mash-pdf-region-tool"
+		class:is-active={regionMode}
+		onclick={toggleRegionMode}
+		aria-pressed={regionMode}
+		aria-label={regionMode ? 'Exit clip region' : 'Clip region'}
+		title={regionMode ? 'Exit clip region (Esc)' : 'Clip a region from the page'}
+	>
+		<Crop size={16} />
+	</button>
 
 	{#snippet stage()}
 		<section

@@ -4,9 +4,7 @@ import { bodyForSearchIndex } from './search';
 describe('bodyForSearchIndex', () => {
 	it('strips data-url image payloads and keeps alt/caption', () => {
 		const body =
-			'![Chart of sales](data:image/png;base64,' +
-			'A'.repeat(50_000) +
-			')\n\n_From board photo_';
+			'![Chart of sales](data:image/png;base64,' + 'A'.repeat(50_000) + ')\n\n_From board photo_';
 		const indexed = bodyForSearchIndex(body);
 		expect(indexed.length).toBeLessThan(500);
 		expect(indexed.toLowerCase()).toContain('chart');

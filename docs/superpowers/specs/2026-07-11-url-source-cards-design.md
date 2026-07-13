@@ -27,13 +27,13 @@ Pasting a link on the desk today becomes a plain text sticky (or multi-line past
 
 ## Product behavior
 
-| Clipboard text | Behavior |
-|----------------|----------|
-| Single line that is an `http(s)` URL | One URL source card (no paste-split dialog) |
-| Multiple lines, each an `http(s)` URL | One card per URL (set layout) |
-| Image present | Image path wins (existing); URL text may become caption if both |
-| Mixed URL + non-URL lines | Existing text paste / split dialog |
-| Non-http schemes | Treated as normal text |
+| Clipboard text                        | Behavior                                                        |
+| ------------------------------------- | --------------------------------------------------------------- |
+| Single line that is an `http(s)` URL  | One URL source card (no paste-split dialog)                     |
+| Multiple lines, each an `http(s)` URL | One card per URL (set layout)                                   |
+| Image present                         | Image path wins (existing); URL text may become caption if both |
+| Mixed URL + non-URL lines             | Existing text paste / split dialog                              |
+| Non-http schemes                      | Treated as normal text                                          |
 
 **Title:** URL hostname without leading `www.` (fallback `Link`).  
 **Body:** `[title](url)` plus the raw URL on a following line for copy visibility.  
@@ -43,14 +43,14 @@ Pasting a link on the desk today becomes a plain text sticky (or multi-line past
 
 ## Architecture
 
-| Piece | Role |
-|--------|------|
+| Piece                   | Role                                        |
+| ----------------------- | ------------------------------------------- |
 | `src/lib/url-source.ts` | Detect, normalize, title, draft body/source |
-| `types.ts` | `NoteSource` += url |
-| `import-notes.ts` | Validate url source on JSON import |
-| `+page.svelte` | Paste branch before text split dialog |
-| `CanvasBoard.svelte` | Source footer for url |
-| `board-image-export.ts` | sourceLabel for url |
+| `types.ts`              | `NoteSource` += url                         |
+| `import-notes.ts`       | Validate url source on JSON import          |
+| `+page.svelte`          | Paste branch before text split dialog       |
+| `CanvasBoard.svelte`    | Source footer for url                       |
+| `board-image-export.ts` | sourceLabel for url                         |
 
 ## Testing
 

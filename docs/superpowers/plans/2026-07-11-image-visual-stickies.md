@@ -14,27 +14,28 @@
 
 ## File map
 
-| File | Responsibility |
-|------|----------------|
-| `src/lib/types.ts` | `NoteSource` += image |
-| `src/lib/external-file-drop.ts` | Classify images; `imageFiles` batch |
-| `src/lib/external-file-drop.spec.ts` | Detection + partition tests |
-| `src/lib/desk-image.ts` | Prepare pipeline, body/title builders, caps |
-| `src/lib/desk-image.spec.ts` | Unit tests for prepare + body |
-| `src/lib/import-notes.ts` | Validate `source.kind === 'image'` |
-| `src/lib/import-notes.spec.ts` | Round-trip provenance |
-| `src/lib/board-image-export.ts` | Optional source label for image notes |
-| `src/routes/+page.svelte` | Drop, paste, open, create cards |
-| `src/lib/components/SettingsPanel.svelte` | Open image… action |
-| `src/lib/components/CanvasBoard.svelte` | Source footer for `image` |
-| `e2e/image-stickies.spec.ts` | Drop fixture PNG |
-| `README.md` | Feature bullet |
+| File                                      | Responsibility                              |
+| ----------------------------------------- | ------------------------------------------- |
+| `src/lib/types.ts`                        | `NoteSource` += image                       |
+| `src/lib/external-file-drop.ts`           | Classify images; `imageFiles` batch         |
+| `src/lib/external-file-drop.spec.ts`      | Detection + partition tests                 |
+| `src/lib/desk-image.ts`                   | Prepare pipeline, body/title builders, caps |
+| `src/lib/desk-image.spec.ts`              | Unit tests for prepare + body               |
+| `src/lib/import-notes.ts`                 | Validate `source.kind === 'image'`          |
+| `src/lib/import-notes.spec.ts`            | Round-trip provenance                       |
+| `src/lib/board-image-export.ts`           | Optional source label for image notes       |
+| `src/routes/+page.svelte`                 | Drop, paste, open, create cards             |
+| `src/lib/components/SettingsPanel.svelte` | Open image… action                          |
+| `src/lib/components/CanvasBoard.svelte`   | Source footer for `image`                   |
+| `e2e/image-stickies.spec.ts`              | Drop fixture PNG                            |
+| `README.md`                               | Feature bullet                              |
 
 ---
 
 ### Task 1: Types + classify images
 
 **Files:**
+
 - Modify: `src/lib/types.ts`
 - Modify: `src/lib/external-file-drop.ts`
 - Modify: `src/lib/external-file-drop.spec.ts`
@@ -80,6 +81,7 @@ git commit -m "feat: classify image drops and image note source"
 ### Task 2: desk-image prepare pipeline
 
 **Files:**
+
 - Create: `src/lib/desk-image.ts`
 - Create: `src/lib/desk-image.spec.ts`
 
@@ -101,12 +103,19 @@ export function imageNoteBody(dataUrl: string, alt: string, caption?: string): s
 export function imageNoteSource(title: string): { kind: 'image'; title: string };
 
 export type PrepareDeskImageResult =
-  | { ok: true; dataUrl: string; width: number; height: number; compacted: boolean; titleHint: string }
-  | { ok: false; error: 'too-large' | 'undecodable' | 'unsupported' };
+	| {
+			ok: true;
+			dataUrl: string;
+			width: number;
+			height: number;
+			compacted: boolean;
+			titleHint: string;
+	  }
+	| { ok: false; error: 'too-large' | 'undecodable' | 'unsupported' };
 
 export async function prepareDeskImage(
-  input: Blob,
-  options?: { fileName?: string; titleHint?: string }
+	input: Blob,
+	options?: { fileName?: string; titleHint?: string }
 ): Promise<PrepareDeskImageResult>;
 ```
 
@@ -125,6 +134,7 @@ git commit -m "feat: prepare desk images with soft resize"
 ### Task 3: Wire drop, paste, open on the page
 
 **Files:**
+
 - Modify: `src/routes/+page.svelte`
 - Modify: `src/lib/components/SettingsPanel.svelte`
 - Modify: `src/lib/components/CanvasBoard.svelte` (image source footer)
@@ -159,6 +169,7 @@ git commit -m "feat: drop paste and open visual image stickies"
 ### Task 4: E2E + README
 
 **Files:**
+
 - Create: `e2e/image-stickies.spec.ts`
 - Modify: `README.md`
 
@@ -176,15 +187,15 @@ git commit -m "test: e2e coverage for image visual stickies"
 
 ## Spec coverage
 
-| Spec item | Task |
-|-----------|------|
-| Classify image files | 1 |
-| NoteSource image | 1 |
-| Soft resize / caps | 2 |
-| Body + source composition | 2 |
-| Drop multi set | 3 |
-| Paste image + text | 3 |
-| Palette / Settings open | 3 |
-| Image-forward cards | existing CanvasBoard + source footer 3 |
-| E2E / README | 4 |
-| Explode GIF | out of scope |
+| Spec item                 | Task                                   |
+| ------------------------- | -------------------------------------- |
+| Classify image files      | 1                                      |
+| NoteSource image          | 1                                      |
+| Soft resize / caps        | 2                                      |
+| Body + source composition | 2                                      |
+| Drop multi set            | 3                                      |
+| Paste image + text        | 3                                      |
+| Palette / Settings open   | 3                                      |
+| Image-forward cards       | existing CanvasBoard + source footer 3 |
+| E2E / README              | 4                                      |
+| Explode GIF               | out of scope                           |

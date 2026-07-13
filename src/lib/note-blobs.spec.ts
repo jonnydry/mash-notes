@@ -153,9 +153,7 @@ describe('note-blobs', () => {
 	it('gcOrphanNoteBlobs reclaims unreferenced rows', async () => {
 		const live = await putNoteBlobFromDataUrl(TINY_PNG, { width: 1, height: 1 });
 		const orphan = await putNoteBlobFromDataUrl(TINY_PNG, { width: 1, height: 1 });
-		await db.notes.put(
-			baseNote({ id: 'n1', body: imageNoteBodyFromBlob(live.id, 'Live') })
-		);
+		await db.notes.put(baseNote({ id: 'n1', body: imageNoteBodyFromBlob(live.id, 'Live') }));
 		const n = await gcOrphanNoteBlobs();
 		expect(n).toBe(1);
 		expect(await db.noteBlobs.get(live.id)).toBeTruthy();
@@ -165,9 +163,7 @@ describe('note-blobs', () => {
 	it('deleteBlobIdsIfUnreferenced can ignore a stale note id (rotate path)', async () => {
 		const row = await putNoteBlobFromDataUrl(TINY_PNG, { width: 1, height: 1 });
 		// IDB still has the pre-rotate body for this note.
-		await db.notes.put(
-			baseNote({ id: 'rotating', body: imageNoteBodyFromBlob(row.id, 'Old') })
-		);
+		await db.notes.put(baseNote({ id: 'rotating', body: imageNoteBodyFromBlob(row.id, 'Old') }));
 		const deleted = await deleteBlobIdsIfUnreferenced([row.id], {
 			ignoreNoteIds: ['rotating']
 		});
@@ -225,4 +221,3 @@ describe('note-blobs', () => {
 		revokeSpy.mockRestore();
 	});
 });
-

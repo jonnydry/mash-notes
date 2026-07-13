@@ -10,6 +10,8 @@ export const DESK_IMAGE_MAX_ORIGINAL_BYTES = 20 * 1024 * 1024;
 export const DESK_IMAGE_MAX_EDGE = 2400;
 export const DESK_IMAGE_JPEG_QUALITY = 0.82;
 export const DESK_IMAGE_MAX_PER_ACTION = 50;
+const DESK_IMAGE_MAX_SOURCE_PIXELS = 16_777_216;
+const DESK_IMAGE_MAX_SOURCE_EDGE = 8192;
 
 const IMAGE_MIME = /^image\/(png|jpeg|webp|gif)$/i;
 const IMAGE_EXT = /\.(png|jpe?g|webp|gif)$/i;
@@ -98,6 +100,14 @@ function scaleDimensions(
 	};
 }
 
+/** Read dimensions without asking the browser to allocate decoded pixel memory. */
+export async function readEncodedImageDimensions(
+	input: Blob
+): Promise<{ width: number; height: number } | null> {
+	const { readEncodedImageDimensions: readDimensions } = await import('./image-headers');
+	return readDimensions(input);
+}
+
 async function decodeBitmap(blob: Blob): Promise<ImageBitmap | HTMLImageElement> {
 	if (typeof createImageBitmap === 'function') {
 		return createImageBitmap(blob);
@@ -116,11 +126,7 @@ async function decodeBitmap(blob: Blob): Promise<ImageBitmap | HTMLImageElement>
 	}
 }
 
-function canvasToDataUrl(
-	canvas: HTMLCanvasElement,
-	preferPng: boolean,
-	quality: number
-): string {
+function canvasToDataUrl(canvas: HTMLCanvasElement, preferPng: boolean, quality: number): string {
 	if (preferPng) return canvas.toDataURL('image/png');
 	return canvas.toDataURL('image/jpeg', quality);
 }
@@ -145,6 +151,22 @@ export async function prepareDeskImage(
 	if (typeof input.size === 'number' && input.size > DESK_IMAGE_MAX_ORIGINAL_BYTES) {
 		return { ok: false, error: 'too-large' };
 	}
+	let encodedDimensions: { width: number; height: number } | null;
+	try {
+		encodedDimensions = await readEncodedImageDimensions(input);
+	} catch {
+		return { ok: false, error: 'undecodable' };
+	}
+	if (!encodedDimensions || encodedDimensions.width < 1 || encodedDimensions.height < 1) {
+		return { ok: false, error: 'undecodable' };
+	}
+	if (
+		encodedDimensions.width > DESK_IMAGE_MAX_SOURCE_EDGE ||
+		encodedDimensions.height > DESK_IMAGE_MAX_SOURCE_EDGE ||
+		encodedDimensions.width * encodedDimensions.height > DESK_IMAGE_MAX_SOURCE_PIXELS
+	) {
+		return { ok: false, error: 'too-large' };
+	}
 
 	const titleHint =
 		options?.titleHint?.trim() ||
@@ -159,9 +181,7 @@ export async function prepareDeskImage(
 	}
 
 	const srcW =
-		'naturalWidth' in bitmap
-			? bitmap.naturalWidth || bitmap.width
-			: (bitmap as ImageBitmap).width;
+		'naturalWidth' in bitmap ? bitmap.naturalWidth || bitmap.width : (bitmap as ImageBitmap).width;
 	const srcH =
 		'naturalHeight' in bitmap
 			? bitmap.naturalHeight || bitmap.height

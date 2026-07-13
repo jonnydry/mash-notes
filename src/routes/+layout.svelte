@@ -11,7 +11,11 @@
 </script>
 
 <svelte:head>
-	<title>Mash · where notes become useful</title>
+	<title>Mash · local-first scratch workbench</title>
+	<meta
+		name="description"
+		content="Turn messy text and files into useful, portable results on a private local-first workbench."
+	/>
 	<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
 	<meta name="theme-color" content={theme.metaColor} />
 	<meta

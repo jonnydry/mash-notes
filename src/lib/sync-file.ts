@@ -3,7 +3,16 @@
  * Bundle v4 includes notes + desk + tombstones + operation provenance.
  * v3, v2, and v1 still import.
  */
-import type { Canvas, CanvasBowl, CanvasEdge, CanvasItem, Note, NoteBlobMime, Operation } from './types';
+import type {
+	Canvas,
+	CanvasBowl,
+	CanvasEdge,
+	CanvasItem,
+	Note,
+	NoteBlob,
+	NoteBlobMime,
+	Operation
+} from './types';
 import { mergeNotesLww, hasConflicts, type MergeResult, type SyncConflict } from './sync-model';
 import { normalizeImportedNote } from './import-notes';
 import { db, getSyncTombstoneNotes, newId } from './db';
@@ -13,8 +22,7 @@ import {
 	dataUrlToBytes,
 	extractBlobIdsFromNotes,
 	getNoteBlobsByIds,
-	normalizeBlobMime,
-	putNoteBlob
+	normalizeBlobMime
 } from './note-blobs';
 
 export const SYNC_BUNDLE_VERSION = 5 as const;
@@ -22,6 +30,16 @@ export const SYNC_BUNDLE_VERSION_V4 = 4 as const;
 export const SYNC_BUNDLE_VERSION_V3 = 3 as const;
 export const SYNC_BUNDLE_VERSION_V2 = 2 as const;
 export const SYNC_BUNDLE_VERSION_V1 = 1 as const;
+export const SYNC_BUNDLE_MAX_CHARS = 8_000_000;
+
+const MAX_ID_CHARS = 128;
+const MAX_DISMISSED_PER_CANVAS = 5000;
+const MAX_OPERATION_NOTE_IDS = 1000;
+const MAX_OPERATION_PAYLOAD_CHARS = 100_000;
+const MAX_SYNC_BLOB_BASE64_CHARS = 5_600_000;
+const MAX_SYNC_BLOBS_BASE64_CHARS = 6_500_000;
+const MAX_CANVAS_COORDINATE = 1_000_000;
+const MAX_CANVAS_ITEM_EDGE = 5000;
 
 /** Keep soft-delete tombstones in sync exports for this long. */
 export const TOMBSTONE_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
@@ -97,14 +115,22 @@ function asNumber(v: unknown, fallback: number): number {
 	return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
 }
 
+function boundedId(value: unknown): string {
+	return asString(value).trim().slice(0, MAX_ID_CHARS);
+}
+
+function clampNumber(value: unknown, fallback: number, min: number, max: number): number {
+	return Math.min(max, Math.max(min, asNumber(value, fallback)));
+}
+
 function normalizeCanvas(raw: unknown, index: number): Canvas | string {
 	if (!isRecord(raw)) return `Canvas ${index + 1} is not an object`;
-	const id = asString(raw.id).trim();
+	const id = boundedId(raw.id);
 	if (!id) return `Canvas ${index + 1} missing id`;
 	const now = Date.now();
 	const canvas: Canvas = {
 		id,
-		folder: asString(raw.folder),
+		folder: asString(raw.folder).slice(0, 200),
 		title: asString(raw.title, 'Desk').slice(0, 200) || 'Desk',
 		created: asNumber(raw.created, now),
 		modified: asNumber(raw.modified, now)
@@ -114,8 +140,10 @@ function normalizeCanvas(raw: unknown, index: number): Canvas | string {
 		const bowls: CanvasBowl[] = [];
 		for (const candidate of raw.bowls) {
 			if (!isRecord(candidate) || !Array.isArray(candidate.itemIds)) continue;
-			const bowlId = asString(candidate.id).trim();
-			const itemIds = candidate.itemIds.filter((id): id is string => typeof id === 'string');
+			const bowlId = boundedId(candidate.id);
+			const itemIds = candidate.itemIds
+				.filter((id): id is string => typeof id === 'string')
+				.map((id) => id.slice(0, MAX_ID_CHARS));
 			if (!bowlId || itemIds.length < 2 || itemIds.length > 500) continue;
 			bowls.push({
 				id: bowlId,
@@ -132,33 +160,37 @@ function normalizeCanvas(raw: unknown, index: number): Canvas | string {
 
 function normalizeCanvasItem(raw: unknown, index: number): CanvasItem | string {
 	if (!isRecord(raw)) return `Canvas item ${index + 1} is not an object`;
-	const id = asString(raw.id).trim() || newId();
-	const canvasId = asString(raw.canvasId).trim();
-	const noteId = asString(raw.noteId).trim();
+	const id = boundedId(raw.id) || newId();
+	const canvasId = boundedId(raw.canvasId);
+	const noteId = boundedId(raw.noteId);
 	if (!canvasId || !noteId) return `Canvas item ${index + 1} missing canvasId/noteId`;
 	const item: CanvasItem = {
 		id,
 		canvasId,
 		noteId,
-		x: asNumber(raw.x, 40),
-		y: asNumber(raw.y, 40)
+		x: clampNumber(raw.x, 40, -MAX_CANVAS_COORDINATE, MAX_CANVAS_COORDINATE),
+		y: clampNumber(raw.y, 40, -MAX_CANVAS_COORDINATE, MAX_CANVAS_COORDINATE)
 	};
-	if (typeof raw.w === 'number' && Number.isFinite(raw.w)) item.w = raw.w;
-	if (typeof raw.h === 'number' && Number.isFinite(raw.h)) item.h = raw.h;
+	if (typeof raw.w === 'number' && Number.isFinite(raw.w)) {
+		item.w = clampNumber(raw.w, 220, 1, MAX_CANVAS_ITEM_EDGE);
+	}
+	if (typeof raw.h === 'number' && Number.isFinite(raw.h)) {
+		item.h = clampNumber(raw.h, 160, 1, MAX_CANVAS_ITEM_EDGE);
+	}
 	return item;
 }
 
 function normalizeCanvasEdge(raw: unknown, index: number): CanvasEdge | string {
 	if (!isRecord(raw)) return `Canvas edge ${index + 1} is not an object`;
-	const canvasId = asString(raw.canvasId).trim();
-	const fromItemId = asString(raw.fromItemId).trim();
-	const toItemId = asString(raw.toItemId).trim();
+	const canvasId = boundedId(raw.canvasId);
+	const fromItemId = boundedId(raw.fromItemId);
+	const toItemId = boundedId(raw.toItemId);
 	if (!canvasId || !fromItemId || !toItemId) {
 		return `Canvas edge ${index + 1} missing canvasId/from/to`;
 	}
 	if (fromItemId === toItemId) return `Canvas edge ${index + 1} is a self-loop`;
 	return {
-		id: asString(raw.id).trim() || newId(),
+		id: boundedId(raw.id) || newId(),
 		canvasId,
 		fromItemId,
 		toItemId,
@@ -166,12 +198,22 @@ function normalizeCanvasEdge(raw: unknown, index: number): CanvasEdge | string {
 	};
 }
 
-function normalizeDismissed(raw: unknown): DismissedByCanvas {
+function normalizeDismissed(raw: unknown): DismissedByCanvas | string {
 	if (!isRecord(raw)) return {};
+	const entries = Object.entries(raw);
+	if (entries.length > 200) return 'Too many dismissed canvas lists in sync bundle';
 	const out: DismissedByCanvas = {};
-	for (const [canvasId, ids] of Object.entries(raw)) {
+	for (const [rawCanvasId, ids] of entries) {
 		if (!Array.isArray(ids)) continue;
-		out[canvasId] = ids.filter((id): id is string => typeof id === 'string');
+		if (ids.length > MAX_DISMISSED_PER_CANVAS) {
+			return `Too many dismissed notes for canvas ${rawCanvasId.slice(0, 40)}`;
+		}
+		const canvasId = rawCanvasId.trim().slice(0, MAX_ID_CHARS);
+		if (!canvasId) continue;
+		out[canvasId] = ids
+			.filter((id): id is string => typeof id === 'string')
+			.map((id) => id.slice(0, MAX_ID_CHARS))
+			.filter(Boolean);
 	}
 	return out;
 }
@@ -189,28 +231,46 @@ function normalizeDesk(raw: unknown): DeskSnapshot | string {
 	if (edgesRaw.length > 50_000) return 'Too many canvas edges in sync bundle';
 
 	const canvases: Canvas[] = [];
+	const canvasIds = new Set<string>();
+	const canvasFolders = new Set<string>();
 	for (let i = 0; i < canvasesRaw.length; i++) {
 		const c = normalizeCanvas(canvasesRaw[i], i);
 		if (typeof c === 'string') return c;
+		if (canvasIds.has(c.id)) return `Duplicate canvas id: ${c.id.slice(0, 40)}`;
+		if (canvasFolders.has(c.folder)) return `Duplicate canvas folder: ${c.folder.slice(0, 40)}`;
+		canvasIds.add(c.id);
+		canvasFolders.add(c.folder);
 		canvases.push(c);
 	}
 	const items: CanvasItem[] = [];
+	const itemIds = new Set<string>();
+	const placements = new Set<string>();
 	for (let i = 0; i < itemsRaw.length; i++) {
 		const item = normalizeCanvasItem(itemsRaw[i], i);
 		if (typeof item === 'string') return item;
+		if (itemIds.has(item.id)) return `Duplicate canvas item id: ${item.id.slice(0, 40)}`;
+		const placement = JSON.stringify([item.canvasId, item.noteId]);
+		if (placements.has(placement)) return `Duplicate note placement at canvas item ${i + 1}`;
+		itemIds.add(item.id);
+		placements.add(placement);
 		items.push(item);
 	}
 	const edges: CanvasEdge[] = [];
+	const edgeIds = new Set<string>();
 	for (let i = 0; i < edgesRaw.length; i++) {
 		const edge = normalizeCanvasEdge(edgesRaw[i], i);
 		if (typeof edge === 'string') return edge;
+		if (edgeIds.has(edge.id)) return `Duplicate canvas edge id: ${edge.id.slice(0, 40)}`;
+		edgeIds.add(edge.id);
 		edges.push(edge);
 	}
+	const dismissed = normalizeDismissed(raw.dismissed);
+	if (typeof dismissed === 'string') return dismissed;
 	return {
 		canvases,
 		items,
 		edges,
-		dismissed: normalizeDismissed(raw.dismissed)
+		dismissed
 	};
 }
 
@@ -297,40 +357,61 @@ function normalizeSyncBlobs(raw: unknown): SyncBlob[] | string {
 	if (!Array.isArray(raw)) return 'Blobs must be an array';
 	if (raw.length > 5000) return 'Too many blobs in sync bundle';
 	const out: SyncBlob[] = [];
+	const seenIds = new Set<string>();
+	let totalBase64Chars = 0;
 	for (let i = 0; i < raw.length; i++) {
 		const row = raw[i];
 		if (!isRecord(row)) return `Blob ${i + 1} is not an object`;
-		const id = asString(row.id).trim();
+		const id = boundedId(row.id);
 		const mime = normalizeBlobMime(asString(row.mime));
 		const dataBase64 = asString(row.dataBase64).replace(/\s+/g, '');
 		if (!id || !mime || !dataBase64) return `Blob ${i + 1} missing id/mime/dataBase64`;
+		if (seenIds.has(id)) return `Duplicate blob id: ${id.slice(0, 40)}`;
+		seenIds.add(id);
+		if (!/^[A-Za-z0-9+/]+={0,2}$/.test(dataBase64) || dataBase64.length % 4 === 1) {
+			return `Blob ${i + 1} has invalid base64 data`;
+		}
+		if (dataBase64.length > MAX_SYNC_BLOB_BASE64_CHARS) {
+			return `Blob ${i + 1} is too large`;
+		}
+		totalBase64Chars += dataBase64.length;
+		if (totalBase64Chars > MAX_SYNC_BLOBS_BASE64_CHARS) {
+			return 'Image data in sync bundle is too large';
+		}
 		out.push({
 			id,
 			mime,
-			width: asNumber(row.width, 0),
-			height: asNumber(row.height, 0),
+			width: clampNumber(row.width, 0, 0, MAX_CANVAS_ITEM_EDGE * 4),
+			height: clampNumber(row.height, 0, 0, MAX_CANVAS_ITEM_EDGE * 4),
 			dataBase64
 		});
 	}
 	return out;
 }
 
-export async function persistSyncBlobs(blobs: SyncBlob[] | undefined): Promise<number> {
-	if (!blobs?.length) return 0;
-	let n = 0;
+function decodeSyncBlobs(blobs: SyncBlob[] | undefined): NoteBlob[] {
+	if (!blobs?.length) return [];
+	const decoded: NoteBlob[] = [];
+	const created = Date.now();
 	for (const row of blobs) {
 		const parsed = dataUrlToBytes(`data:${row.mime};base64,${row.dataBase64}`);
-		if (!parsed) continue;
-		await putNoteBlob({
+		if (!parsed) throw new Error(`Invalid image data for blob ${row.id.slice(0, 16)}`);
+		decoded.push({
 			id: row.id,
 			mime: parsed.mime,
 			bytes: parsed.bytes,
 			width: row.width,
-			height: row.height
+			height: row.height,
+			created
 		});
-		n++;
 	}
-	return n;
+	return decoded;
+}
+
+export async function persistSyncBlobs(blobs: SyncBlob[] | undefined): Promise<number> {
+	const decoded = decodeSyncBlobs(blobs);
+	if (decoded.length > 0) await db.noteBlobs.bulkPut(decoded);
+	return decoded.length;
 }
 
 function normalizeTombstones(raw: unknown): SyncTombstone[] | string {
@@ -338,12 +419,15 @@ function normalizeTombstones(raw: unknown): SyncTombstone[] | string {
 	if (!Array.isArray(raw)) return 'Tombstones must be an array';
 	if (raw.length > 5000) return 'Too many tombstones in sync bundle';
 	const out: SyncTombstone[] = [];
+	const seenIds = new Set<string>();
 	for (let i = 0; i < raw.length; i++) {
 		const row = raw[i];
 		if (!isRecord(row)) return `Tombstone ${i + 1} is not an object`;
-		const id = asString(row.id).trim();
+		const id = boundedId(row.id);
 		const deletedAt = asNumber(row.deletedAt, NaN);
 		if (!id || !Number.isFinite(deletedAt)) return `Tombstone ${i + 1} missing id/deletedAt`;
+		if (seenIds.has(id)) return `Duplicate tombstone id: ${id.slice(0, 40)}`;
+		seenIds.add(id);
 		out.push({ id, deletedAt });
 	}
 	return out;
@@ -354,19 +438,32 @@ function normalizeOperations(raw: unknown): Operation[] | string {
 	if (!Array.isArray(raw)) return 'Operations must be an array';
 	if (raw.length > 10_000) return 'Too many operations in sync bundle';
 	const out: Operation[] = [];
+	const seenIds = new Set<string>();
 	for (let index = 0; index < raw.length; index++) {
 		const row = raw[index];
 		if (!isRecord(row)) return `Operation ${index + 1} is not an object`;
-		const id = asString(row.id).trim();
-		const sessionId = asString(row.sessionId).trim();
+		const id = boundedId(row.id);
+		const sessionId = boundedId(row.sessionId);
 		const type = asString(row.type).trim().slice(0, 100);
+		if (Array.isArray(row.inputNoteIds) && row.inputNoteIds.length > MAX_OPERATION_NOTE_IDS) {
+			return `Operation ${index + 1} has too many input notes`;
+		}
+		if (Array.isArray(row.outputNoteIds) && row.outputNoteIds.length > MAX_OPERATION_NOTE_IDS) {
+			return `Operation ${index + 1} has too many output notes`;
+		}
 		const inputNoteIds = Array.isArray(row.inputNoteIds)
-			? row.inputNoteIds.filter((id): id is string => typeof id === 'string')
+			? row.inputNoteIds
+					.filter((noteId): noteId is string => typeof noteId === 'string')
+					.map((noteId) => noteId.slice(0, MAX_ID_CHARS))
 			: [];
 		const outputNoteIds = Array.isArray(row.outputNoteIds)
-			? row.outputNoteIds.filter((id): id is string => typeof id === 'string')
+			? row.outputNoteIds
+					.filter((noteId): noteId is string => typeof noteId === 'string')
+					.map((noteId) => noteId.slice(0, MAX_ID_CHARS))
 			: [];
 		if (!id || !type) return `Operation ${index + 1} missing id/type`;
+		if (seenIds.has(id)) return `Duplicate operation id: ${id.slice(0, 40)}`;
+		seenIds.add(id);
 		const operation: Operation = {
 			id,
 			sessionId,
@@ -375,7 +472,12 @@ function normalizeOperations(raw: unknown): Operation[] | string {
 			outputNoteIds,
 			created: asNumber(row.created, Date.now())
 		};
-		if (isRecord(row.payload)) operation.payload = { ...row.payload };
+		if (isRecord(row.payload)) {
+			if (JSON.stringify(row.payload).length > MAX_OPERATION_PAYLOAD_CHARS) {
+				return `Operation ${index + 1} payload is too large`;
+			}
+			operation.payload = { ...row.payload };
+		}
 		if (typeof row.revertedAt === 'number' && Number.isFinite(row.revertedAt)) {
 			operation.revertedAt = row.revertedAt;
 		}
@@ -387,6 +489,9 @@ function normalizeOperations(raw: unknown): Operation[] | string {
 export function parseSyncBundle(
 	raw: string
 ): { ok: true; bundle: SyncBundle } | { ok: false; error: string } {
+	if (raw.length > SYNC_BUNDLE_MAX_CHARS) {
+		return { ok: false, error: 'Sync file too large' };
+	}
 	let data: unknown;
 	try {
 		data = JSON.parse(raw);
@@ -415,9 +520,14 @@ export function parseSyncBundle(
 	}
 
 	const notes: Note[] = [];
+	const noteIds = new Set<string>();
 	for (let i = 0; i < obj.notes.length; i++) {
 		const result = normalizeImportedNote(obj.notes[i], i);
 		if (typeof result === 'string') return { ok: false, error: result };
+		if (noteIds.has(result.id)) {
+			return { ok: false, error: `Duplicate note id: ${result.id.slice(0, 40)}` };
+		}
+		noteIds.add(result.id);
 		// JSON / vault-style imports must not invent soft-deletes via deletedAt.
 		const active = { ...(result as Note & { deletedAt?: number }) };
 		delete active.deletedAt;
@@ -475,19 +585,18 @@ export function parseSyncBundle(
 	};
 }
 
-function stripCanvasForDeletedNote(noteId: string): Promise<void> {
-	return (async () => {
-		const items = await db.canvasItems.where('noteId').equals(noteId).toArray();
-		for (const item of items) {
-			const from = await db.canvasEdges.where('fromItemId').equals(item.id).toArray();
-			const to = await db.canvasEdges.where('toItemId').equals(item.id).toArray();
-			const ids = [...new Set([...from, ...to].map((e) => e.id))];
-			if (ids.length > 0) await db.canvasEdges.bulkDelete(ids);
-		}
-		if (items.length > 0) {
-			await db.canvasItems.bulkDelete(items.map((i) => i.id));
-		}
-	})();
+async function stripCanvasForDeletedNotes(noteIds: string[]): Promise<void> {
+	if (noteIds.length === 0) return;
+	const items = await db.canvasItems.where('noteId').anyOf(noteIds).toArray();
+	if (items.length === 0) return;
+	const itemIds = items.map((item) => item.id);
+	const [from, to] = await Promise.all([
+		db.canvasEdges.where('fromItemId').anyOf(itemIds).toArray(),
+		db.canvasEdges.where('toItemId').anyOf(itemIds).toArray()
+	]);
+	const edgeIds = [...new Set([...from, ...to].map((edge) => edge.id))];
+	if (edgeIds.length > 0) await db.canvasEdges.bulkDelete(edgeIds);
+	await db.canvasItems.bulkDelete(itemIds);
 }
 
 /**
@@ -644,13 +753,30 @@ async function applyDeskIdbSnapshot(
 		}
 	}
 
+	const remoteCanvasById = new Map(desk.canvases.map((canvas) => [canvas.id, canvas]));
+	const targetCanvasIds = [...new Set(idMap.values())];
+	const existingItemRows =
+		targetCanvasIds.length > 0
+			? await db.canvasItems.where('canvasId').anyOf(targetCanvasIds).toArray()
+			: [];
+	const existingItemsByCanvas = new Map<string, Map<string, CanvasItem>>();
+	for (const item of existingItemRows) {
+		let byNote = existingItemsByCanvas.get(item.canvasId);
+		if (!byNote) {
+			byNote = new Map();
+			existingItemsByCanvas.set(item.canvasId, byNote);
+		}
+		byNote.set(item.noteId, item);
+	}
+	const itemUpserts: CanvasItem[] = [];
+
 	for (const remoteItem of desk.items) {
 		if (!knownNoteIds.has(remoteItem.noteId)) {
 			itemsSkipped += 1;
 			continue;
 		}
 		const localCanvasId = idMap.get(remoteItem.canvasId);
-		const remoteCanvas = desk.canvases.find((c) => c.id === remoteItem.canvasId);
+		const remoteCanvas = remoteCanvasById.get(remoteItem.canvasId);
 		if (!localCanvasId || !remoteCanvas) {
 			itemsSkipped += 1;
 			continue;
@@ -658,10 +784,12 @@ async function applyDeskIdbSnapshot(
 		const localMod = folderModified.get(remoteCanvas.folder) ?? 0;
 		const remoteNewer = remoteCanvas.modified >= localMod;
 
-		const existing = await db.canvasItems
-			.where('[canvasId+noteId]')
-			.equals([localCanvasId, remoteItem.noteId])
-			.first();
+		let byNote = existingItemsByCanvas.get(localCanvasId);
+		if (!byNote) {
+			byNote = new Map();
+			existingItemsByCanvas.set(localCanvasId, byNote);
+		}
+		const existing = byNote.get(remoteItem.noteId);
 
 		if (!existing) {
 			// Only insert remote-only placements when remote canvas wins LWW.
@@ -671,7 +799,7 @@ async function applyDeskIdbSnapshot(
 				continue;
 			}
 			const localItemId = newId();
-			await db.canvasItems.put({
+			const next: CanvasItem = {
 				id: localItemId,
 				canvasId: localCanvasId,
 				noteId: remoteItem.noteId,
@@ -679,7 +807,9 @@ async function applyDeskIdbSnapshot(
 				y: remoteItem.y,
 				w: remoteItem.w,
 				h: remoteItem.h
-			});
+			};
+			itemUpserts.push(next);
+			byNote.set(remoteItem.noteId, next);
 			itemIdMap.set(remoteItem.id, localItemId);
 			itemsUpserted += 1;
 			continue;
@@ -687,17 +817,21 @@ async function applyDeskIdbSnapshot(
 
 		itemIdMap.set(remoteItem.id, existing.id);
 		if (remoteNewer) {
-			await db.canvasItems.update(existing.id, {
+			const next: CanvasItem = {
+				...existing,
 				x: remoteItem.x,
 				y: remoteItem.y,
 				w: remoteItem.w,
 				h: remoteItem.h
-			});
+			};
+			itemUpserts.push(next);
+			byNote.set(remoteItem.noteId, next);
 			itemsUpserted += 1;
 		} else {
 			itemsSkipped += 1;
 		}
 	}
+	if (itemUpserts.length > 0) await db.canvasItems.bulkPut(itemUpserts);
 
 	for (const remoteCanvas of desk.canvases) {
 		const localCanvas = localByFolder.get(remoteCanvas.folder);
@@ -715,6 +849,14 @@ async function applyDeskIdbSnapshot(
 		await db.canvases.update(localCanvasId, { bowls });
 	}
 
+	const existingEdgeRows =
+		targetCanvasIds.length > 0
+			? await db.canvasEdges.where('canvasId').anyOf(targetCanvasIds).toArray()
+			: [];
+	const edgeKeys = new Set(
+		existingEdgeRows.map((edge) => JSON.stringify([edge.canvasId, edge.fromItemId, edge.toItemId]))
+	);
+	const edgeUpserts: CanvasEdge[] = [];
 	for (const remoteEdge of desk.edges ?? []) {
 		const localCanvasId = idMap.get(remoteEdge.canvasId);
 		const fromLocal = itemIdMap.get(remoteEdge.fromItemId);
@@ -723,23 +865,22 @@ async function applyDeskIdbSnapshot(
 			edgesSkipped += 1;
 			continue;
 		}
-		const existing = await db.canvasEdges
-			.where('[canvasId+fromItemId+toItemId]')
-			.equals([localCanvasId, fromLocal, toLocal])
-			.first();
-		if (existing) {
+		const edgeKey = JSON.stringify([localCanvasId, fromLocal, toLocal]);
+		if (edgeKeys.has(edgeKey)) {
 			edgesSkipped += 1;
 			continue;
 		}
-		await db.canvasEdges.put({
+		edgeUpserts.push({
 			id: newId(),
 			canvasId: localCanvasId,
 			fromItemId: fromLocal,
 			toItemId: toLocal,
 			created: remoteEdge.created
 		});
+		edgeKeys.add(edgeKey);
 		edgesUpserted += 1;
 	}
+	if (edgeUpserts.length > 0) await db.canvasEdges.bulkPut(edgeUpserts);
 
 	const remappedDismissed: DismissedByCanvas = {};
 	for (const [remoteCanvasId, noteIds] of Object.entries(desk.dismissed)) {
@@ -793,17 +934,21 @@ export async function persistMergedSync(
 	let operationsUpserted = 0;
 	let blobsUpserted = 0;
 	const deletedIds = plainNotes.filter((n) => n.deletedAt != null).map((n) => n.id);
-
-	// Blobs first so note refs resolve after import (outside nested note tx is fine).
-	blobsUpserted = await persistSyncBlobs(blobs);
+	const deletedSet = new Set(deletedIds);
+	// Decode before opening the transaction; persist pixels atomically with their note references.
+	const decodedBlobs = decodeSyncBlobs(blobs);
 
 	await db.transaction(
 		'rw',
 		[db.notes, db.canvases, db.canvasItems, db.canvasEdges, db.operations, db.noteBlobs],
 		async () => {
 			const operationIdMap = new Map<string, string>();
-			for (const operation of operations) {
-				const existing = await db.operations.get(operation.id);
+			const existingOperations = await db.operations.bulkGet(
+				operations.map((operation) => operation.id)
+			);
+			for (let index = 0; index < operations.length; index++) {
+				const operation = operations[index]!;
+				const existing = existingOperations[index];
 				if (existing && sessionId && existing.sessionId !== sessionId) {
 					operationIdMap.set(operation.id, newId());
 				}
@@ -813,24 +958,28 @@ export async function persistMergedSync(
 					note.operationId = operationIdMap.get(note.operationId);
 				}
 			}
+			if (decodedBlobs.length > 0) {
+				await db.noteBlobs.bulkPut(decodedBlobs);
+				blobsUpserted = decodedBlobs.length;
+			}
 			await db.notes.bulkPut(plainNotes);
-			for (const operation of operations) {
-				const mapped: Operation = {
+			const mappedOperations = operations.map(
+				(operation): Operation => ({
 					...operation,
 					id: operationIdMap.get(operation.id) ?? operation.id,
 					sessionId: sessionId ?? operation.sessionId,
 					inputNoteIds: [...operation.inputNoteIds],
 					outputNoteIds: [...operation.outputNoteIds],
 					...(operation.payload ? { payload: { ...operation.payload } } : {})
-				};
-				await db.operations.put(mapped);
-				operationsUpserted++;
+				})
+			);
+			if (mappedOperations.length > 0) {
+				await db.operations.bulkPut(mappedOperations);
+				operationsUpserted = mappedOperations.length;
 			}
-			for (const id of deletedIds) {
-				await stripCanvasForDeletedNote(id);
-			}
+			await stripCanvasForDeletedNotes(deletedIds);
 			if (desk) {
-				const activeIds = new Set([...knownNoteIds].filter((id) => !deletedIds.includes(id)));
+				const activeIds = new Set([...knownNoteIds].filter((id) => !deletedSet.has(id)));
 				const result = await applyDeskIdbSnapshot(desk, activeIds, sessionId);
 				const { remappedDismissed: remapped, ...summary } = result;
 				deskSummary = summary;

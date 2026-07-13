@@ -1,0 +1,43 @@
+name: Workflow improvement
+description: Propose an improvement to Mash's local intake → manipulation → takeaway workflow.
+title: '[Workflow]: '
+labels: ['enhancement']
+body:
+  - type: textarea
+    id: material
+    attributes:
+      label: What material are you bringing into Mash?
+      placeholder: Meeting notes, a folder of Markdown, a PDF, screenshots, a copied table…
+    validations:
+      required: true
+
+  - type: textarea
+    id: task
+    attributes:
+      label: What do you need to do with it?
+      description: Describe the workflow problem rather than only the proposed control or feature.
+    validations:
+      required: true
+
+  - type: textarea
+    id: result
+    attributes:
+      label: What useful result should leave Mash?
+      placeholder: Clean Markdown, ordered cards, a comparison, a printable board…
+    validations:
+      required: true
+
+  - type: textarea
+    id: current-alternative
+    attributes:
+      label: How do you handle this today?
+
+  - type: checkboxes
+    id: fit
+    attributes:
+      label: Product fit
+      options:
+        - label: This can remain local-first and useful without an account.
+          required: true
+        - label: The proposed behavior can be explained and reversed when it changes existing work.
+          required: true

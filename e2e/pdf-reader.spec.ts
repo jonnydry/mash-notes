@@ -47,7 +47,7 @@ test('returns to a live PDF session without rereading the file', async ({ page }
 	await reader.getByRole('button', { name: 'Next page' }).click();
 	const selectedSpan = page.locator('.textLayer span').filter({ hasText: 'Second page excerpt' });
 	await expect(selectedSpan).toBeVisible();
-	const pdfCanvas = reader.getByLabel('PDF page 2');
+	const pdfCanvas = reader.getByLabel('PDF page 2', { exact: true });
 	const widthBeforeZoom = await pdfCanvas.evaluate(
 		(canvas) => canvas.getBoundingClientRect().width
 	);
@@ -58,16 +58,18 @@ test('returns to a live PDF session without rereading the file', async ({ page }
 		.poll(() => pdfCanvas.evaluate((canvas) => canvas.getBoundingClientRect().width))
 		.toBeGreaterThan(widthBeforeZoom * 1.05);
 
-	await selectedSpan.evaluate((span) => {
+	const selectedText = await selectedSpan.evaluate((span) => {
 		const selection = window.getSelection();
 		const range = document.createRange();
 		range.selectNodeContents(span);
 		selection?.removeAllRanges();
 		selection?.addRange(range);
-		span
-			.closest('.mash-pdf-stage')
-			?.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+		return selection?.toString() ?? '';
 	});
+	expect(selectedText).toContain('Second page excerpt');
+	await reader
+		.getByRole('region', { name: 'PDF page viewport' })
+		.dispatchEvent('pointerup', { bubbles: true });
 	await reader.getByRole('button', { name: 'Save excerpt' }).click();
 	await expect(reader.getByText('1 saved from this PDF', { exact: true })).toBeVisible();
 

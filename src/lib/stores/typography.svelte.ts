@@ -3,6 +3,8 @@
  * Default "kitchen" matches the original Mash look (Plex + Fraunces).
  */
 
+import { SvelteSet } from 'svelte/reactivity';
+
 export type TypographySuiteId =
 	| 'kitchen'
 	| 'editor'
@@ -122,7 +124,7 @@ export function readStoredTextSize(): TextSizeId {
 	return 'comfortable';
 }
 
-const loadedFontSuites = new Set<TypographySuiteId>(['kitchen']);
+const loadedFontSuites = new SvelteSet<TypographySuiteId>(['kitchen']);
 
 /** Lazy-load non-default suite font faces so initial CSS stays small. */
 export async function ensureTypographyFonts(id: TypographySuiteId): Promise<void> {

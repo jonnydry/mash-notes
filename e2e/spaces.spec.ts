@@ -11,16 +11,15 @@ async function setNoteFolder(page: import('@playwright/test').Page, folder: stri
 
 async function openFolderSpace(page: import('@playwright/test').Page, folder: string) {
 	await page.getByRole('button', { name: 'Folders' }).click();
-	const peel = page.getByRole('complementary', { name: 'Note scanner' });
+	const peel = page.getByRole('complementary', { name: 'Ingredients' });
 	await expect(peel).toBeVisible();
 	await peel.getByRole('button', { name: folder, exact: true }).click();
-	// With any non-Desk board open, the chip becomes Screenplay + mascot.
-	await expect(page.getByRole('button', { name: 'Show Screenplay' })).toContainText('Screenplay', {
+	await expect(page.getByRole('button', { name: 'Open desks' })).toContainText(folder, {
 		timeout: 10_000
 	});
 }
 
-test.describe('Screenplay', () => {
+test.describe('Open desks', () => {
 	test('open folder boards, switch via overview, close board', async ({ page }) => {
 		test.setTimeout(90_000);
 		await wipeIndexedDb(page);
@@ -45,8 +44,8 @@ test.describe('Screenplay', () => {
 			timeout: 10_000
 		});
 
-		await page.getByRole('button', { name: 'Show Screenplay' }).click();
-		const dialog = page.getByRole('dialog', { name: 'Screenplay' });
+		await page.getByRole('button', { name: 'Open desks' }).click();
+		const dialog = page.getByRole('dialog', { name: 'Open desks' });
 		await expect(dialog).toBeVisible();
 		await expect(dialog.locator('.mash-spaces-header-mascot')).toBeVisible();
 		await expect(dialog.getByRole('button', { name: 'Switch to Desk' })).toBeVisible();
@@ -56,24 +55,21 @@ test.describe('Screenplay', () => {
 		await dialog.getByRole('button', { name: 'Switch to SpaceAlpha' }).click();
 
 		await expect(dialog).toBeHidden({ timeout: 5_000 });
-		await expect(page.getByRole('button', { name: 'Show Screenplay' })).toContainText(
-			'Screenplay',
-			{
-				timeout: 10_000
-			}
-		);
+		await expect(page.getByRole('button', { name: 'Open desks' })).toContainText('SpaceAlpha', {
+			timeout: 10_000
+		});
 		await expect(page.getByRole('group', { name: 'Space Alpha Note' })).toBeVisible({
 			timeout: 10_000
 		});
 
 		await page.waitForTimeout(700);
-		await page.getByRole('button', { name: 'Show Screenplay' }).click();
+		await page.getByRole('button', { name: 'Open desks' }).click();
 		await expect(dialog).toBeVisible();
 		await dialog.getByRole('button', { name: 'Close SpaceBeta board' }).click();
 		await expect(dialog.getByRole('button', { name: 'Switch to SpaceBeta' })).toHaveCount(0);
 		await expect(dialog.getByRole('button', { name: 'Switch to SpaceAlpha' })).toBeVisible();
 
-		await dialog.getByRole('button', { name: 'Close Screenplay' }).click();
+		await dialog.getByRole('button', { name: 'Close open desks' }).click();
 		await expect(dialog).toBeHidden();
 	});
 });

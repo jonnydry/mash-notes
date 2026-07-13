@@ -12,7 +12,7 @@ test.describe('Mobile canvas controls', () => {
 
 		// Desks entry is under More on mobile (Finish-only header)
 		await page.getByRole('button', { name: 'More navigation' }).click();
-		await page.locator('.mash-dock-more-menu').getByRole('button', { name: 'Desks' }).click();
+		await page.locator('.mash-dock-more-menu').getByRole('menuitem', { name: 'Desks' }).click();
 		const closeTarget = await page
 			.getByRole('dialog', { name: 'Your desks' })
 			.getByRole('button', { name: 'Close desk panel' })
@@ -45,8 +45,8 @@ test.describe('Mobile canvas controls', () => {
 
 		await page.getByRole('button', { name: 'More navigation' }).click();
 		const moreMenu = page.locator('.mash-dock-more-menu');
-		await expect(moreMenu.getByRole('button', { name: 'Settings' })).toBeVisible();
-		await expect(moreMenu.getByRole('button', { name: 'Folders' })).toBeVisible();
-		await expect(moreMenu.getByRole('button', { name: 'Desks' })).toBeVisible();
+		await expect(moreMenu.getByRole('menuitem', { name: 'Settings' })).toBeVisible();
+		await expect(moreMenu.getByRole('menuitem', { name: 'Folders' })).toBeVisible();
+		await expect(moreMenu.getByRole('menuitem', { name: 'Desks' })).toBeVisible();
 	});
 });

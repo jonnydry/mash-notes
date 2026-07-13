@@ -16,6 +16,10 @@ async function loadGifuct() {
 }
 
 export const GIF_EXPLODE_MAX_FRAMES = 36;
+const GIF_MAX_SOURCE_PIXELS = 16_777_216;
+const GIF_MAX_SOURCE_EDGE = 8192;
+const GIF_MAX_DECODED_PIXELS = 32_000_000;
+const GIF_MAX_FRAME_COUNT = 2000;
 
 export type GifExplodeMode = 'still' | 'frames';
 
@@ -24,6 +28,60 @@ type ParsedFrame = {
 	disposalType: number;
 	patch?: Uint8ClampedArray;
 };
+
+type ParsedGif = {
+	lsd?: { width?: number; height?: number };
+	frames?: Array<{
+		image?: {
+			descriptor?: { left?: number; top?: number; width?: number; height?: number };
+		};
+	}>;
+};
+
+function inspectParsedGif(
+	gif: ParsedGif
+): { width: number; height: number; frameCount: number } | null {
+	const width = gif.lsd?.width ?? 0;
+	const height = gif.lsd?.height ?? 0;
+	if (
+		!Number.isInteger(width) ||
+		!Number.isInteger(height) ||
+		width < 1 ||
+		height < 1 ||
+		width > GIF_MAX_SOURCE_EDGE ||
+		height > GIF_MAX_SOURCE_EDGE ||
+		width * height > GIF_MAX_SOURCE_PIXELS
+	) {
+		return null;
+	}
+	const imageFrames = (gif.frames ?? []).filter((frame) => frame.image?.descriptor);
+	if (imageFrames.length < 1 || imageFrames.length > GIF_MAX_FRAME_COUNT) return null;
+	let decodedPixels = 0;
+	for (const frame of imageFrames) {
+		const descriptor = frame.image?.descriptor;
+		const left = descriptor?.left ?? 0;
+		const top = descriptor?.top ?? 0;
+		const frameWidth = descriptor?.width ?? 0;
+		const frameHeight = descriptor?.height ?? 0;
+		if (
+			!Number.isInteger(left) ||
+			!Number.isInteger(top) ||
+			!Number.isInteger(frameWidth) ||
+			!Number.isInteger(frameHeight) ||
+			left < 0 ||
+			top < 0 ||
+			frameWidth < 1 ||
+			frameHeight < 1 ||
+			left + frameWidth > width ||
+			top + frameHeight > height
+		) {
+			return null;
+		}
+		decodedPixels += frameWidth * frameHeight;
+		if (decodedPixels > GIF_MAX_DECODED_PIXELS) return null;
+	}
+	return { width, height, frameCount: imageFrames.length };
+}
 
 export type GifInspectResult =
 	| {
@@ -73,7 +131,11 @@ export function sampleFrameIndices(total: number, max: number): number[] {
 	return [...new Set(indices)].slice(0, max);
 }
 
-export function gifFrameTitle(baseTitle: string, frameNumber: number, sourceFrameCount: number): string {
+export function gifFrameTitle(
+	baseTitle: string,
+	frameNumber: number,
+	sourceFrameCount: number
+): string {
 	const base = baseTitle.trim() || 'GIF';
 	if (sourceFrameCount <= 1) return base.slice(0, 200);
 	return `${base} · f. ${frameNumber}`.slice(0, 200);
@@ -131,19 +193,17 @@ export async function inspectGif(input: Blob): Promise<GifInspectResult> {
 		return { ok: false, error: 'too-large' };
 	}
 	try {
-		const { parseGIF, decompressFrames } = await loadGifuct();
+		const { parseGIF } = await loadGifuct();
 		const buffer = await input.arrayBuffer();
 		const gif = parseGIF(buffer);
-		const frames = decompressFrames(gif, true) as ParsedFrame[];
-		const width = gif.lsd?.width ?? frames[0]?.dims?.width ?? 0;
-		const height = gif.lsd?.height ?? frames[0]?.dims?.height ?? 0;
-		if (!frames.length || !width || !height) return { ok: false, error: 'undecodable' };
+		const inspected = inspectParsedGif(gif as ParsedGif);
+		if (!inspected) return { ok: false, error: 'undecodable' };
 		return {
 			ok: true,
-			animated: frames.length > 1,
-			frameCount: frames.length,
-			width,
-			height
+			animated: inspected.frameCount > 1,
+			frameCount: inspected.frameCount,
+			width: inspected.width,
+			height: inspected.height
 		};
 	} catch (error) {
 		console.error('inspectGif failed', error);
@@ -165,15 +225,17 @@ export async function explodeGifFrames(
 	const maxEdge = options?.maxEdge ?? DESK_IMAGE_MAX_EDGE;
 
 	let rawFrames: ParsedFrame[];
-	let fullW = 0;
-	let fullH = 0;
+	let fullW: number;
+	let fullH: number;
 	try {
 		const { parseGIF, decompressFrames } = await loadGifuct();
 		const buffer = await input.arrayBuffer();
 		const gif = parseGIF(buffer);
+		const inspected = inspectParsedGif(gif as ParsedGif);
+		if (!inspected) return { ok: false, error: 'undecodable' };
 		rawFrames = decompressFrames(gif, true) as ParsedFrame[];
-		fullW = gif.lsd?.width ?? 0;
-		fullH = gif.lsd?.height ?? 0;
+		fullW = inspected.width;
+		fullH = inspected.height;
 	} catch (error) {
 		console.error('explodeGifFrames failed', error);
 		return { ok: false, error: 'undecodable' };
@@ -221,11 +283,7 @@ export async function explodeGifFrames(
 		if (frame.patch && width > 0 && height > 0) {
 			patchCanvas.width = width;
 			patchCanvas.height = height;
-			const imageData = new ImageData(
-				new Uint8ClampedArray(frame.patch),
-				width,
-				height
-			);
+			const imageData = new ImageData(new Uint8ClampedArray(frame.patch), width, height);
 			patchCtx.putImageData(imageData, 0, 0);
 			ctx.drawImage(patchCanvas, left, top);
 		}
@@ -263,10 +321,17 @@ export async function draftsFromGif(
 	mode: 'still' | 'frames',
 	options?: { fileName?: string; caption?: string; maxFrames?: number }
 ): Promise<
-	| { ok: true; drafts: GifCardDraft[]; frameCount: number; importedFrames: number; sampled: boolean }
+	| {
+			ok: true;
+			drafts: GifCardDraft[];
+			frameCount: number;
+			importedFrames: number;
+			sampled: boolean;
+	  }
 	| { ok: false; error: 'too-large' | 'undecodable' | 'not-gif' | 'empty' }
 > {
-	const fileName = options?.fileName?.trim() || (input instanceof File ? input.name : 'animation.gif');
+	const fileName =
+		options?.fileName?.trim() || (input instanceof File ? input.name : 'animation.gif');
 	const baseTitle = imageTitleFromFileName(fileName);
 	const caption = options?.caption ?? '';
 
@@ -276,8 +341,7 @@ export async function draftsFromGif(
 	});
 	if (!exploded.ok) return { ok: false, error: exploded.error };
 
-	const frames =
-		mode === 'still' ? exploded.frames.slice(0, 1) : exploded.frames;
+	const frames = mode === 'still' ? exploded.frames.slice(0, 1) : exploded.frames;
 	const drafts: GifCardDraft[] = [];
 	for (const frame of frames) {
 		const dims = { width: frame.width, height: frame.height };

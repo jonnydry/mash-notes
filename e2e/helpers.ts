@@ -45,28 +45,36 @@ export async function wipeIndexedDb(page: Page) {
 	});
 }
 
-/** New note opens in the stage editor (primary surface). */
+/** New note expands on the canvas for quick entry. */
 export async function createNamedNote(page: Page, title: string, body: string) {
+	const closeIngredients = page.getByRole('button', { name: 'Close ingredients' });
+	if (await closeIngredients.isVisible().catch(() => false)) await closeIngredients.click();
 	await page.getByRole('button', { name: 'New note' }).click();
-	const stage = page.locator('.mash-editor-stage.is-open, .mash-editor-pane').first();
-	await expect(stage).toBeVisible({ timeout: 10_000 });
-	const titleInput = page.locator('.mash-editor-pane-titlebar input').first();
+	const card = page
+		.locator('[data-canvas-card]')
+		.filter({ has: page.locator('textarea.mash-sticky-body') })
+		.first();
+	await expect(card).toBeVisible({ timeout: 10_000 });
+	const titleInput = card.locator('input[type="text"]').first();
 	await expect(titleInput).toBeVisible({ timeout: 10_000 });
 	await titleInput.fill(title);
-	const bodyEl = page.locator('textarea.mash-sticky-body').first();
+	const bodyEl = card.locator('textarea.mash-sticky-body');
 	await expect(bodyEl).toBeVisible();
 	await bodyEl.fill(body);
 	// Blur so debounced sticky saves flush before the next action.
 	await bodyEl.blur();
 	await page.waitForTimeout(500);
-	await page.getByRole('button', { name: 'Collapse to canvas' }).click();
+	await card.getByRole('button', { name: 'Collapse sticky' }).click();
 	await expect(page.getByRole('group', { name: title })).toBeVisible({ timeout: 5_000 });
 	await page.waitForTimeout(400);
 }
 
 /** Open a note from the peel into the stage editor. */
 export async function openNoteInStage(page: Page, title: string) {
-	await page.getByRole('button', { name: 'Desk' }).click();
+	await page
+		.getByRole('navigation', { name: 'Mash dock' })
+		.getByRole('button', { name: 'Desk', exact: true })
+		.click();
 	const peel = page.getByRole('complementary', { name: 'Ingredients' });
 	await expect(peel).toBeVisible();
 	const row = peel.getByRole('option').filter({ hasText: title });
@@ -91,7 +99,10 @@ export async function openPalette(page: Page, query: string) {
 }
 
 export async function selectNotesInPeel(page: Page, titles: string[]) {
-	await page.getByRole('button', { name: 'Desk' }).click();
+	await page
+		.getByRole('navigation', { name: 'Mash dock' })
+		.getByRole('button', { name: 'Desk', exact: true })
+		.click();
 	const peel = page.getByRole('complementary', { name: 'Ingredients' });
 	await expect(peel).toBeVisible();
 	for (let i = 0; i < titles.length; i++) {
@@ -115,7 +126,12 @@ export async function dismissBlockingDialogs(page: Page) {
 	const alertdialog = page.getByRole('alertdialog');
 	if (await alertdialog.isVisible().catch(() => false)) {
 		const cancel = alertdialog.getByRole('button', { name: /Cancel|Close|Not now|Dismiss/i });
-		if (await cancel.first().isVisible().catch(() => false)) {
+		if (
+			await cancel
+				.first()
+				.isVisible()
+				.catch(() => false)
+		) {
 			await cancel.first().click();
 		} else {
 			await page.keyboard.press('Escape');
@@ -140,7 +156,7 @@ export async function openDesksPanel(page: Page) {
 	const more = page.getByRole('button', { name: 'More navigation' });
 	if (await more.isVisible()) {
 		await more.click();
-		await page.locator('.mash-dock-more-menu').getByRole('button', { name: 'Desks' }).click();
+		await page.locator('.mash-dock-more-menu').getByRole('menuitem', { name: 'Desks' }).click();
 	} else {
 		await page.getByRole('button', { name: 'Finish', exact: true }).click();
 		const finish = page.getByRole('dialog', { name: 'Finish this desk' });

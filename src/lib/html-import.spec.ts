@@ -17,9 +17,7 @@ describe('html-import', () => {
 
 	it('titles from filename and <title>', () => {
 		expect(htmlTitleFromFileName('notes.html')).toBe('notes');
-		expect(extractHtmlDocumentTitle('<html><title> Hello </title></html>', 'x.html')).toBe(
-			'Hello'
-		);
+		expect(extractHtmlDocumentTitle('<html><title> Hello </title></html>', 'x.html')).toBe('Hello');
 		expect(extractHtmlDocumentTitle('<html><body>no title</body></html>', 'brief.html')).toBe(
 			'brief'
 		);
@@ -35,6 +33,16 @@ describe('html-import', () => {
 		expect(cleaned).toContain('Ok');
 	});
 
+	it('keeps malformed active markup inert in the non-browser fallback', () => {
+		const cleaned = sanitizeHtmlFragment(
+			'<script>first()</script\t\n data-junk><scr<script>ipt>second()</scr</script>ipt>'
+		);
+		expect(cleaned.toLowerCase()).not.toContain('<script');
+		expect(cleaned.toLowerCase()).not.toContain('</script');
+		expect(cleaned).toContain('first()');
+		expect(cleaned).toContain('second()');
+	});
+
 	it('strips javascript and data href/src values', () => {
 		const cleaned = sanitizeHtmlFragment(
 			'<a href="javascript:alert(1)">x</a><a href="data:text/html,hi">y</a><a href="//evil.example">z</a><img src="data:image/png;base64,abc" />'
@@ -43,6 +51,25 @@ describe('html-import', () => {
 		expect(cleaned.toLowerCase()).not.toContain('href="data:');
 		expect(cleaned.toLowerCase()).not.toContain('href="//evil');
 		expect(cleaned.toLowerCase()).not.toContain('src="data:');
+	});
+
+	it('blocks automatic remote loads and presentation attributes', () => {
+		const cleaned = sanitizeHtmlFragment(
+			'<img src="https://tracker.example/pixel"><p style="background:url(https://tracker.example/x)" class="fake-ui">Text</p>'
+		);
+		expect(cleaned).not.toContain('tracker.example');
+		expect(cleaned).not.toContain('style=');
+		expect(cleaned).not.toContain('class=');
+		expect(cleaned).toContain('Text');
+	});
+
+	it('removes active foreign markup while retaining ordinary text', () => {
+		const cleaned = sanitizeHtmlFragment(
+			'<custom-card>Readable</custom-card><svg><a href="javascript:alert(1)"><text>x</text></a></svg>'
+		);
+		expect(cleaned).toContain('Readable');
+		expect(cleaned.toLowerCase()).not.toContain('<svg');
+		expect(cleaned.toLowerCase()).not.toContain('javascript:');
 	});
 
 	it('allows safe raster data images only when explicitly requested', () => {

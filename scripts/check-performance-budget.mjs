@@ -9,6 +9,7 @@ const deferredEntryNames = new Set([
 	'PdfReader',
 	'board-image-export',
 	'gifuct-js',
+	'image-headers',
 	'DocxReader',
 	'HtmlReader',
 	'SettingsPanel',

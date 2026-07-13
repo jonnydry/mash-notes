@@ -14,32 +14,33 @@
 
 ## File map
 
-| File | Responsibility |
-|------|----------------|
-| `src/lib/external-file-drop.ts` | Classify `.docx` / Office MIME; partition `docxFiles` |
-| `src/lib/external-file-drop.spec.ts` | Detection + batch tests |
-| `src/lib/docx-import.ts` | Size guard, title, mammoth → HTML (images omitted) |
-| `src/lib/docx-import.spec.ts` | Conversion success/fail cases |
-| `src/lib/docx-clipping.ts` | Excerpt normalize/title helpers + clip types |
-| `src/lib/docx-clipping.spec.ts` | Title/excerpt unit tests |
-| `src/lib/types.ts` | `NoteSource` union includes docx |
-| `src/lib/import-notes.ts` | Validate `source.kind === 'docx'` on JSON import |
-| `src/lib/import-notes.spec.ts` | Provenance round-trip |
+| File                                            | Responsibility                                                            |
+| ----------------------------------------------- | ------------------------------------------------------------------------- |
+| `src/lib/external-file-drop.ts`                 | Classify `.docx` / Office MIME; partition `docxFiles`                     |
+| `src/lib/external-file-drop.spec.ts`            | Detection + batch tests                                                   |
+| `src/lib/docx-import.ts`                        | Size guard, title, mammoth → HTML (images omitted)                        |
+| `src/lib/docx-import.spec.ts`                   | Conversion success/fail cases                                             |
+| `src/lib/docx-clipping.ts`                      | Excerpt normalize/title helpers + clip types                              |
+| `src/lib/docx-clipping.spec.ts`                 | Title/excerpt unit tests                                                  |
+| `src/lib/types.ts`                              | `NoteSource` union includes docx                                          |
+| `src/lib/import-notes.ts`                       | Validate `source.kind === 'docx'` on JSON import                          |
+| `src/lib/import-notes.spec.ts`                  | Provenance round-trip                                                     |
 | `src/lib/components/DocumentReaderShell.svelte` | Shared overlay chrome (header shell, clippings rail, loading/error slots) |
-| `src/lib/components/PdfReader.svelte` | Refactor to use shell; keep PDF stage + region crop |
-| `src/lib/components/DocxReader.svelte` | HTML stage + text selection → clip |
-| `src/lib/lazy-docx-reader.ts` | Dynamic import boundary |
-| `src/routes/+page.svelte` | State, drop, save clip, palette, hidden input, return chip |
-| `src/lib/components/SettingsPanel.svelte` | “Open Word document…” action |
-| `e2e/docx-reader.spec.ts` | Open reader + clip excerpt |
-| `README.md` | One-line feature mention |
-| `package.json` | `mammoth` dependency |
+| `src/lib/components/PdfReader.svelte`           | Refactor to use shell; keep PDF stage + region crop                       |
+| `src/lib/components/DocxReader.svelte`          | HTML stage + text selection → clip                                        |
+| `src/lib/lazy-docx-reader.ts`                   | Dynamic import boundary                                                   |
+| `src/routes/+page.svelte`                       | State, drop, save clip, palette, hidden input, return chip                |
+| `src/lib/components/SettingsPanel.svelte`       | “Open Word document…” action                                              |
+| `e2e/docx-reader.spec.ts`                       | Open reader + clip excerpt                                                |
+| `README.md`                                     | One-line feature mention                                                  |
+| `package.json`                                  | `mammoth` dependency                                                      |
 
 ---
 
 ### Task 1: Classify docx in external file drops
 
 **Files:**
+
 - Modify: `src/lib/external-file-drop.ts`
 - Modify: `src/lib/external-file-drop.spec.ts`
 
@@ -194,6 +195,7 @@ git commit -m "feat: classify docx files in external drops"
 ### Task 2: mammoth conversion module
 
 **Files:**
+
 - Create: `src/lib/docx-import.ts`
 - Create: `src/lib/docx-import.spec.ts`
 - Modify: `package.json` / lockfile via npm
@@ -235,10 +237,7 @@ async function minimalDocxBuffer(paragraphText: string): Promise<ArrayBuffer> {
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
 </Relationships>`
 	);
-	const escaped = paragraphText
-		.replace(/&/g, '&amp;')
-		.replace(/</g, '&lt;')
-		.replace(/>/g, '&gt;');
+	const escaped = paragraphText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 	zip.folder('word')?.file(
 		'document.xml',
 		`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -394,6 +393,7 @@ git commit -m "feat: convert docx to HTML with mammoth"
 ### Task 3: Note source + clip helpers
 
 **Files:**
+
 - Modify: `src/lib/types.ts`
 - Modify: `src/lib/import-notes.ts`
 - Modify: `src/lib/import-notes.spec.ts`
@@ -405,26 +405,26 @@ git commit -m "feat: convert docx to HTML with mammoth"
 Add to `src/lib/import-notes.spec.ts`:
 
 ```ts
-	it('preserves validated docx provenance', () => {
-		const json = JSON.stringify([
-			{
-				id: 'docx-note',
-				title: 'Useful excerpt',
-				body: 'Selected text',
-				folder: '',
-				tags: ['docx-clipping'],
-				created: 1,
-				modified: 2,
-				pinned: 0,
-				source: { kind: 'docx', title: 'brief.docx' }
-			}
-		]);
-		const result = parseNotesJson(json);
-		expect(result.ok).toBe(true);
-		if (result.ok) {
-			expect(result.notes[0].source).toEqual({ kind: 'docx', title: 'brief.docx' });
+it('preserves validated docx provenance', () => {
+	const json = JSON.stringify([
+		{
+			id: 'docx-note',
+			title: 'Useful excerpt',
+			body: 'Selected text',
+			folder: '',
+			tags: ['docx-clipping'],
+			created: 1,
+			modified: 2,
+			pinned: 0,
+			source: { kind: 'docx', title: 'brief.docx' }
 		}
-	});
+	]);
+	const result = parseNotesJson(json);
+	expect(result.ok).toBe(true);
+	if (result.ok) {
+		expect(result.notes[0].source).toEqual({ kind: 'docx', title: 'brief.docx' });
+	}
+});
 ```
 
 Create `src/lib/docx-clipping.spec.ts`:
@@ -472,25 +472,25 @@ export type NoteSource =
 In `src/lib/import-notes.ts`, replace the `source` block inside `normalizeImportedNote` with:
 
 ```ts
-	const sourceRaw = isRecord(raw.source) ? raw.source : null;
-	let source: Note['source'] | undefined;
-	if (
-		sourceRaw?.kind === 'pdf' &&
-		typeof sourceRaw.title === 'string' &&
-		typeof sourceRaw.page === 'number' &&
-		Number.isFinite(sourceRaw.page)
-	) {
-		source = {
-			kind: 'pdf',
-			title: sourceRaw.title.trim().slice(0, 300),
-			page: Math.max(1, Math.floor(sourceRaw.page))
-		};
-	} else if (sourceRaw?.kind === 'docx' && typeof sourceRaw.title === 'string') {
-		source = {
-			kind: 'docx',
-			title: sourceRaw.title.trim().slice(0, 300) || 'Untitled document'
-		};
-	}
+const sourceRaw = isRecord(raw.source) ? raw.source : null;
+let source: Note['source'] | undefined;
+if (
+	sourceRaw?.kind === 'pdf' &&
+	typeof sourceRaw.title === 'string' &&
+	typeof sourceRaw.page === 'number' &&
+	Number.isFinite(sourceRaw.page)
+) {
+	source = {
+		kind: 'pdf',
+		title: sourceRaw.title.trim().slice(0, 300),
+		page: Math.max(1, Math.floor(sourceRaw.page))
+	};
+} else if (sourceRaw?.kind === 'docx' && typeof sourceRaw.title === 'string') {
+	source = {
+		kind: 'docx',
+		title: sourceRaw.title.trim().slice(0, 300) || 'Untitled document'
+	};
+}
 ```
 
 (Keep the rest of the return object using `source` as today.)
@@ -536,6 +536,7 @@ git commit -m "feat: docx note source and clipping helpers"
 ### Task 4: Extract `DocumentReaderShell` and refactor `PdfReader`
 
 **Files:**
+
 - Create: `src/lib/components/DocumentReaderShell.svelte`
 - Modify: `src/lib/components/PdfReader.svelte`
 
@@ -621,6 +622,7 @@ git commit -m "refactor: extract shared document reader shell"
 ### Task 5: `DocxReader` component + lazy loader
 
 **Files:**
+
 - Create: `src/lib/components/DocxReader.svelte`
 - Create: `src/lib/lazy-docx-reader.ts`
 
@@ -692,6 +694,7 @@ git commit -m "feat: add DocxReader with text excerpts"
 ### Task 6: Wire page, Settings, palette, drop handler
 
 **Files:**
+
 - Modify: `src/routes/+page.svelte`
 - Modify: `src/lib/components/SettingsPanel.svelte`
 
@@ -704,7 +707,12 @@ In `SettingsPanel.svelte`:
 
 ```svelte
 {#if onOpenDocx}
-	<button type="button" class="mash-settings-action" data-testid="settings-open-docx" onclick={onOpenDocx}>
+	<button
+		type="button"
+		class="mash-settings-action"
+		data-testid="settings-open-docx"
+		onclick={onOpenDocx}
+	>
 		Open Word document…
 	</button>
 {/if}
@@ -788,16 +796,13 @@ async function saveDocxClipping(excerpt: { text: string }) {
 	});
 	// follow same library refresh / search indexing as savePdfClipping
 	// (copy the pattern from savePdfClipping for adding to library + toast)
-	docxClippings = [
-		...docxClippings,
-		{ id: crypto.randomUUID(), noteId: note.id, text }
-	];
+	docxClippings = [...docxClippings, { id: crypto.randomUUID(), noteId: note.id, text }];
 	flashToast('Saved excerpt from Word document');
 }
 
 async function openDocxClippingsOnCanvas(noteIds: string[]) {
 	// same as openPdfClippingsOnCanvas
-	await canvas.handleDropNotes(noteIds, /* spawn center or same helper */);
+	await canvas.handleDropNotes(noteIds /* spawn center or same helper */);
 	docxReaderOpen = false;
 	flashToast(`Opened ${noteIds.length} clipping${noteIds.length === 1 ? '' : 's'} on canvas`);
 }
@@ -891,7 +896,10 @@ Mount reader near PDF mount:
 	{/key}
 {:else if docxReaderOpen && docxReaderModuleLoading}
 	<section class="mash-pdf-reader" aria-label="Word document reader">
-		<div class="flex h-full items-center justify-center text-sm" style="color: var(--mash-ink-muted);">
+		<div
+			class="flex h-full items-center justify-center text-sm"
+			style="color: var(--mash-ink-muted);"
+		>
 			Loading Word document tools…
 		</div>
 	</section>
@@ -911,10 +919,10 @@ Fix any `NoteSource` exhaustiveness in `board-image-export.ts` / sync conflict m
 ```ts
 // board-image-export.ts — extend subtitle helper:
 note.source?.kind === 'pdf'
-  ? `${note.source.title} · p. ${note.source.page}`
-  : note.source?.kind === 'docx'
-    ? note.source.title
-    : undefined
+	? `${note.source.title} · p. ${note.source.page}`
+	: note.source?.kind === 'docx'
+		? note.source.title
+		: undefined;
 ```
 
 Check `note-library.svelte.ts` PDF source merge (~749) and extend for docx if it special-cases source kind.
@@ -931,6 +939,7 @@ git commit -m "feat: wire docx reader into drop, settings, and palette"
 ### Task 7: E2E + README
 
 **Files:**
+
 - Create: `e2e/docx-reader.spec.ts`
 - Modify: `README.md`
 - Optionally extend: `e2e/file-drop.spec.ts` for toast copy
@@ -962,10 +971,7 @@ async function minimalDocxBuffer(paragraphText: string): Promise<Buffer> {
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
 </Relationships>`
 	);
-	const escaped = paragraphText
-		.replace(/&/g, '&amp;')
-		.replace(/</g, '&lt;')
-		.replace(/>/g, '&gt;');
+	const escaped = paragraphText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 	zip.folder('word')?.file(
 		'document.xml',
 		`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -1045,19 +1051,19 @@ git commit -m "test: e2e coverage for docx reader and clips"
 
 ## Self-review (plan vs spec)
 
-| Spec requirement | Task |
-|------------------|------|
-| Classify `.docx` + MIME | Task 1 |
-| Pages unsupported | Task 1 tests |
-| mammoth convert, 8MB, no images | Task 2 |
-| NoteSource docx + import validation | Task 3 |
-| Shared DocumentReaderShell | Task 4 |
-| DocxReader view + text clip | Task 5 |
-| Drop / palette / Settings | Task 6 |
-| Mixed drop PDF-before-docx | Task 6 |
-| Toast copy update | Task 6 |
-| E2E + README | Task 7 |
-| PDF regression | Tasks 4, 7 |
+| Spec requirement                    | Task         |
+| ----------------------------------- | ------------ |
+| Classify `.docx` + MIME             | Task 1       |
+| Pages unsupported                   | Task 1 tests |
+| mammoth convert, 8MB, no images     | Task 2       |
+| NoteSource docx + import validation | Task 3       |
+| Shared DocumentReaderShell          | Task 4       |
+| DocxReader view + text clip         | Task 5       |
+| Drop / palette / Settings           | Task 6       |
+| Mixed drop PDF-before-docx          | Task 6       |
+| Toast copy update                   | Task 6       |
+| E2E + README                        | Task 7       |
+| PDF regression                      | Tasks 4, 7   |
 
 No Pages implementation (deferred). No region crop for docx. No DOMPurify.
 

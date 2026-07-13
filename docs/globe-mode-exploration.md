@@ -120,13 +120,13 @@ For extremely sparse or pathological layouts, fall back to deterministic Fibonac
 
 ## Rendering options
 
-| Approach | Strengths | Weaknesses | Verdict |
-|---|---|---|---|
-| CSS 3D transforms | Reuses DOM and Svelte event handling; quick for a tiny spike | Poor occlusion, many composited layers, awkward back-face behavior, full cards become illegible | Useful only for an early visual experiment |
-| Canvas 2D with custom sphere projection | Small dependency footprint; total visual control | Manual depth sorting, picking, camera math, clipping, and effects; becomes a home-grown 3D engine | Not worth the maintenance |
-| PixiJS | Excellent high-volume 2D rendering and custom shaders | Its perspective mesh is still fundamentally 2D; true orbiting, depth, and spherical picking require custom work | Better for a warped-disc illusion, not this feature |
-| Three.js directly | Mature camera, raycasting, instancing, lines, shaders, and controls; easy to isolate | Imperative lifecycle must be bridged carefully into Svelte | **Recommended** |
-| Threlte on Three.js | Svelte-native composition and interactivity; attractive if 3D becomes a product platform | Adds an abstraction and more packages for one isolated scene; may encourage component-per-node rendering | Reconsider if Globe grows beyond one renderer |
+| Approach                                | Strengths                                                                                | Weaknesses                                                                                                      | Verdict                                             |
+| --------------------------------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| CSS 3D transforms                       | Reuses DOM and Svelte event handling; quick for a tiny spike                             | Poor occlusion, many composited layers, awkward back-face behavior, full cards become illegible                 | Useful only for an early visual experiment          |
+| Canvas 2D with custom sphere projection | Small dependency footprint; total visual control                                         | Manual depth sorting, picking, camera math, clipping, and effects; becomes a home-grown 3D engine               | Not worth the maintenance                           |
+| PixiJS                                  | Excellent high-volume 2D rendering and custom shaders                                    | Its perspective mesh is still fundamentally 2D; true orbiting, depth, and spherical picking require custom work | Better for a warped-disc illusion, not this feature |
+| Three.js directly                       | Mature camera, raycasting, instancing, lines, shaders, and controls; easy to isolate     | Imperative lifecycle must be bridged carefully into Svelte                                                      | **Recommended**                                     |
+| Threlte on Three.js                     | Svelte-native composition and interactivity; attractive if 3D becomes a product platform | Adds an abstraction and more packages for one isolated scene; may encourage component-per-node rendering        | Reconsider if Globe grows beyond one renderer       |
 
 Three.js already supplies the pieces this concept needs: `OrbitControls` for rotation/dolly, `Raycaster` for picking, `InstancedMesh` for many repeated note nodes, and `Points` for the background dot sphere. Its WebGL renderer now targets WebGL 2. Threlte is compatible with Svelte 5 and wraps the same scene graph, but the current Mash canvas is already interaction-heavy and imperative; a direct adapter is the smaller architectural commitment.
 
@@ -166,11 +166,11 @@ Lazy-load Three.js only when Globe is first entered so the normal note-taking pa
 
 The renderer should have three distance bands:
 
-| Distance | Visible detail |
-|---|---|
-| Orbit | Dot sphere, bowl clusters/counts, selected pin |
-| Explore | Individual note pins, bowl washes, hovered title |
-| Inspect | Nearby labels, selected preview, relevant sequence arcs |
+| Distance | Visible detail                                          |
+| -------- | ------------------------------------------------------- |
+| Orbit    | Dot sphere, bowl clusters/counts, selected pin          |
+| Explore  | Individual note pins, bowl washes, hovered title        |
+| Inspect  | Nearby labels, selected preview, relevant sequence arcs |
 
 Use one `InstancedMesh` per visual class/material, not one Three.js mesh per note. `Raycaster` reports the selected `instanceId`, which maps back to a canvas item. Use a point cloud for ambient grid dots. Keep text in a sparse DOM overlay rather than generating a texture for every title.
 

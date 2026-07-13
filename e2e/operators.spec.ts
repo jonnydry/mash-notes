@@ -69,7 +69,7 @@ test.describe('Set operators', () => {
 		);
 
 		await openPalette(page, 'Shuffle selected cards');
-		const paletteShuffle = page.getByRole('button', { name: 'Shuffle selected cards' });
+		const paletteShuffle = page.getByRole('option', { name: 'Shuffle selected cards' });
 		await expect(paletteShuffle).toBeVisible();
 		await paletteShuffle.click();
 		await expect(page.getByTestId('action-status')).toContainText('Shuffle');

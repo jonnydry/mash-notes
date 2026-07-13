@@ -35,10 +35,7 @@ export function peelScopeCounts(notes: readonly Note[]): PeelScopeCounts {
 	return { desk, kept, total: desk + kept };
 }
 
-export function filterNotesByPeelScope(
-	notes: readonly Note[],
-	scope: PeelScopeFilter
-): Note[] {
+export function filterNotesByPeelScope(notes: readonly Note[], scope: PeelScopeFilter): Note[] {
 	if (scope === 'desk') return notes.filter(isDeskIngredient);
 	if (scope === 'kept') return notes.filter(isKeptPantryNote);
 	return [...notes];

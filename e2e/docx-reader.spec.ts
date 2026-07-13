@@ -20,10 +20,7 @@ async function minimalDocxBuffer(paragraphText: string): Promise<Buffer> {
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
 </Relationships>`
 	);
-	const escaped = paragraphText
-		.replace(/&/g, '&amp;')
-		.replace(/</g, '&lt;')
-		.replace(/>/g, '&gt;');
+	const escaped = paragraphText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 	zip.folder('word')?.file(
 		'document.xml',
 		`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -87,9 +84,7 @@ test('opens a Word document and saves a text excerpt', async ({ page }) => {
 		range.selectNodeContents(textHost);
 		selection?.removeAllRanges();
 		selection?.addRange(range);
-		el
-			.closest('.mash-docx-stage')
-			?.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+		el.closest('.mash-docx-stage')?.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
 	});
 
 	await reader.getByRole('button', { name: 'Save excerpt' }).click();

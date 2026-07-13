@@ -25,10 +25,7 @@ async function minimalDocxBuffer(paragraphText: string): Promise<ArrayBuffer> {
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
 </Relationships>`
 	);
-	const escaped = paragraphText
-		.replace(/&/g, '&amp;')
-		.replace(/</g, '&lt;')
-		.replace(/>/g, '&gt;');
+	const escaped = paragraphText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 	zip.folder('word')?.file(
 		'document.xml',
 		`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -44,7 +41,10 @@ async function minimalDocxBuffer(paragraphText: string): Promise<ArrayBuffer> {
 }
 
 /** Minimal OOXML package with paragraph text plus an embedded inline PNG. */
-async function minimalDocxWithImageBuffer(paragraphText: string): Promise<ArrayBuffer> {
+async function minimalDocxWithImageBuffer(
+	paragraphText: string,
+	imageBytes = Buffer.from(TINY_PNG_BASE64, 'base64')
+): Promise<ArrayBuffer> {
 	const JSZip = (await import('jszip')).default;
 	const zip = new JSZip();
 	zip.file(
@@ -64,10 +64,7 @@ async function minimalDocxWithImageBuffer(paragraphText: string): Promise<ArrayB
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
 </Relationships>`
 	);
-	const escaped = paragraphText
-		.replace(/&/g, '&amp;')
-		.replace(/</g, '&lt;')
-		.replace(/>/g, '&gt;');
+	const escaped = paragraphText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 	const word = zip.folder('word');
 	word?.file(
 		'document.xml',
@@ -121,7 +118,7 @@ async function minimalDocxWithImageBuffer(paragraphText: string): Promise<ArrayB
   <Relationship Id="rIdImage" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image1.png"/>
 </Relationships>`
 	);
-	word?.folder('media')?.file('image1.png', Buffer.from(TINY_PNG_BASE64, 'base64'));
+	word?.folder('media')?.file('image1.png', imageBytes);
 	const bytes = await zip.generateAsync({ type: 'arraybuffer' });
 	return bytes;
 }
@@ -158,6 +155,21 @@ describe('docx-import', () => {
 		const result = await convertDocxToHtml(buffer, 'image-only.docx');
 		expect(result.ok).toBe(true);
 		if (result.ok) expect(result.html).toContain('data:image/png;base64,');
+	});
+
+	it('omits embedded raster images whose declared dimensions are unsafe', async () => {
+		const oversizedPngHeader = Buffer.alloc(24);
+		Buffer.from([0x89, 0x50, 0x4e, 0x47]).copy(oversizedPngHeader, 0);
+		Buffer.from('IHDR').copy(oversizedPngHeader, 12);
+		oversizedPngHeader.writeUInt32BE(20_000, 16);
+		oversizedPngHeader.writeUInt32BE(20_000, 20);
+		const buffer = await minimalDocxWithImageBuffer('Safe text remains', oversizedPngHeader);
+		const result = await convertDocxToHtml(buffer, 'oversized-image.docx');
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(result.html).toContain('Safe text remains');
+			expect(result.html).not.toMatch(/<img/i);
+		}
 	});
 
 	it('rejects oversized files', async () => {

@@ -87,10 +87,7 @@ function normalizeForSearch(s: string): string {
 export function bodyForSearchIndex(body: string, maxChars = 8_000): string {
 	if (!body) return '';
 	// Fast path: embedded visual sticky / PDF clip — index alt + caption only.
-	if (
-		body.startsWith('![') &&
-		(body.includes('data:image') || body.includes('mash-blob:'))
-	) {
+	if (body.startsWith('![') && (body.includes('data:image') || body.includes('mash-blob:'))) {
 		const close = body.indexOf(')');
 		const altEnd = body.indexOf('](');
 		const alt = altEnd > 2 ? body.slice(2, altEnd) : '';

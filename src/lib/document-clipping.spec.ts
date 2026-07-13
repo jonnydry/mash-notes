@@ -64,9 +64,7 @@ describe('document clipping drafts', () => {
 	});
 
 	it('buildPdfClippingDraft returns null for blank text without image', async () => {
-		expect(
-			await buildPdfClippingDraft(file('paper.pdf'), { page: 1, text: '  \t  ' })
-		).toBeNull();
+		expect(await buildPdfClippingDraft(file('paper.pdf'), { page: 1, text: '  \t  ' })).toBeNull();
 	});
 
 	it('withNoteId stamps the created note id onto a clipping row', () => {

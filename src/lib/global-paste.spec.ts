@@ -15,7 +15,7 @@ class StubHTMLElement {
 	constructor(editable = false) {
 		this.#editable = editable;
 	}
-	closest(_selector: string): StubHTMLElement | null {
+	closest(): StubHTMLElement | null {
 		return this.#editable ? this : null;
 	}
 }
@@ -122,14 +122,23 @@ function makeDeps(overrides: Partial<GlobalPasteDeps> = {}): GlobalPasteDeps & {
 	isPasteBlocked: ReturnType<typeof vi.fn>;
 	queueGifExplodeChoice: ReturnType<typeof vi.fn>;
 } {
-	return {
+	const defaults: GlobalPasteDeps = {
 		flashToast: vi.fn(),
 		isPasteBlocked: vi.fn(() => false),
-		placeNoteDraftsOnDesk: vi.fn(async (drafts) => drafts.map((_, i) => makeNote(`n${i}`))),
+		placeNoteDraftsOnDesk: vi.fn<GlobalPasteDeps['placeNoteDraftsOnDesk']>(async (drafts) =>
+			drafts.map((_, i) => makeNote(`n${i}`))
+		),
 		queueGifExplodeChoice: vi.fn(),
 		openPasteDialog: vi.fn(),
-		closePasteDialog: vi.fn(),
-		...overrides
+		closePasteDialog: vi.fn()
+	};
+	return { ...defaults, ...overrides } as GlobalPasteDeps & {
+		placeNoteDraftsOnDesk: ReturnType<typeof vi.fn>;
+		openPasteDialog: ReturnType<typeof vi.fn>;
+		closePasteDialog: ReturnType<typeof vi.fn>;
+		flashToast: ReturnType<typeof vi.fn>;
+		isPasteBlocked: ReturnType<typeof vi.fn>;
+		queueGifExplodeChoice: ReturnType<typeof vi.fn>;
 	};
 }
 
@@ -137,9 +146,7 @@ describe('isEditablePasteTarget', () => {
 	it('returns false for null, non-elements, and non-editable elements', () => {
 		expect(isEditablePasteTarget(null)).toBe(false);
 		expect(isEditablePasteTarget({} as EventTarget)).toBe(false);
-		expect(isEditablePasteTarget(new StubHTMLElement(false) as unknown as EventTarget)).toBe(
-			false
-		);
+		expect(isEditablePasteTarget(new StubHTMLElement(false) as unknown as EventTarget)).toBe(false);
 	});
 
 	it('returns true when closest finds an editable ancestor match', () => {

@@ -45,8 +45,7 @@ export function createDeskPlacement(deps: DeskPlacementDeps) {
 			return [];
 		}
 		if (drafts.length === 0) return [];
-		const spawn =
-			origin ??
+		const spawn = origin ??
 			deps.getSpawnPoint(COLLAPSED_CARD, deps.getCanvasItemCount()) ?? {
 				x: 80,
 				y: 80

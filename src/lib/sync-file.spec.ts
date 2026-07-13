@@ -7,6 +7,7 @@ import {
 	applyDeskSnapshot,
 	persistMergedSync,
 	formatConflictSummary,
+	SYNC_BUNDLE_MAX_CHARS,
 	SYNC_BUNDLE_VERSION
 } from './sync-file';
 import { db } from './db';
@@ -336,21 +337,37 @@ describe('sync-file', () => {
 			dismissed: {}
 		};
 
-		const originalPut = db.canvasItems.put.bind(db.canvasItems);
-		db.canvasItems.put = (async () => {
+		const originalBulkPut = db.canvasItems.bulkPut.bind(db.canvasItems);
+		db.canvasItems.bulkPut = (async () => {
 			throw new Error('forced desk failure');
-		}) as unknown as typeof db.canvasItems.put;
+		}) as unknown as typeof db.canvasItems.bulkPut;
 
-		await expect(persistMergedSync(notes, desk, new Set(['keep', 'new']))).rejects.toThrow(
-			'forced desk failure'
-		);
+		await expect(
+			persistMergedSync(
+				notes,
+				desk,
+				new Set(['keep', 'new']),
+				undefined,
+				[],
+				[
+					{
+						id: 'rollback-blob-01',
+						mime: 'image/png',
+						width: 1,
+						height: 1,
+						dataBase64: 'AQID'
+					}
+				]
+			)
+		).rejects.toThrow('forced desk failure');
 
-		db.canvasItems.put = originalPut;
+		db.canvasItems.bulkPut = originalBulkPut;
 
 		expect(await db.notes.get('new')).toBeUndefined();
 		expect(await db.notes.get('keep')).toMatchObject({ title: 'Keep me' });
 		expect(await db.canvases.count()).toBe(0);
 		expect(await db.canvasItems.count()).toBe(0);
+		expect(await db.noteBlobs.get('rollback-blob-01')).toBeUndefined();
 	});
 
 	it('rejects bad JSON and invalid notes', () => {
@@ -359,6 +376,77 @@ describe('sync-file', () => {
 			false
 		);
 		expect(parseSyncBundle(JSON.stringify({ version: 2, notes: [null] })).ok).toBe(false);
+	});
+
+	it('rejects duplicate identifiers and ambiguous desk placements', () => {
+		const duplicateNotes = parseSyncBundle(
+			JSON.stringify({
+				version: 5,
+				notes: [note({ id: 'same', title: 'One' }), note({ id: 'same', title: 'Two' })]
+			})
+		);
+		expect(duplicateNotes).toMatchObject({
+			ok: false,
+			error: expect.stringMatching(/duplicate note/i)
+		});
+
+		const duplicatePlacements = parseSyncBundle(
+			JSON.stringify({
+				version: 5,
+				notes: [note({ id: 'n1', title: 'One' })],
+				desk: {
+					canvases: [{ id: 'c1', folder: '', title: 'Desk' }],
+					items: [
+						{ id: 'i1', canvasId: 'c1', noteId: 'n1' },
+						{ id: 'i2', canvasId: 'c1', noteId: 'n1' }
+					]
+				}
+			})
+		);
+		expect(duplicatePlacements).toMatchObject({
+			ok: false,
+			error: expect.stringMatching(/duplicate note placement/i)
+		});
+	});
+
+	it('rejects oversized and resource-amplifying bundle fields', () => {
+		expect(parseSyncBundle(' '.repeat(SYNC_BUNDLE_MAX_CHARS + 1))).toEqual({
+			ok: false,
+			error: 'Sync file too large'
+		});
+		expect(
+			parseSyncBundle(
+				JSON.stringify({
+					version: 5,
+					notes: [],
+					blobs: [
+						{
+							id: 'valid-blob-01',
+							mime: 'image/png',
+							width: 1,
+							height: 1,
+							dataBase64: '***not-base64***'
+						}
+					]
+				})
+			).ok
+		).toBe(false);
+		expect(
+			parseSyncBundle(
+				JSON.stringify({
+					version: 4,
+					notes: [],
+					operations: [
+						{
+							id: 'op',
+							type: 'test',
+							inputNoteIds: Array.from({ length: 1001 }, (_, i) => `n-${i}`),
+							outputNoteIds: []
+						}
+					]
+				})
+			).ok
+		).toBe(false);
 	});
 
 	it('formats conflict summaries', () => {

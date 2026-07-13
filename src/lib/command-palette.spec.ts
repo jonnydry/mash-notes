@@ -118,7 +118,9 @@ describe('buildBasePaletteActions', () => {
 			getSelectedId: () => 'a',
 			getSelectedNote: () => note({ id: 'a', pinned: 0 })
 		});
-		buildBasePaletteActions(deps).find((a) => a.id === 'toggle-pin')!.action();
+		buildBasePaletteActions(deps)
+			.find((a) => a.id === 'toggle-pin')!
+			.action();
 		expect(deps.handleStickyMetaChange).toHaveBeenCalledWith('a', { pinned: 1 });
 	});
 });
@@ -126,7 +128,10 @@ describe('buildBasePaletteActions', () => {
 describe('buildOperatorActions', () => {
 	it('hides multi-select layout ops until 2+ cards are selected', () => {
 		const single = makeDeps({ selectedCanvasCount: () => 1, getSelectionIds: () => ['a'] });
-		const multi = makeDeps({ selectedCanvasCount: () => 3, getSelectionIds: () => ['a', 'b', 'c'] });
+		const multi = makeDeps({
+			selectedCanvasCount: () => 3,
+			getSelectionIds: () => ['a', 'b', 'c']
+		});
 
 		const singleIds = actionsForSurface(buildOperatorActions(single), 'palette').map((a) => a.id);
 		const multiIds = actionsForSurface(buildOperatorActions(multi), 'palette').map((a) => a.id);
@@ -151,10 +156,14 @@ describe('buildOperatorActions', () => {
 		const no = makeDeps({ getCanUnmash: () => false });
 		const yes = makeDeps({ getCanUnmash: () => true });
 		expect(
-			actionsForSurface(buildOperatorActions(no), 'palette').some((a) => a.id === 'unmash-selection')
+			actionsForSurface(buildOperatorActions(no), 'palette').some(
+				(a) => a.id === 'unmash-selection'
+			)
 		).toBe(false);
 		expect(
-			actionsForSurface(buildOperatorActions(yes), 'palette').some((a) => a.id === 'unmash-selection')
+			actionsForSurface(buildOperatorActions(yes), 'palette').some(
+				(a) => a.id === 'unmash-selection'
+			)
 		).toBe(true);
 	});
 

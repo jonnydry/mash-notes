@@ -4,65 +4,11 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="text-scale" content="scale" />
+		<meta name="referrer" content="no-referrer" />
 		<meta name="theme-color" content="#0e0c0a" />
 		<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
 		<link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16.png" />
-		<script>
-			(function () {
-				try {
-					var t = localStorage.getItem('mash-theme');
-					if (t !== 'light' && t !== 'dark') t = 'dark';
-					document.documentElement.dataset.theme = t;
-					document.documentElement.style.colorScheme = t;
-					var meta = document.querySelector('meta[name="theme-color"]');
-					if (meta) meta.setAttribute('content', t === 'light' ? '#efe6d8' : '#0e0c0a');
-				} catch (e) {}
-				try {
-					var textSize = localStorage.getItem('mash-text-size');
-					if (textSize !== 'compact' && textSize !== 'comfortable' && textSize !== 'large') {
-						textSize = 'comfortable';
-					}
-					document.documentElement.dataset.textSize = textSize;
-				} catch (e) {
-					document.documentElement.dataset.textSize = 'comfortable';
-				}
-				try {
-					var suites = {
-						kitchen: {
-							ui: "'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif",
-							display: "'Fraunces', ui-serif, Georgia, serif"
-						},
-						editor: {
-							ui: "'Source Sans 3', ui-sans-serif, system-ui, sans-serif",
-							display: "'Source Serif 4', ui-serif, Georgia, serif"
-						},
-						workshop: {
-							ui: "'Inter', ui-sans-serif, system-ui, sans-serif",
-							display: "'Newsreader', ui-serif, Georgia, serif"
-						},
-						atelier: {
-							ui: "'Nunito Sans', ui-sans-serif, system-ui, sans-serif",
-							display: "'Literata', ui-serif, Georgia, serif"
-						},
-						napkin: {
-							ui: "'Excalifont', 'Segoe Print', 'Comic Sans MS', cursive",
-							display: "'Excalifont', 'Segoe Print', 'Comic Sans MS', cursive"
-						},
-						terminal: {
-							ui: "'IBM Plex Mono', ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, Consolas, monospace",
-							display:
-								"'IBM Plex Mono', ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, Consolas, monospace"
-						}
-					};
-					var ty = localStorage.getItem('mash-typography');
-					if (!suites[ty]) ty = 'kitchen';
-					var s = suites[ty];
-					document.documentElement.dataset.typography = ty;
-					document.documentElement.style.setProperty('--mash-font-ui', s.ui);
-					document.documentElement.style.setProperty('--mash-font-display', s.display);
-				} catch (e) {}
-			})();
-		</script>
+		<script src="/boot-theme.js"></script>
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">

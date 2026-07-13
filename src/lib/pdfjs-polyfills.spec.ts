@@ -30,7 +30,12 @@ describe('pdf.js Map polyfills', () => {
 			expect(map.getOrInsert('b', 2)).toBe(2);
 			expect(map.getOrInsert('b', 3)).toBe(2);
 		} finally {
-			if (hadInsert) Object.defineProperty(proto, 'getOrInsert', { value: prevInsert, writable: true, configurable: true });
+			if (hadInsert)
+				Object.defineProperty(proto, 'getOrInsert', {
+					value: prevInsert,
+					writable: true,
+					configurable: true
+				});
 			else delete (proto as { getOrInsert?: unknown }).getOrInsert;
 			if (hadComputed)
 				Object.defineProperty(proto, 'getOrInsertComputed', {
