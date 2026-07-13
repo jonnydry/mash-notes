@@ -58,7 +58,12 @@ test('creates, renames, selects, and dissolves a bowl', async ({ page }) => {
 	expect(secondAfterCardMove!.x).toBeCloseTo(secondBeforeCardMove.x, 0);
 	expect(secondAfterCardMove!.y).toBeCloseTo(secondBeforeCardMove.y, 0);
 
-	await page.getByRole('button', { name: 'Select bowl Research' }).click();
+	const selectGrip = await bowl.locator('.mash-canvas-bowl-grip').boundingBox();
+	expect(selectGrip).not.toBeNull();
+	await page.mouse.click(
+		selectGrip!.x + selectGrip!.width / 2,
+		selectGrip!.y + selectGrip!.height / 2
+	);
 	await expect(page.getByText('2 selected', { exact: true })).toBeVisible();
 	await page.getByRole('button', { name: 'Dissolve bowl Research' }).click();
 	await expect(page.locator('.mash-canvas-bowl')).toHaveCount(0);

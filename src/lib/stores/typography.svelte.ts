@@ -6,12 +6,7 @@
 import { SvelteSet } from 'svelte/reactivity';
 
 export type TypographySuiteId =
-	| 'kitchen'
-	| 'editor'
-	| 'workshop'
-	| 'atelier'
-	| 'napkin'
-	| 'terminal';
+	'kitchen' | 'editor' | 'workshop' | 'atelier' | 'napkin' | 'terminal';
 
 export type TextSizeId = 'compact' | 'comfortable' | 'large';
 

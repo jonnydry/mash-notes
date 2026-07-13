@@ -521,8 +521,7 @@
 					style="color: var(--mash-card-ink); text-align: {align};"
 					oninput={(e) => commitEditable((e.currentTarget as HTMLTextAreaElement).value)}
 					onpointerdown={(e) => e.stopPropagation()}
-					onwheel={(e) => e.stopPropagation()}
-				></textarea>
+					onwheel={(e) => e.stopPropagation()}></textarea>
 			{:else if embeddedImage.caption.trim()}
 				<div
 					data-card-scroll
@@ -547,8 +546,7 @@
 				style="color: var(--mash-card-ink); text-align: {align};"
 				oninput={(e) => commitEditable((e.currentTarget as HTMLTextAreaElement).value)}
 				onpointerdown={(e) => e.stopPropagation()}
-				onwheel={(e) => e.stopPropagation()}
-			></textarea>
+				onwheel={(e) => e.stopPropagation()}></textarea>
 		</div>
 	{:else}
 		<div

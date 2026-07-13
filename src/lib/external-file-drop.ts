@@ -1,11 +1,5 @@
 export type ExternalImportKind =
-	| 'note-text'
-	| 'json'
-	| 'pdf'
-	| 'docx'
-	| 'html'
-	| 'image'
-	| 'unsupported';
+	'note-text' | 'json' | 'pdf' | 'docx' | 'html' | 'image' | 'unsupported';
 
 export type ExternalImportBatch = {
 	noteTextFiles: File[];

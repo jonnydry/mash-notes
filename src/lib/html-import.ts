@@ -6,8 +6,7 @@
 export const HTML_IMPORT_MAX_BYTES = 5 * 1024 * 1024;
 
 export type HtmlImportResult =
-	| { ok: true; html: string; title: string }
-	| { ok: false; error: string };
+	{ ok: true; html: string; title: string } | { ok: false; error: string };
 
 const HTML_EXT = /\.html?$/i;
 const HTML_MIME = /^(text\/html|application\/xhtml\+xml)$/i;
