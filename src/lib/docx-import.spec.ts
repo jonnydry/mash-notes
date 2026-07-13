@@ -142,16 +142,22 @@ describe('docx-import', () => {
 		}
 	});
 
-	it('omits embedded images from converted HTML', async () => {
+	it('inlines embedded images in converted HTML', async () => {
 		const buffer = await minimalDocxWithImageBuffer('Text beside image');
 		const result = await convertDocxToHtml(buffer, 'with-image.docx');
 		expect(result.ok).toBe(true);
 		if (result.ok) {
 			expect(result.html).toContain('Text beside image');
-			// mammoth defaults to data: URI <img> tags; v1 must strip media.
-			expect(result.html).not.toMatch(/<img/i);
-			expect(result.html).not.toContain('data:image');
+			expect(result.html).toMatch(/<img/i);
+			expect(result.html).toContain('data:image/png;base64,');
 		}
+	});
+
+	it('opens an image-only document', async () => {
+		const buffer = await minimalDocxWithImageBuffer('');
+		const result = await convertDocxToHtml(buffer, 'image-only.docx');
+		expect(result.ok).toBe(true);
+		if (result.ok) expect(result.html).toContain('data:image/png;base64,');
 	});
 
 	it('rejects oversized files', async () => {

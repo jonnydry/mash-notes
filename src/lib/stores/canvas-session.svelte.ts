@@ -17,9 +17,10 @@ import {
 	replaceCanvasItemSubset,
 	setOperationReverted,
 	bulkUpdateCanvasItemPositions,
+	updateCanvasBowls,
 	updateCanvasItemPosition
 } from '$lib/db';
-import type { Canvas, CanvasEdge, CanvasItem, Note } from '$lib/types';
+import type { Canvas, CanvasBowl, CanvasEdge, CanvasItem, Note } from '$lib/types';
 import { isBlankUntitledNote, notePreview } from '$lib/format';
 import {
 	dismissNoteFromCanvas,
@@ -48,6 +49,11 @@ import {
 	listFlowSequences
 } from '$lib/canvas-flow';
 import type { SnapZone } from '$lib/stores/editor-stage.svelte';
+import {
+	cleanCanvasBowls,
+	createBowlMembership,
+	removeItemsFromBowls
+} from '$lib/canvas-bowls';
 
 export const COLLAPSED_CARD = { w: 220, h: 120 };
 export const EXPANDED_CARD = { w: 360, h: 320 };
@@ -138,6 +144,7 @@ export type CanvasBoardApi = {
 	applyAlign: (mode: AlignMode) => void;
 	organizeToSnap?: () => void;
 	clientToWorld?: (clientX: number, clientY: number) => { x: number; y: number };
+	focusBowlName?: (bowlId: string) => void;
 };
 
 export type CreateCanvasSessionOpts = {
@@ -303,6 +310,11 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 				}
 			}
 
+			if (seq !== canvasLoadSeq) return;
+			const cleanedBowls = cleanCanvasBowls(canvas.bowls ?? [], items.map((item) => item.id));
+			const bowlsChanged = JSON.stringify(cleanedBowls) !== JSON.stringify(canvas.bowls ?? []);
+			activeCanvas = { ...canvas, bowls: cleanedBowls };
+			if (bowlsChanged) await updateCanvasBowls(canvas.id, cleanedBowls);
 			if (seq !== canvasLoadSeq) return;
 			// Preserve optimistic positions only for dirty drag/resize items, not arbitrary drift.
 			const localById = new Map(canvasItems.map((i) => [i.id, i]));
@@ -1207,6 +1219,50 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		opts.selectNote(noteId, { keepSelection: true });
 	}
 
+	async function commitCanvasBowls(bowls: CanvasBowl[]) {
+		if (!activeCanvas) return;
+		activeCanvas = { ...activeCanvas, bowls, modified: Date.now() };
+		await updateCanvasBowls(activeCanvas.id, bowls);
+		opts.onMeaningfulActivity?.();
+	}
+
+	async function createBowl(noteIds: string[], name = 'New bowl'): Promise<string | null> {
+		if (!activeCanvas) return null;
+		const selected = new Set(noteIds);
+		const itemIds = canvasItems.filter((item) => selected.has(item.noteId)).map((item) => item.id);
+		if (itemIds.length < 2) return null;
+		const id = newId();
+		const bowls = createBowlMembership(activeCanvas.bowls ?? [], itemIds, { id, name });
+		await commitCanvasBowls(bowls);
+		opts.flashToast(`Created bowl with ${itemIds.length} cards`);
+		return id;
+	}
+
+	async function renameBowl(bowlId: string, name: string) {
+		if (!activeCanvas) return;
+		const trimmed = name.trim().slice(0, 80) || 'New bowl';
+		const now = Date.now();
+		const bowls = (activeCanvas.bowls ?? []).map((bowl) =>
+			bowl.id === bowlId ? { ...bowl, name: trimmed, modified: now } : bowl
+		);
+		await commitCanvasBowls(bowls);
+	}
+
+	async function dissolveBowl(bowlId: string) {
+		if (!activeCanvas) return;
+		const bowls = (activeCanvas.bowls ?? []).filter((bowl) => bowl.id !== bowlId);
+		await commitCanvasBowls(bowls);
+		opts.flashToast('Bowl dissolved · cards stayed on the desk');
+	}
+
+	function selectBowl(bowlId: string) {
+		const bowl = activeCanvas?.bowls?.find((candidate) => candidate.id === bowlId);
+		if (!bowl) return;
+		const itemIds = new Set(bowl.itemIds);
+		const noteIds = canvasItems.filter((item) => itemIds.has(item.id)).map((item) => item.noteId);
+		opts.setSelection(noteIds, noteIds[0] ?? null);
+	}
+
 	async function handleCanvasRemove(itemId: string) {
 		const item = canvasItems.find((i) => i.id === itemId);
 		const note = item ? opts.getNotesById().get(item.noteId) : undefined;
@@ -1214,6 +1270,9 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		opts.onMeaningfulActivity?.();
 		canvasItems = canvasItems.filter((i) => i.id !== itemId);
 		canvasEdges = canvasEdges.filter((e) => e.fromItemId !== itemId && e.toItemId !== itemId);
+		if (activeCanvas?.bowls?.some((bowl) => bowl.itemIds.includes(itemId))) {
+			await commitCanvasBowls(removeItemsFromBowls(activeCanvas.bowls, [itemId]));
+		}
 		// Drop only undo entries that referenced this card — keep the rest.
 		pruneCanvasUndo([itemId]);
 
@@ -1439,6 +1498,9 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		get canvasEdges() {
 			return canvasEdges;
 		},
+		get canvasBowls() {
+			return activeCanvas?.bowls ?? [];
+		},
 		set canvasEdges(v: CanvasEdge[]) {
 			canvasEdges = v;
 		},
@@ -1525,6 +1587,10 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		handleCanvasResizeEnd,
 		handleCanvasSelectNotes,
 		handleCanvasSelect,
+		createBowl,
+		renameBowl,
+		dissolveBowl,
+		selectBowl,
 		handleCanvasRemove,
 		bumpNeighborsAround,
 		restoreBumpLayout,

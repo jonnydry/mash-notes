@@ -15,6 +15,7 @@ import {
 	getOrCreateFolderCanvas,
 	getCanvasItems,
 	addNoteToCanvas,
+	updateCanvasBowls,
 	updateCanvasItemPosition,
 	removeCanvasItem,
 	deleteNote
@@ -65,6 +66,26 @@ describe('Canvas DB', () => {
 		expect(updated.y).toBe(200);
 		await removeCanvasItem(item.id);
 		expect(await getCanvasItems(canvas.id)).toHaveLength(0);
+	});
+
+	it('persists bowl membership on the canvas', async () => {
+		const first = await createNote({ title: 'First', folder: 'Ideas' });
+		const second = await createNote({ title: 'Second', folder: 'Ideas' });
+		const canvas = await getOrCreateFolderCanvas('Ideas');
+		const firstItem = await addNoteToCanvas(canvas.id, first.id);
+		const secondItem = await addNoteToCanvas(canvas.id, second.id);
+		const bowl = {
+			id: crypto.randomUUID(),
+			name: 'Research',
+			itemIds: [firstItem.id, secondItem.id],
+			created: Date.now(),
+			modified: Date.now()
+		};
+
+		await updateCanvasBowls(canvas.id, [bowl]);
+
+		const stored = await db.canvases.get(canvas.id);
+		expect(stored?.bowls).toEqual([bowl]);
 	});
 
 	it('clears canvas items when a note is deleted', async () => {

@@ -25,6 +25,7 @@ export function createDocumentReaders(opts: DocumentReadersOpts) {
 	let docxReaderOpen = $state(false);
 	let LazyDocxReader = $state<Component | null>(null);
 	let docxReaderModuleLoading = $state(false);
+	let docxReaderModulePromise: Promise<void> | null = null;
 	let docxClippings = $state<DocxClipping[]>([]);
 
 	let htmlReaderFile = $state<File | null>(null);
@@ -55,18 +56,23 @@ export function createDocumentReaders(opts: DocumentReadersOpts) {
 	}
 
 	async function ensureDocxReaderModule() {
-		if (LazyDocxReader || docxReaderModuleLoading) return;
-		docxReaderModuleLoading = true;
-		try {
-			const { loadDocxReader } = await import('$lib/lazy-docx-reader');
-			LazyDocxReader = (await loadDocxReader()) as Component;
-		} catch (error) {
-			console.error('Failed to load Word document tools', error);
-			docxReaderOpen = false;
-			opts.flashToast('Couldn’t load Word document tools', 3600);
-		} finally {
-			docxReaderModuleLoading = false;
-		}
+		if (LazyDocxReader) return;
+		if (docxReaderModulePromise) return docxReaderModulePromise;
+		docxReaderModulePromise = (async () => {
+			docxReaderModuleLoading = true;
+			try {
+				const { loadDocxReader } = await import('$lib/lazy-docx-reader');
+				LazyDocxReader = (await loadDocxReader()) as Component;
+			} catch (error) {
+				console.error('Failed to load Word document tools', error);
+				docxReaderOpen = false;
+				opts.flashToast('Couldn’t load Word document tools', 3600);
+			} finally {
+				docxReaderModuleLoading = false;
+				docxReaderModulePromise = null;
+			}
+		})();
+		return docxReaderModulePromise;
 	}
 
 	async function ensureHtmlReaderModule() {
@@ -95,14 +101,14 @@ export function createDocumentReaders(opts: DocumentReadersOpts) {
 		void ensurePdfReaderModule();
 	}
 
-	function openDocxReader(file: File) {
+	async function openDocxReader(file: File) {
 		docxReaderFile = file;
 		docxReaderOpen = true;
 		pdfReaderOpen = false;
 		htmlReaderOpen = false;
 		docxClippings = [];
 		prepareChrome();
-		void ensureDocxReaderModule();
+		await ensureDocxReaderModule();
 	}
 
 	function openHtmlReader(file: File) {

@@ -38,8 +38,8 @@ export async function wipeIndexedDb(page: Page) {
 		timeout: 30_000
 	});
 	// Wait for initial loadNotes (seed welcome notes) so later imports aren't raced.
-	await page.getByRole('button', { name: 'Desk' }).click();
-	const peel = page.getByRole('complementary', { name: 'Note scanner' });
+	await page.getByRole('button', { name: 'Desk', exact: true }).click();
+	const peel = page.getByRole('complementary', { name: 'Ingredients' });
 	await expect(peel.getByText("Hi — I'm Scoop")).toBeVisible({
 		timeout: 15_000
 	});
@@ -67,7 +67,7 @@ export async function createNamedNote(page: Page, title: string, body: string) {
 /** Open a note from the peel into the stage editor. */
 export async function openNoteInStage(page: Page, title: string) {
 	await page.getByRole('button', { name: 'Desk' }).click();
-	const peel = page.getByRole('complementary', { name: 'Note scanner' });
+	const peel = page.getByRole('complementary', { name: 'Ingredients' });
 	await expect(peel).toBeVisible();
 	const row = peel.getByRole('option').filter({ hasText: title });
 	await row.dblclick();
@@ -92,7 +92,7 @@ export async function openPalette(page: Page, query: string) {
 
 export async function selectNotesInPeel(page: Page, titles: string[]) {
 	await page.getByRole('button', { name: 'Desk' }).click();
-	const peel = page.getByRole('complementary', { name: 'Note scanner' });
+	const peel = page.getByRole('complementary', { name: 'Ingredients' });
 	await expect(peel).toBeVisible();
 	for (let i = 0; i < titles.length; i++) {
 		const btn = peel.getByRole('option').filter({ hasText: titles[i] }).getByRole('button').nth(1);

@@ -3,7 +3,7 @@
  * Bundle v4 includes notes + desk + tombstones + operation provenance.
  * v3, v2, and v1 still import.
  */
-import type { Canvas, CanvasEdge, CanvasItem, Note, NoteBlobMime, Operation } from './types';
+import type { Canvas, CanvasBowl, CanvasEdge, CanvasItem, Note, NoteBlobMime, Operation } from './types';
 import { mergeNotesLww, hasConflicts, type MergeResult, type SyncConflict } from './sync-model';
 import { normalizeImportedNote } from './import-notes';
 import { db, getSyncTombstoneNotes, newId } from './db';
@@ -102,13 +102,32 @@ function normalizeCanvas(raw: unknown, index: number): Canvas | string {
 	const id = asString(raw.id).trim();
 	if (!id) return `Canvas ${index + 1} missing id`;
 	const now = Date.now();
-	return {
+	const canvas: Canvas = {
 		id,
 		folder: asString(raw.folder),
 		title: asString(raw.title, 'Desk').slice(0, 200) || 'Desk',
 		created: asNumber(raw.created, now),
 		modified: asNumber(raw.modified, now)
 	};
+	if (Array.isArray(raw.bowls)) {
+		if (raw.bowls.length > 100) return `Canvas ${index + 1} has too many bowls`;
+		const bowls: CanvasBowl[] = [];
+		for (const candidate of raw.bowls) {
+			if (!isRecord(candidate) || !Array.isArray(candidate.itemIds)) continue;
+			const bowlId = asString(candidate.id).trim();
+			const itemIds = candidate.itemIds.filter((id): id is string => typeof id === 'string');
+			if (!bowlId || itemIds.length < 2 || itemIds.length > 500) continue;
+			bowls.push({
+				id: bowlId,
+				name: asString(candidate.name, 'New bowl').trim().slice(0, 80) || 'New bowl',
+				itemIds: [...new Set(itemIds)],
+				created: asNumber(candidate.created, now),
+				modified: asNumber(candidate.modified, now)
+			});
+		}
+		if (bowls.length > 0) canvas.bowls = bowls;
+	}
+	return canvas;
 }
 
 function normalizeCanvasItem(raw: unknown, index: number): CanvasItem | string {
@@ -210,7 +229,12 @@ export async function collectDeskSnapshot(sessionId?: string): Promise<DeskSnaps
 		Object.entries(allDismissed).filter(([canvasId]) => canvasIds.has(canvasId))
 	);
 	return {
-		canvases: canvases.map((c) => ({ ...c })),
+		canvases: canvases.map((c) => ({
+			...c,
+			...(c.bowls
+				? { bowls: c.bowls.map((bowl) => ({ ...bowl, itemIds: [...bowl.itemIds] })) }
+				: {})
+		})),
 		items: items.map((i) => ({ ...i })),
 		edges: edges.map((e) => ({ ...e })),
 		dismissed
@@ -673,6 +697,22 @@ async function applyDeskIdbSnapshot(
 		} else {
 			itemsSkipped += 1;
 		}
+	}
+
+	for (const remoteCanvas of desk.canvases) {
+		const localCanvas = localByFolder.get(remoteCanvas.folder);
+		const localCanvasId = idMap.get(remoteCanvas.id);
+		if (!localCanvas || !localCanvasId || remoteCanvas.modified < localCanvas.modified) continue;
+		const bowls = (remoteCanvas.bowls ?? [])
+			.map((bowl) => ({
+				...bowl,
+				id: newId(),
+				itemIds: bowl.itemIds
+					.map((itemId) => itemIdMap.get(itemId))
+					.filter((itemId): itemId is string => Boolean(itemId))
+			}))
+			.filter((bowl) => bowl.itemIds.length >= 2);
+		await db.canvases.update(localCanvasId, { bowls });
 	}
 
 	for (const remoteEdge of desk.edges ?? []) {

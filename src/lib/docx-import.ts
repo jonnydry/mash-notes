@@ -18,7 +18,7 @@ function stripTagsToText(html: string): string {
 
 /**
  * Convert a local user-chosen .docx ArrayBuffer to HTML via mammoth.
- * Images are omitted (v1). Lazy-loads mammoth so it stays out of the main bundle path.
+ * Embedded images are inlined as data URIs. Lazy-loads mammoth so it stays out of the main bundle path.
  */
 export async function convertDocxToHtml(
 	buffer: ArrayBuffer,
@@ -43,12 +43,10 @@ export async function convertDocxToHtml(
 				: { arrayBuffer: buffer };
 		const result = await mammoth.convertToHtml(input, {
 			includeDefaultStyleMap: true,
-			// Omit embedded images in v1 (default mammoth.images.dataUri inlines data: URIs).
-			// mammoth brands ImageConverter; returning [] is intentional and not in public types.
-			convertImage: (() => Promise.resolve([])) as unknown as typeof mammoth.images.dataUri
+			convertImage: mammoth.images.dataUri
 		});
 		const html = (result.value ?? '').trim();
-		if (!html || !stripTagsToText(html)) {
+		if (!html || (!stripTagsToText(html) && !/<img\b/i.test(html))) {
 			return { ok: false, error: 'No readable text in this document.' };
 		}
 		return { ok: true, html, title };

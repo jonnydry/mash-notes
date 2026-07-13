@@ -495,6 +495,8 @@
 				class:is-zoomed={clipZoom > 1}
 				style="--clip-zoom: {clipZoom};"
 				data-card-scroll
+				role="group"
+				aria-label="Image clipping preview"
 				use:clipZoomWheel
 				onpointerdown={(e) => e.stopPropagation()}
 			>

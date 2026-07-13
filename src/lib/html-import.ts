@@ -43,11 +43,37 @@ const DANGEROUS_TAGS = new Set([
 	'applet'
 ]);
 
+export type HtmlSanitizeOptions = {
+	/** DOCX conversion emits trusted local raster bytes as data URIs. */
+	allowDataImages?: boolean;
+};
+
+const SAFE_DATA_IMAGE = /^data:image\/(?:png|jpe?g|gif|webp|bmp);base64,[a-z0-9+/=\s]+$/i;
+
+function allowedDataImage(tag: string, name: string, value: string, options: HtmlSanitizeOptions) {
+	return (
+		options.allowDataImages === true &&
+		tag === 'img' &&
+		name === 'src' &&
+		SAFE_DATA_IMAGE.test(value.trim())
+	);
+}
+
 /** Strip active content; keep readable structure for local user files. */
-export function sanitizeHtmlFragment(raw: string): string {
+export function sanitizeHtmlFragment(raw: string, options: HtmlSanitizeOptions = {}): string {
 	if (typeof DOMParser === 'undefined') {
 		// Node/unit fallback: strip script blocks, event handlers, and unsafe URLs.
-		return raw
+		const preservedImages: string[] = [];
+		const input = options.allowDataImages
+			? raw.replace(
+					/(<img\b[^>]*\bsrc\s*=\s*)(["'])(data:image\/(?:png|jpe?g|gif|webp|bmp);base64,[a-z0-9+/=\s]+)\2/gi,
+					(_match, prefix: string, quote: string, url: string) => {
+						const index = preservedImages.push(url) - 1;
+						return `${prefix}${quote}__MASH_DATA_IMAGE_${index}__${quote}`;
+					}
+				)
+			: raw;
+		const sanitized = input
 			.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
 			.replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
 			.replace(
@@ -56,6 +82,9 @@ export function sanitizeHtmlFragment(raw: string): string {
 			)
 			.replace(/\s(href|src|xlink:href)\s*=\s*(javascript:|data:|vbscript:|\/\/)[^\s>]*/gi, '')
 			.replace(/javascript:/gi, '');
+		return sanitized.replace(/__MASH_DATA_IMAGE_(\d+)__/g, (_match, index: string) => {
+			return preservedImages[Number(index)] ?? '';
+		});
 	}
 	const parser = new DOMParser();
 	const doc = parser.parseFromString(raw, 'text/html');
@@ -76,6 +105,7 @@ export function sanitizeHtmlFragment(raw: string): string {
 				}
 				if (name === 'href' || name === 'src' || name === 'xlink:href') {
 					const v = value.trim().toLowerCase();
+					if (allowedDataImage(tag, name, value, options)) continue;
 					if (
 						v.startsWith('javascript:') ||
 						v.startsWith('data:') ||

@@ -59,7 +59,7 @@
 			if (disposed || generation !== loadGeneration) return;
 			if (result.ok) {
 				// Mammoth HTML is untrusted input — run through the same sanitizer as HTML import.
-				html = sanitizeHtmlFragment(result.html);
+				html = sanitizeHtmlFragment(result.html, { allowDataImages: true });
 			} else {
 				error = result.error;
 			}
@@ -245,6 +245,13 @@
 		color: var(--mash-accent-bright);
 		text-decoration: underline;
 		text-underline-offset: 2px;
+	}
+	.mash-docx-article :global(img) {
+		display: block;
+		max-width: 100%;
+		height: auto;
+		margin: 1.1rem auto;
+		object-fit: contain;
 	}
 	.mash-docx-article :global(::selection) {
 		background: color-mix(in srgb, var(--mash-accent) 42%, transparent);

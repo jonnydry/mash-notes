@@ -37,6 +37,34 @@ async function minimalDocxBuffer(paragraphText: string): Promise<Buffer> {
 	return Buffer.from(await zip.generateAsync({ type: 'uint8array' }));
 }
 
+test('opens a Word document on the first external drop', async ({ page }) => {
+	test.setTimeout(60_000);
+	await wipeIndexedDb(page);
+
+	const buffer = await minimalDocxBuffer('Opened from the first drop');
+	const dataTransfer = await page.evaluateHandle((base64) => {
+		const binary = atob(base64);
+		const bytes = new Uint8Array(binary.length);
+		for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+		const transfer = new DataTransfer();
+		transfer.items.add(
+			new File([bytes], 'first-drop.docx', {
+				type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+			})
+		);
+		return transfer;
+	}, buffer.toString('base64'));
+
+	const canvas = page.getByRole('application', { name: 'Mash canvas' });
+	await canvas.dispatchEvent('dragover', { dataTransfer });
+	await canvas.dispatchEvent('drop', { dataTransfer, clientX: 520, clientY: 360 });
+
+	const reader = page.getByRole('region', { name: 'Word document reader' });
+	await expect(reader).toBeVisible({ timeout: 15_000 });
+	await expect(reader.getByText('Opened from the first drop')).toBeVisible();
+	await dataTransfer.dispose();
+});
+
 test('opens a Word document and saves a text excerpt', async ({ page }) => {
 	await wipeIndexedDb(page);
 

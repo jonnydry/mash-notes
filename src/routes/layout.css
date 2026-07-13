@@ -975,6 +975,113 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 .mash-note-card.is-flow-mode {
 	cursor: crosshair;
 }
+.mash-canvas-bowl {
+	z-index: 0;
+	pointer-events: none;
+}
+.mash-canvas-bowl-wash {
+	pointer-events: auto;
+	border: 1px solid color-mix(in srgb, var(--mash-accent) 22%, transparent);
+	border-radius: 50%;
+	background: color-mix(in srgb, var(--mash-accent) 7%, transparent);
+	box-shadow:
+		inset 0 0 48px color-mix(in srgb, var(--mash-accent) 6%, transparent),
+		0 0 44px color-mix(in srgb, var(--mash-accent) 5%, transparent);
+	cursor: grab;
+	transition:
+		background-color 140ms ease,
+		border-color 140ms ease,
+		box-shadow 140ms ease;
+}
+.mash-canvas-bowl.is-dragging .mash-canvas-bowl-wash,
+.mash-canvas-bowl.is-dragging .mash-canvas-bowl-label {
+	cursor: grabbing;
+}
+.mash-canvas-bowl-wash:hover {
+	border-color: color-mix(in srgb, var(--mash-accent) 34%, transparent);
+	background: color-mix(in srgb, var(--mash-accent) 9%, transparent);
+}
+.mash-canvas-bowl-wash:focus-visible {
+	outline: none;
+	box-shadow:
+		inset 0 0 48px color-mix(in srgb, var(--mash-accent) 7%, transparent),
+		0 0 0 3px color-mix(in srgb, var(--mash-accent-bright) 28%, transparent),
+		0 0 44px color-mix(in srgb, var(--mash-accent) 7%, transparent);
+}
+.mash-canvas-bowl-label {
+	pointer-events: auto;
+	min-height: 28px;
+	max-width: min(18rem, 80%);
+	gap: 6px;
+	padding: 4px 5px 4px 9px;
+	border: 1px solid color-mix(in srgb, var(--mash-accent) 28%, var(--mash-panel-border));
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--mash-panel) 94%, var(--mash-accent));
+	box-shadow: var(--mash-shadow-card);
+	color: var(--mash-ink);
+	cursor: grab;
+}
+.mash-canvas-bowl-label > svg:not(.mash-canvas-bowl-grip) {
+	color: var(--mash-accent-bright);
+}
+.mash-canvas-bowl-grip {
+	color: var(--mash-ink-muted);
+}
+.mash-canvas-bowl-label input {
+	min-width: 0;
+	width: clamp(5rem, 11ch, 10rem);
+	background: transparent;
+	color: var(--mash-ink);
+	font-size: 12px;
+	font-weight: 650;
+	line-height: 1;
+	outline: none;
+}
+.mash-canvas-bowl-label input:focus {
+	box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--mash-accent-bright) 62%, transparent);
+}
+.mash-canvas-bowl-count {
+	min-width: 1.25rem;
+	padding: 2px 5px;
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--mash-accent) 14%, transparent);
+	color: var(--mash-accent-bright);
+	font-size: 9px;
+	font-weight: 700;
+	text-align: center;
+}
+.mash-canvas-bowl-dissolve {
+	display: grid;
+	place-items: center;
+	width: 20px;
+	height: 20px;
+	border-radius: 999px;
+	color: var(--mash-ink-muted);
+}
+.mash-canvas-bowl-dissolve:hover,
+.mash-canvas-bowl-dissolve:focus-visible {
+	background: var(--mash-hover-fill);
+	color: var(--mash-ink);
+	outline: none;
+}
+.mash-canvas-bowl-hint {
+	pointer-events: none;
+	white-space: nowrap;
+	padding: 4px 8px;
+	border: 1px solid color-mix(in srgb, var(--mash-accent) 22%, var(--mash-panel-border));
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--mash-panel) 94%, transparent);
+	box-shadow: var(--mash-shadow-card);
+	color: var(--mash-ink-muted);
+	font-size: 9px;
+	font-weight: 600;
+	letter-spacing: 0.01em;
+	opacity: 0;
+	transition: opacity 120ms ease;
+}
+.mash-canvas-bowl-hint.is-visible {
+	opacity: 1;
+}
 .mash-flow-edge-hit {
 	line-height: 1;
 	padding: 0;

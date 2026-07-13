@@ -8,6 +8,7 @@
 import Dexie, { type Table } from 'dexie';
 import type {
 	Canvas,
+	CanvasBowl,
 	CanvasEdge,
 	CanvasItem,
 	Note,
@@ -530,6 +531,13 @@ export async function getOrCreateFolderCanvas(folder: string, sessionId?: string
 
 export async function getCanvasItems(canvasId: string): Promise<CanvasItem[]> {
 	return db.canvasItems.where('canvasId').equals(canvasId).toArray();
+}
+
+export async function updateCanvasBowls(canvasId: string, bowls: CanvasBowl[]): Promise<void> {
+	await db.canvases.update(canvasId, {
+		bowls: bowls.map((bowl) => ({ ...bowl, itemIds: [...bowl.itemIds] })),
+		modified: Date.now()
+	});
 }
 
 export async function addNoteToCanvas(

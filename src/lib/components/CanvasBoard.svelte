@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { CanvasEdge, CanvasItem, Note } from '$lib/types';
+	import type { CanvasBowl, CanvasEdge, CanvasItem, Note } from '$lib/types';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { notePreview } from '$lib/format';
 	import { parseEmbeddedNoteImage } from '$lib/markdown';
@@ -30,7 +30,9 @@
 		Maximize2,
 		X,
 		FileUp,
-		FileText
+		FileText,
+		IceCreamBowl,
+		GripVertical
 	} from 'lucide-svelte';
 	import { focusTrap } from '$lib/focus-trap';
 	import StickyEditor from '$lib/components/StickyEditor.svelte';
@@ -54,6 +56,7 @@
 		type EditorPane,
 		type SnapZone
 	} from '$lib/stores/editor-stage.svelte';
+	import { canvasBowlBounds } from '$lib/canvas-bowls';
 
 	const NOTE_MIME = 'application/x-mash-notes';
 	const COLLAPSED_W = 220;
@@ -98,6 +101,10 @@
 		canvasId?: string | null;
 		/** Directed flow edges between cards on this board. */
 		edges?: CanvasEdge[];
+		bowls?: CanvasBowl[];
+		onSelectBowl?: (bowlId: string) => void;
+		onRenameBowl?: (bowlId: string, name: string) => void | Promise<void>;
+		onDissolveBowl?: (bowlId: string) => void | Promise<void>;
 		onConnectFlow?: (fromItemId: string, toItemId: string) => boolean | Promise<boolean>;
 		onDisconnectFlow?: (edgeId: string) => void | Promise<void>;
 		/** Clear all links in a sequence (by index in listFlowSequences). */
@@ -191,6 +198,10 @@
 		settlingIds = new Set(),
 		canvasId = null,
 		edges = [],
+		bowls = [],
+		onSelectBowl,
+		onRenameBowl,
+		onDissolveBowl,
 		onConnectFlow,
 		onDisconnectFlow,
 		onUnstitchSequence,
@@ -256,6 +267,7 @@
 	let pointerOverBoard = $state(false);
 	let titleInputEl: HTMLInputElement | undefined = $state();
 	let focusedExpandId: string | null = null;
+	let focusedBodyExpandId: string | null = null;
 	let isPanning = $state(false);
 	let isExternalDragOver = $state(false);
 	let isFileDragOver = $state(false);
@@ -279,6 +291,8 @@
 	const CULL_ITEM_THRESHOLD = 18;
 
 	let dragItemId: string | null = $state(null);
+	let dragBowlId: string | null = $state(null);
+	let hoveredBowlId: string | null = $state(null);
 	let dragGroup = $state<Array<{ id: string; originX: number; originY: number }>>([]);
 	let dragSelectionIntent: {
 		noteId: string;
@@ -537,6 +551,18 @@
 		};
 	}
 
+	let bowlViews = $derived(
+		bowls
+			.map((bowl) => ({
+				bowl,
+				bounds: canvasBowlBounds(bowl, items, (item) => cardSize(item, item.noteId))
+			}))
+			.filter(
+				(view): view is { bowl: CanvasBowl; bounds: { x: number; y: number; w: number; h: number } } =>
+					view.bounds !== null
+			)
+	);
+
 	function maybeSnapPos(x: number, y: number): { x: number; y: number } {
 		return snapEffective ? snapPoint(x, y) : { x, y };
 	}
@@ -636,6 +662,7 @@
 		if (e.button !== 0) return;
 		if (flowMode) return;
 		if (expandedNoteId) onCollapse();
+		hoveredBowlId = null;
 
 		const pos = clientToBoard(e.clientX, e.clientY);
 		marquee = { x0: pos.x, y0: pos.y, x1: pos.x, y1: pos.y };
@@ -773,6 +800,7 @@
 		const targetId = mashTargetId;
 		const group = dragGroup;
 		dragItemId = null;
+		dragBowlId = null;
 		mashTargetId = null;
 		dragGroup = [];
 		dragSelectionIntent = null;
@@ -977,6 +1005,7 @@
 			onMoveMany(dragGroup.map((g) => ({ itemId: g.id, x: g.originX, y: g.originY })));
 		}
 		dragItemId = null;
+		dragBowlId = null;
 		dragGroup = [];
 		dragSelectionIntent = null;
 		dragStageRect = null;
@@ -1113,6 +1142,7 @@
 			return;
 		}
 		e.stopPropagation();
+		hoveredBowlId = null;
 		didDrag = false;
 		pendingMash = null;
 		pendingEdgeZone = null;
@@ -1121,13 +1151,18 @@
 		mashTargetId = null;
 
 		const noteSelected = selectedIds.has(item.noteId);
+		const movingWithinBowl = bowls.some((bowl) => bowl.itemIds.includes(item.id));
+		// A card remains independently manipulable inside a bowl. The bowl itself
+		// has its own direct drag surface for moving every member together.
 		const additive = e.metaKey || e.ctrlKey;
 		dragSelectionIntent = {
 			noteId: item.noteId,
-			additive,
-			initiallySelected: noteSelected
+			additive: movingWithinBowl ? false : additive,
+			initiallySelected: movingWithinBowl ? false : noteSelected
 		};
-		if (noteSelected && selectedIds.size > 1) {
+		if (movingWithinBowl) {
+			dragGroup = [{ id: item.id, originX: item.x, originY: item.y }];
+		} else if (noteSelected && selectedIds.size > 1) {
 			dragGroup = items
 				.filter((i) => selectedIds.has(i.noteId))
 				.map((i) => ({ id: i.id, originX: i.x, originY: i.y }));
@@ -1142,6 +1177,36 @@
 		dragStageRect = dragGroup.length <= 1 ? stageSnapRect() : null;
 
 		dragOrigin = { x: e.clientX, y: e.clientY, itemX: item.x, itemY: item.y };
+		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+	}
+
+	function startBowlDrag(e: PointerEvent, bowl: CanvasBowl) {
+		if (e.button !== 0 || flowMode || expandedNoteId) return;
+		const target = e.target as HTMLElement;
+		if (target.closest('input') || target.closest('.mash-canvas-bowl-dissolve')) return;
+		if (target.closest('button') && !target.closest('.mash-canvas-bowl-wash')) return;
+		const itemIds = new Set(bowl.itemIds);
+		const group = items
+			.filter((item) => itemIds.has(item.id))
+			.map((item) => ({ id: item.id, originX: item.x, originY: item.y }));
+		if (group.length < 2) return;
+
+		e.stopPropagation();
+		e.preventDefault();
+		didDrag = false;
+		pendingMash = null;
+		pendingEdgeZone = null;
+		onStageSnapPreview?.(null);
+		dragBowlId = bowl.id;
+		hoveredBowlId = bowl.id;
+		dragGroup = group;
+		dragItemId = group[0]!.id;
+		dragSelectionIntent = null;
+		dragStageRect = null;
+		mashTargetId = null;
+		onSelectBowl?.(bowl.id);
+		const first = group[0]!;
+		dragOrigin = { x: e.clientX, y: e.clientY, itemX: first.originX, itemY: first.originY };
 		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
 	}
 
@@ -1220,7 +1285,7 @@
 		isFileDragOver = false;
 	}
 
-	function handleDrop(e: DragEvent) {
+	async function handleDrop(e: DragEvent) {
 		e.preventDefault();
 		isExternalDragOver = false;
 		isFileDragOver = false;
@@ -1228,7 +1293,7 @@
 		if (droppedFiles.length > 0) {
 			let pos = clientToBoard(e.clientX, e.clientY);
 			pos = maybeSnapPos(pos.x, pos.y);
-			void onDropFiles?.(droppedFiles, pos.x, pos.y);
+			await onDropFiles?.(droppedFiles, pos.x, pos.y);
 			return;
 		}
 		const raw = e.dataTransfer?.getData(NOTE_MIME) || e.dataTransfer?.getData('text/plain') || '';
@@ -1295,12 +1360,21 @@
 
 	function zoomToFit(selectionOnly = false, minScale = MIN_SCALE) {
 		if (!boardEl) return;
-		const rects = items
+		const cardRects = items
 			.filter((i) => !selectionOnly || selectedIds.has(i.noteId))
 			.map((i) => {
 				const s = cardSize(i, i.noteId);
 				return { x: i.x, y: i.y, w: s.w, h: s.h };
 			});
+		const bowlRects = selectionOnly
+			? []
+			: bowlViews.map((view) => ({
+					x: view.bounds.x,
+					y: view.bounds.y,
+					w: view.bounds.w,
+					h: view.bounds.h
+				}));
+		const rects = [...cardRects, ...bowlRects];
 		const b = boundsOf(rects);
 		if (!b) return;
 		const view = boardEl.getBoundingClientRect();
@@ -1309,10 +1383,10 @@
 			view.width,
 			view.height,
 			56,
-			{ min: minScale, max: MAX_SCALE }
+			{ min: minScale, max: bowlRects.length > 0 ? 1.3 : MAX_SCALE }
 		);
 		panX = next.panX;
-		panY = next.panY;
+		panY = next.panY - (bowlRects.length > 0 ? view.height * 0.1 : 0);
 		scale = next.scale;
 	}
 
@@ -1366,6 +1440,16 @@
 			x: (clientX - rect.left - panX) / scale,
 			y: (clientY - rect.top - panY) / scale
 		};
+	}
+
+	export function focusBowlName(bowlId: string): void {
+		requestAnimationFrame(() => {
+			const input = boardEl?.querySelector<HTMLInputElement>(
+				`[data-bowl-id="${CSS.escape(bowlId)}"] input`
+			);
+			input?.focus();
+			input?.select();
+		});
 	}
 
 	function toggleSnap() {
@@ -1548,6 +1632,24 @@
 			const title = notesById.get(expandedNoteId)?.title ?? '';
 			if (title === 'Untitled') titleInputEl?.select();
 			else titleInputEl?.setSelectionRange(title.length, title.length);
+		});
+	});
+
+	$effect(() => {
+		if (!expandedNoteId || expandFocus !== 'body') {
+			if (!expandedNoteId) focusedBodyExpandId = null;
+			return;
+		}
+		if (focusedBodyExpandId === expandedNoteId) return;
+		focusedBodyExpandId = expandedNoteId;
+		const noteId = expandedNoteId;
+		requestAnimationFrame(() => {
+			const body = boardEl?.querySelector<HTMLTextAreaElement>(
+				`[data-canvas-card][data-note-id="${CSS.escape(noteId)}"] textarea.mash-sticky-body`
+			);
+			body?.focus();
+			const end = body?.value.length ?? 0;
+			body?.setSelectionRange(end, end);
 		});
 	});
 
@@ -1755,6 +1857,74 @@
 		class="absolute top-0 left-0 origin-top-left will-change-transform"
 		style="transform: translate({panX}px, {panY}px) scale({scale});"
 	>
+		{#each bowlViews as view (view.bowl.id)}
+			<div
+				data-bowl-id={view.bowl.id}
+				class="mash-canvas-bowl absolute {dragBowlId === view.bowl.id ? 'is-dragging' : ''}"
+				style="left: {view.bounds.x}px; top: {view.bounds.y}px; width: {view.bounds.w}px; height: {view.bounds.h}px;"
+			>
+				<button
+					type="button"
+					class="mash-canvas-bowl-wash absolute inset-0"
+					aria-label={`Select bowl ${view.bowl.name}; drag to move the whole bowl`}
+					title="Drag empty bowl space to move every card"
+					onpointerenter={() => (hoveredBowlId = view.bowl.id)}
+					onpointerleave={() => {
+						if (dragBowlId !== view.bowl.id) hoveredBowlId = null;
+					}}
+					onpointerdown={(e) => startBowlDrag(e, view.bowl)}
+					onclick={() => {
+						if (didDrag) return;
+						hoveredBowlId = view.bowl.id;
+						onSelectBowl?.(view.bowl.id);
+					}}
+				></button>
+				<div
+					data-canvas-chrome
+					data-bowl-drag-handle
+					class="mash-canvas-bowl-label absolute top-0 left-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center"
+					role="group"
+					aria-label={`Bowl ${view.bowl.name}; drag the handle to move every card`}
+					title="Drag this handle to move the whole bowl"
+					onpointerenter={() => (hoveredBowlId = view.bowl.id)}
+					onpointerleave={() => {
+						if (dragBowlId !== view.bowl.id) hoveredBowlId = null;
+					}}
+					onpointerdown={(e) => startBowlDrag(e, view.bowl)}
+				>
+					<GripVertical class="mash-canvas-bowl-grip h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+					<IceCreamBowl class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+					<input
+						value={view.bowl.name}
+						maxlength="80"
+						aria-label="Bowl name"
+						onblur={(e) => void onRenameBowl?.(view.bowl.id, e.currentTarget.value)}
+						onkeydown={(e) => {
+							if (e.key === 'Enter') {
+								e.preventDefault();
+								e.currentTarget.blur();
+							} else if (e.key === 'Escape') {
+								e.currentTarget.value = view.bowl.name;
+								e.currentTarget.blur();
+							}
+						}}
+					/>
+					<span class="mash-canvas-bowl-count">{view.bowl.itemIds.length}</span>
+					<button
+						type="button"
+						class="mash-canvas-bowl-dissolve"
+						aria-label={`Dissolve bowl ${view.bowl.name}`}
+						title="Dissolve bowl · cards stay on the desk"
+						onclick={() => void onDissolveBowl?.(view.bowl.id)}
+					>
+						<X class="h-3 w-3" />
+					</button>
+				</div>
+				<div class="mash-canvas-bowl-hint absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 {hoveredBowlId === view.bowl.id || dragBowlId === view.bowl.id ? 'is-visible' : ''}" aria-hidden="true">
+					Drag empty bowl space to move all · drag a card to rearrange
+				</div>
+			</div>
+		{/each}
 		{#each items as item (item.id)}
 			{@const note = notesById.get(item.noteId)}
 			{#if note && visibleItemIds.has(item.id)}

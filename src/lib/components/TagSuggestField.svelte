@@ -35,6 +35,7 @@
 	const listId = `mash-tag-suggest-${Math.random().toString(36).slice(2, 9)}`;
 
 	let open = $state(false);
+	// svelte-ignore state_referenced_locally -- the effect below resyncs external changes while closed
 	let draft = $state(formatDraft(value));
 	let highlight = $state(-1);
 	let controlEl: HTMLDivElement | undefined = $state();

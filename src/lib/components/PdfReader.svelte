@@ -561,6 +561,8 @@
 					class="mash-pdf-page"
 					class:is-region-mode={regionMode}
 					style="width: {pageWidth || 640}px; height: {pageHeight || 820}px;"
+					role="region"
+					aria-label="PDF page {pageNumber} clipping surface"
 					onpointerdown={onRegionPointerDown}
 					onpointermove={onRegionPointerMove}
 					onpointerup={onRegionPointerUp}

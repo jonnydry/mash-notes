@@ -29,7 +29,8 @@
 		FileDown,
 		Printer,
 		Bookmark,
-		MoreHorizontal
+		MoreHorizontal,
+		IceCreamBowl
 	} from 'lucide-svelte';
 	import MashDock from '$lib/components/MashDock.svelte';
 	import PeelScanner from '$lib/components/PeelScanner.svelte';
@@ -810,7 +811,8 @@
 			if (showPalette) paletteQuery = '';
 		},
 		handleNewNote: () => handleNewNote(),
-		startTypingNote: (initialTitle) => handleNewNote(initialTitle),
+		startTypingNote: (initialBody) =>
+			handleNewNote('Untitled', { initialBody, focus: 'body' }),
 		canStartTypingNote: () =>
 			!Boolean(
 				showPalette ||
@@ -1042,7 +1044,7 @@
 			if (batch.docxFiles.length > 0) failedCount += batch.docxFiles.length;
 			if (batch.htmlFiles.length > 0) failedCount += batch.htmlFiles.length;
 		} else if (batch.docxFiles.length > 0) {
-			openDocxReader(batch.docxFiles[0]!);
+			await openDocxReader(batch.docxFiles[0]!);
 			openedDocName = batch.docxFiles[0]!.name;
 			if (batch.docxFiles.length > 1) failedCount += batch.docxFiles.length - 1;
 			if (batch.htmlFiles.length > 0) failedCount += batch.htmlFiles.length;
@@ -1321,12 +1323,15 @@
 		if (searchDropdownOpen) closeSearchDropdown(false);
 	}
 
-	async function handleNewNote(initialTitle = 'Untitled') {
+	async function handleNewNote(
+		initialTitle = 'Untitled',
+		opts: { initialBody?: string; focus?: 'title' | 'body' } = {}
+	) {
 		const onPinned = peel.currentFilter.type === 'pinned';
 		const note = await createNote({
 			...activeNoteOwnership(),
 			title: initialTitle,
-			body: '',
+			body: opts.initialBody ?? '',
 			folder: peel.currentFilter.type === 'folder' ? peel.currentFilter.value || '' : '',
 			links: [],
 			pinned: onPinned ? 1 : 0
@@ -1345,7 +1350,7 @@
 			};
 			await canvas.handleDropNotes([note.id], spawn.x, spawn.y);
 			library.selectNote(note.id);
-			canvas.expandSticky(note.id, 'title');
+			canvas.expandSticky(note.id, opts.focus ?? 'title');
 			return;
 		}
 		library.selectNote(note.id);
@@ -1370,6 +1375,13 @@
 			return;
 		}
 		void invokeOperatorAction('combine-selection');
+	}
+
+	async function bowlSelection() {
+		const bowlId = await canvas.createBowl(library.selectionIds);
+		if (!bowlId) return;
+		await tick();
+		canvas.canvasBoard?.focusBowlName?.(bowlId);
 	}
 
 	function toggleMoreMenu() {
@@ -1965,6 +1977,10 @@
 					settlingIds={canvas.settlingIds}
 					canvasId={canvas.activeCanvas?.id ?? null}
 					edges={canvas.canvasEdges}
+					bowls={canvas.canvasBowls}
+					onSelectBowl={canvas.selectBowl}
+					onRenameBowl={(bowlId, name) => canvas.renameBowl(bowlId, name)}
+					onDissolveBowl={(bowlId) => canvas.dissolveBowl(bowlId)}
 					onConnectFlow={(from, to) => canvas.connectFlowEdge(from, to)}
 					onDisconnectFlow={(id) => void canvas.disconnectFlowEdge(id)}
 					onUnstitchSequence={(i) => void canvas.unstitchSequence(i)}
@@ -2610,6 +2626,18 @@
 							Mash
 						</button>
 					{/if}
+					{#if library.selectionIds.length >= 2}
+						<button
+							type="button"
+							onclick={() => void bowlSelection()}
+							class="mash-btn-ghost mash-selection-secondary flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs"
+							title="Group selected cards in a temporary bowl"
+							data-testid="selection-bowl"
+						>
+							<IceCreamBowl class="h-3.5 w-3.5" />
+							Bowl
+						</button>
+					{/if}
 					{#if kitchenMenuSections.length > 0}
 						<button
 							type="button"
@@ -2862,7 +2890,7 @@
 			const input = e.currentTarget as HTMLInputElement;
 			const file = input.files?.[0];
 			input.value = '';
-			if (file) openDocxReader(file);
+			if (file) void openDocxReader(file);
 		}}
 	/>
 	<input

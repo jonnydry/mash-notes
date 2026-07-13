@@ -45,6 +45,20 @@ describe('html-import', () => {
 		expect(cleaned.toLowerCase()).not.toContain('src="data:');
 	});
 
+	it('allows safe raster data images only when explicitly requested', () => {
+		const png = 'data:image/png;base64,aGVsbG8=';
+		const cleaned = sanitizeHtmlFragment(`<img src="${png}"><a href="${png}">x</a>`, {
+			allowDataImages: true
+		});
+		expect(cleaned).toContain(png);
+		expect(cleaned).not.toContain(`href="${png}"`);
+		expect(
+			sanitizeHtmlFragment('<img src="data:image/svg+xml;base64,PHN2Zz4=">', {
+				allowDataImages: true
+			})
+		).not.toContain('data:image/svg');
+	});
+
 	it('converts a small html blob', async () => {
 		const file = new File(
 			['<!doctype html><html><title>Demo</title><body><p>Hello desk</p></body></html>'],

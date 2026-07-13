@@ -120,6 +120,17 @@ export interface Canvas {
 	modified: number;
 	/** Owning desk. Legacy canvas records may omit until migration. */
 	sessionId?: string;
+	/** Temporary spatial groups that travel with this desk. */
+	bowls?: CanvasBowl[];
+}
+
+/** A lightweight named group of cards on one canvas. */
+export interface CanvasBowl {
+	id: string;
+	name: string;
+	itemIds: string[];
+	created: number;
+	modified: number;
 }
 
 /**
