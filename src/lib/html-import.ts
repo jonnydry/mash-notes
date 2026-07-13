@@ -157,26 +157,53 @@ function allowedDataImage(tag: string, name: string, value: string, options: Htm
 	);
 }
 
+function extractFallbackTextAndImages(
+	raw: string,
+	options: HtmlSanitizeOptions,
+	preservedImages: string[]
+): string {
+	let result = '';
+	let cursor = 0;
+	while (cursor < raw.length) {
+		const tagStart = raw.indexOf('<', cursor);
+		if (tagStart === -1) {
+			result += raw.slice(cursor);
+			break;
+		}
+		result += raw.slice(cursor, tagStart);
+		const tagEnd = raw.indexOf('>', tagStart + 1);
+		if (tagEnd === -1) {
+			result += raw.slice(tagStart);
+			break;
+		}
+
+		const tag = raw.slice(tagStart, tagEnd + 1);
+		const tagName = tag
+			.slice(1)
+			.trimStart()
+			.split(/[\s/>]/, 1)[0]
+			?.toLowerCase();
+		if (options.allowDataImages === true && tagName === 'img') {
+			const match = tag.match(/\bsrc\s*=\s*(["'])([^"']+)\1/i);
+			const src = match?.[2]?.trim() ?? '';
+			if (SAFE_DATA_IMAGE.test(src)) {
+				const index = preservedImages.push(src) - 1;
+				result += `__MASH_DATA_IMAGE_${index}__`;
+			}
+		}
+		cursor = tagEnd + 1;
+	}
+	return result;
+}
+
 /** Strip active content; keep readable structure for local user files. */
 export function sanitizeHtmlFragment(raw: string, options: HtmlSanitizeOptions = {}): string {
 	if (typeof DOMParser === 'undefined') {
-		// Conservative non-browser fallback: preserve text and approved local images only.
-		// It deliberately does not try to parse arbitrary HTML with regular expressions.
+		// Conservative non-browser fallback: discard tags, escape the extracted text,
+		// and reintroduce only approved local raster images that we construct ourselves.
 		const preservedImages: string[] = [];
-		const withoutActiveBlocks = raw.replace(
-			/<(?:script|style|template|noscript|iframe|object|embed|svg|math)\b[^>]*>[\s\S]*?<\/(?:script|style|template|noscript|iframe|object|embed|svg|math)\s*>/gi,
-			''
-		);
-		const withImageTokens = options.allowDataImages
-			? withoutActiveBlocks.replace(/<img\b[^>]*>/gi, (tag) => {
-					const match = tag.match(/\bsrc\s*=\s*(["'])([^"']+)\1/i);
-					const src = match?.[2]?.trim() ?? '';
-					if (!SAFE_DATA_IMAGE.test(src)) return '';
-					const index = preservedImages.push(src) - 1;
-					return `__MASH_DATA_IMAGE_${index}__`;
-				})
-			: withoutActiveBlocks;
-		const text = escapeHtml(withImageTokens.replace(/<[^>]*>/g, ' '));
+		const withImageTokens = extractFallbackTextAndImages(raw, options, preservedImages);
+		const text = escapeHtml(withImageTokens);
 		return text.replace(/__MASH_DATA_IMAGE_(\d+)__/g, (_match, index: string) => {
 			const src = preservedImages[Number(index)];
 			return src ? `<img src="${src}" alt="" loading="lazy" decoding="async">` : '';

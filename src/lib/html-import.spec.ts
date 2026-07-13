@@ -33,6 +33,16 @@ describe('html-import', () => {
 		expect(cleaned).toContain('Ok');
 	});
 
+	it('keeps malformed active markup inert in the non-browser fallback', () => {
+		const cleaned = sanitizeHtmlFragment(
+			'<script>first()</script\t\n data-junk><scr<script>ipt>second()</scr</script>ipt>'
+		);
+		expect(cleaned.toLowerCase()).not.toContain('<script');
+		expect(cleaned.toLowerCase()).not.toContain('</script');
+		expect(cleaned).toContain('first()');
+		expect(cleaned).toContain('second()');
+	});
+
 	it('strips javascript and data href/src values', () => {
 		const cleaned = sanitizeHtmlFragment(
 			'<a href="javascript:alert(1)">x</a><a href="data:text/html,hi">y</a><a href="//evil.example">z</a><img src="data:image/png;base64,abc" />'
