@@ -1,7 +1,11 @@
 <script lang="ts">
 	import { X } from 'lucide-svelte';
 	import { theme } from '$lib/stores/theme.svelte';
-	import { typography, type TypographySuiteId } from '$lib/stores/typography.svelte';
+	import {
+		typography,
+		type TextSizeId,
+		type TypographySuiteId
+	} from '$lib/stores/typography.svelte';
 	import { flatShortcutRows } from '$lib/keyboard-shortcuts';
 	import { formatNoteTimestamp } from '$lib/format';
 	import { syncBackupHint } from '$lib/sync-hygiene';
@@ -57,7 +61,16 @@
 </script>
 
 <aside class="mash-peel mash-settings" aria-label="Settings">
-	<div class="mash-peel-header">
+	<div class="mash-peel-header mash-settings-header">
+		<img
+			src="/icons/mash-settings-mascot.png"
+			srcset="/icons/mash-settings-mascot.png 1x, /icons/mash-settings-mascot@2x.png 2x"
+			alt="Scoop the settings mechanic"
+			width="52"
+			height="52"
+			class="mash-settings-mascot"
+			draggable="false"
+		/>
 		<div class="min-w-0 flex-1">
 			<div class="mash-peel-title truncate">Settings</div>
 			<div class="mash-peel-subtitle">Local preferences & data</div>
@@ -111,6 +124,32 @@
 			</div>
 			<p class="mash-settings-hint">Stickies and chrome both follow day / night.</p>
 
+			<div class="mash-settings-text-block">
+				<span class="mash-settings-label" id="mash-text-size-label">Text size</span>
+				<div
+					class="mash-settings-seg mash-settings-text-size"
+					role="radiogroup"
+					aria-labelledby="mash-text-size-label"
+					data-testid="text-size"
+				>
+					{#each typography.textSizes as size (size.id)}
+						<button
+							type="button"
+							role="radio"
+							class="mash-settings-seg-btn"
+							class:is-active={typography.textSize === size.id}
+							aria-checked={typography.textSize === size.id}
+							title={size.hint}
+							data-testid="text-size-{size.id}"
+							onclick={() => typography.setTextSize(size.id as TextSizeId)}
+						>
+							{size.label}
+						</button>
+					{/each}
+				</div>
+				<p class="mash-settings-hint">Adjusts text without resizing the desk or your notes.</p>
+			</div>
+
 			<div class="mash-settings-type-block">
 				<span class="mash-settings-label" id="mash-typography-label">Typography</span>
 				<div
@@ -133,10 +172,7 @@
 								<span class="mash-settings-type-name">{suite.label}</span>
 								<span class="mash-settings-type-hint">{suite.hint}</span>
 							</span>
-							<span
-								class="mash-settings-type-sample"
-								style="font-family: {suite.display};"
-							>
+							<span class="mash-settings-type-sample" style="font-family: {suite.display};">
 								{suite.sample}
 							</span>
 						</button>

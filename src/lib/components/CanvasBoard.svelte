@@ -558,7 +558,9 @@
 				bounds: canvasBowlBounds(bowl, items, (item) => cardSize(item, item.noteId))
 			}))
 			.filter(
-				(view): view is { bowl: CanvasBowl; bounds: { x: number; y: number; w: number; h: number } } =>
+				(
+					view
+				): view is { bowl: CanvasBowl; bounds: { x: number; y: number; w: number; h: number } } =>
 					view.bounds !== null
 			)
 	);
@@ -1861,7 +1863,8 @@
 			<div
 				data-bowl-id={view.bowl.id}
 				class="mash-canvas-bowl absolute {dragBowlId === view.bowl.id ? 'is-dragging' : ''}"
-				style="left: {view.bounds.x}px; top: {view.bounds.y}px; width: {view.bounds.w}px; height: {view.bounds.h}px;"
+				style="left: {view.bounds.x}px; top: {view.bounds.y}px; width: {view.bounds
+					.w}px; height: {view.bounds.h}px;"
 			>
 				<button
 					type="button"
@@ -1920,7 +1923,13 @@
 						<X class="h-3 w-3" />
 					</button>
 				</div>
-				<div class="mash-canvas-bowl-hint absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 {hoveredBowlId === view.bowl.id || dragBowlId === view.bowl.id ? 'is-visible' : ''}" aria-hidden="true">
+				<div
+					class="mash-canvas-bowl-hint absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 {hoveredBowlId ===
+						view.bowl.id || dragBowlId === view.bowl.id
+						? 'is-visible'
+						: ''}"
+					aria-hidden="true"
+				>
 					Drag empty bowl space to move all · drag a card to rearrange
 				</div>
 			</div>
@@ -2012,7 +2021,7 @@
 							class="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-[var(--mash-accent-wash)]"
 						>
 							<span
-								class="mash-display rounded-full bg-[var(--mash-accent)] px-3 py-1 text-xs font-semibold text-[var(--mash-accent-ink)] shadow"
+								class="mash-display mash-type-caption rounded-full bg-[var(--mash-accent)] px-3 py-1 font-semibold text-[var(--mash-accent-ink)] shadow"
 							>
 								Drop to mash
 							</span>
@@ -2033,7 +2042,7 @@
 						>
 							<p
 								id="mash-drag-confirm-title"
-								class="mash-display text-center text-sm font-medium"
+								class="mash-display mash-type-body text-center font-medium"
 								style="color: var(--mash-ink);"
 							>
 								{pendingMashCopy
@@ -2041,7 +2050,7 @@
 									: 'Mash these notes?'}
 							</p>
 							<p
-								class="max-w-[16rem] text-center text-[10px] leading-snug text-[var(--mash-ink-muted)]"
+								class="mash-type-micro max-w-[16rem] text-center leading-snug text-[var(--mash-ink-muted)]"
 							>
 								One combined sticky replaces both cards. Unmash restores the originals.
 							</p>
@@ -2049,7 +2058,7 @@
 								<button
 									data-dialog-initial-focus
 									type="button"
-									class="mash-btn rounded-lg px-3 py-1.5 text-xs font-semibold"
+									class="mash-btn mash-type-caption rounded-lg px-3 py-1.5 font-semibold"
 									onclick={(e) => {
 										e.stopPropagation();
 										confirmPendingMash();
@@ -2059,7 +2068,7 @@
 								</button>
 								<button
 									type="button"
-									class="rounded-lg border px-3 py-1.5 text-xs"
+									class="mash-type-caption rounded-lg border px-3 py-1.5"
 									style="border-color: var(--mash-glass-border); color: var(--mash-ink);"
 									onclick={(e) => {
 										e.stopPropagation();
@@ -2081,7 +2090,7 @@
 								type="text"
 								value={note.title}
 								readonly={isPermanentWelcome}
-								class="mash-focus min-w-0 flex-1 bg-transparent text-sm font-semibold tracking-tight outline-none"
+								class="mash-focus mash-type-body min-w-0 flex-1 bg-transparent font-semibold tracking-tight outline-none"
 								style="color: var(--mash-card-ink);"
 								onpointerdown={(e) => e.stopPropagation()}
 								oninput={(e) => onTitleChange(note.id, (e.currentTarget as HTMLInputElement).value)}
@@ -2160,7 +2169,7 @@
 							{#if links.outgoingCount + links.backlinkCount > 0}
 								<button
 									type="button"
-									class="shrink-0 rounded-md px-1.5 py-0.5 text-[10px] text-[var(--mash-card-muted)] tabular-nums hover:bg-[var(--mash-card-hover)] hover:text-[var(--mash-accent)]"
+									class="mash-type-micro shrink-0 rounded-md px-1.5 py-0.5 text-[var(--mash-card-muted)] tabular-nums hover:bg-[var(--mash-card-hover)] hover:text-[var(--mash-accent)]"
 									title="{links.outgoingCount} links · {links.backlinkCount} backlinks — open Linked"
 									aria-label="{links.outgoingCount} links, {links.backlinkCount} backlinks"
 									onclick={(e) => {
@@ -2198,7 +2207,7 @@
 							class="mash-card-title-row flex items-start justify-between gap-1.5 border-b border-[var(--mash-card-edge)] px-2.5 py-2"
 						>
 							<span
-								class="flex min-w-0 items-center gap-1 truncate text-xs font-semibold tracking-tight"
+								class="mash-type-control flex min-w-0 items-center gap-1 truncate font-semibold tracking-tight"
 							>
 								{#if note.pinned === 1}
 									<Pin class="h-3 w-3 shrink-0 text-[var(--mash-accent)]" />
@@ -2207,17 +2216,15 @@
 								<span class="truncate">{note.title}</span>
 								{#if note.scope === 'kept' && !isPermanentWelcome}
 									<span
-										class="mash-card-scope shrink-0 rounded px-1 py-px text-[8px] font-semibold tracking-wide uppercase"
+										class="mash-card-scope mash-type-micro shrink-0 rounded px-1 py-px font-semibold tracking-wide uppercase"
 										style="background: color-mix(in srgb, var(--mash-accent) 16%, transparent); color: var(--mash-accent);"
-										title="Kept on this device"
-										>Kept</span
+										title="Kept on this device">Kept</span
 									>
 								{:else if note.scope === 'session' && !isPermanentWelcome}
 									<span
-										class="mash-card-scope shrink-0 rounded px-1 py-px text-[8px] font-semibold tracking-wide uppercase"
+										class="mash-card-scope mash-type-micro shrink-0 rounded px-1 py-px font-semibold tracking-wide uppercase"
 										style="background: color-mix(in srgb, var(--mash-card-muted) 18%, transparent); color: var(--mash-card-muted);"
-										title="Scratch desk ingredient — clear with the desk unless you Keep"
-										>Desk</span
+										title="Scratch desk ingredient — clear with the desk unless you Keep">Desk</span
 									>
 								{/if}
 							</span>
@@ -2236,7 +2243,7 @@
 						</div>
 						<div
 							data-card-scroll
-							class="mash-card-preview min-h-0 flex-1 overflow-y-auto overscroll-contain px-2.5 py-2.5 text-[11px] leading-snug text-[var(--mash-card-muted)]"
+							class="mash-card-preview mash-type-caption min-h-0 flex-1 overflow-y-auto overscroll-contain px-2.5 py-2.5 leading-snug text-[var(--mash-card-muted)]"
 							style="text-align: {note.textAlign === 'center' || note.textAlign === 'right'
 								? note.textAlign
 								: 'left'};"
@@ -2270,7 +2277,7 @@
 							{/if}
 							{#if note.source?.kind === 'pdf'}
 								<div
-									class="mash-card-source mt-2 flex items-center gap-1 border-t pt-1.5 text-[9px]"
+									class="mash-card-source mash-type-micro mt-2 flex items-center gap-1 border-t pt-1.5"
 									style="border-color: var(--mash-card-edge); color: var(--mash-accent);"
 									title="Captured from {note.source.title}, page {note.source.page}"
 								>
@@ -2279,7 +2286,7 @@
 								</div>
 							{:else if note.source?.kind === 'docx'}
 								<div
-									class="mash-card-source mt-2 flex items-center gap-1 border-t pt-1.5 text-[9px]"
+									class="mash-card-source mash-type-micro mt-2 flex items-center gap-1 border-t pt-1.5"
 									style="border-color: var(--mash-card-edge); color: var(--mash-accent);"
 									title="Captured from {note.source.title}"
 								>
@@ -2288,7 +2295,7 @@
 								</div>
 							{:else if note.source?.kind === 'image'}
 								<div
-									class="mash-card-source mt-2 flex items-center gap-1 border-t pt-1.5 text-[9px]"
+									class="mash-card-source mash-type-micro mt-2 flex items-center gap-1 border-t pt-1.5"
 									style="border-color: var(--mash-card-edge); color: var(--mash-accent);"
 									title="Image: {note.source.title}"
 								>
@@ -2297,7 +2304,7 @@
 								</div>
 							{:else if note.source?.kind === 'url'}
 								<div
-									class="mash-card-source mt-2 flex items-center gap-1 border-t pt-1.5 text-[9px]"
+									class="mash-card-source mash-type-micro mt-2 flex items-center gap-1 border-t pt-1.5"
 									style="border-color: var(--mash-card-edge); color: var(--mash-accent);"
 									title={note.source.url}
 								>
@@ -2306,7 +2313,7 @@
 								</div>
 							{:else if note.source?.kind === 'html'}
 								<div
-									class="mash-card-source mt-2 flex items-center gap-1 border-t pt-1.5 text-[9px]"
+									class="mash-card-source mash-type-micro mt-2 flex items-center gap-1 border-t pt-1.5"
 									style="border-color: var(--mash-card-edge); color: var(--mash-accent);"
 									title="Captured from {note.source.title}"
 								>
@@ -2316,7 +2323,7 @@
 							{/if}
 							{#if note.mashedFrom?.length}
 								<div
-									class="mash-card-provenance mt-2 border-t pt-1.5 text-[9px]"
+									class="mash-card-provenance mash-type-micro mt-2 border-t pt-1.5"
 									style="border-color: var(--mash-card-edge); color: var(--mash-accent);"
 									title={provenanceTitles.length > 0
 										? `Made from: ${provenanceTitles.join(', ')}`
@@ -2393,7 +2400,7 @@
 				<button
 					type="button"
 					data-flow-edge
-					class="mash-flow-edge-hit absolute z-[4] -translate-x-1/2 -translate-y-1/2 rounded-full border bg-[var(--mash-card)] text-[10px] font-bold shadow {invalidEdgeIds.has(
+					class="mash-flow-edge-hit mash-type-micro absolute z-[4] -translate-x-1/2 -translate-y-1/2 rounded-full border bg-[var(--mash-card)] font-bold shadow {invalidEdgeIds.has(
 						path.id
 					)
 						? 'is-invalid border-[var(--mash-danger)] text-[var(--mash-danger)]'
@@ -2532,9 +2539,7 @@
 	</div>
 
 	{#if emptyStateVisible}
-		<div
-			class="pointer-events-none absolute inset-0 flex items-center justify-center p-6 sm:p-8"
-		>
+		<div class="pointer-events-none absolute inset-0 flex items-center justify-center p-6 sm:p-8">
 			<div
 				class="mash-empty-state flex max-w-sm flex-col items-center text-center transition-transform duration-200
 					{isExternalDragOver ? 'mash-empty-state-active scale-[1.03]' : ''}"
@@ -2548,7 +2553,9 @@
 					class="mash-empty-mascot pointer-events-none h-40 w-auto select-none sm:h-44"
 					draggable="false"
 				/>
-				<p class="mash-display mash-empty-title mt-5 text-xl font-medium tracking-tight sm:text-[1.35rem]">
+				<p
+					class="mash-display mash-empty-title mt-5 text-xl font-medium tracking-tight sm:text-[1.35rem]"
+				>
 					{isFileDragOver
 						? 'Drop files to import'
 						: isExternalDragOver
@@ -2556,11 +2563,11 @@
 							: emptyMascot.title}
 				</p>
 				{#if isFileDragOver}
-					<p class="mash-empty-copy mt-2 max-w-[18rem] text-sm leading-relaxed">
+					<p class="mash-empty-copy mash-type-body mt-2 max-w-[18rem] leading-relaxed">
 						PDF, Markdown, text, note JSON, or a Mash sync bundle
 					</p>
 				{:else if !isExternalDragOver}
-					<p class="mash-empty-copy mt-2 max-w-[17rem] text-sm leading-relaxed">
+					<p class="mash-empty-copy mash-type-body mt-2 max-w-[17rem] leading-relaxed">
 						{emptyMascot.copy}
 					</p>
 					{#if showTryAMash && tryAMash}
@@ -2572,7 +2579,7 @@
 						>
 							<button
 								type="button"
-								class="mash-btn rounded-xl px-4 py-2 text-sm font-semibold"
+								class="mash-btn mash-type-body rounded-xl px-4 py-2 font-semibold"
 								data-testid="try-a-mash"
 								disabled={tryAMashBusy}
 								aria-busy={tryAMashBusy}
@@ -2589,7 +2596,7 @@
 							{#if dismissTryAMash}
 								<button
 									type="button"
-									class="text-[11px] font-medium underline-offset-2 hover:underline disabled:opacity-50"
+									class="mash-type-caption font-medium underline-offset-2 hover:underline disabled:opacity-50"
 									style="color: var(--mash-ink-muted);"
 									data-testid="try-a-mash-dismiss"
 									disabled={tryAMashBusy}
@@ -2618,7 +2625,7 @@
 				>
 					<FileUp size={28} strokeWidth={1.8} aria-hidden="true" />
 					<p class="mash-display mt-2 text-lg font-medium">Drop files to import</p>
-					<p class="mt-1 text-xs">.pdf, .md, .markdown, .txt, or Mash .json</p>
+					<p class="mash-type-caption mt-1">.pdf, .md, .markdown, .txt, or Mash .json</p>
 				</div>
 			{/if}
 		</div>

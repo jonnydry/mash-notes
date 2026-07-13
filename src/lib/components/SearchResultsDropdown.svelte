@@ -67,7 +67,10 @@
 					</button>
 					<button type="button" class="min-w-0 flex-1 text-left" onclick={() => onOpen(result.id)}>
 						<div class="flex items-center justify-between gap-1.5">
-							<span class="truncate text-[13px] font-medium leading-tight" style="color: var(--mash-ink);">
+							<span
+								class="mash-type-control truncate leading-tight font-medium"
+								style="color: var(--mash-ink);"
+							>
 								{result.title}
 							</span>
 							{#if result.pinned}
@@ -76,14 +79,14 @@
 						</div>
 						{#if note}
 							<div
-								class="mt-px line-clamp-1 text-[11px] leading-snug"
+								class="mash-type-caption mt-px line-clamp-1 leading-snug"
 								style="color: var(--mash-ink-muted);"
 							>
 								{notePreview(note.body, 64)}
 							</div>
 						{/if}
 						<div
-							class="mt-0.5 flex items-center justify-between gap-2 text-[9px] tabular-nums"
+							class="mash-type-micro mt-0.5 flex items-center justify-between gap-2 tabular-nums"
 							style="color: var(--mash-ink-muted);"
 						>
 							<span class="truncate">{result.folder || '—'}</span>

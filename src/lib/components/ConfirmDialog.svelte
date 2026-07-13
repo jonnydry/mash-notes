@@ -7,6 +7,7 @@
 		confirmLabel?: string;
 		cancelLabel?: string;
 		danger?: boolean;
+		illustration?: string;
 		onConfirm: () => void;
 		onCancel: () => void;
 	}
@@ -18,6 +19,7 @@
 		confirmLabel = 'Confirm',
 		cancelLabel = 'Cancel',
 		danger = false,
+		illustration,
 		onConfirm,
 		onCancel
 	}: Props = $props();
@@ -64,17 +66,32 @@
 		<div
 			use:focusTrap={{ initialFocus: '[data-dialog-initial-focus]' }}
 			class="mash-dialog-panel mash-confirm-dialog"
+			class:has-illustration={Boolean(illustration)}
 			role="alertdialog"
 			aria-modal="true"
 			aria-labelledby="mash-confirm-title"
 			aria-describedby="mash-confirm-msg"
 		>
-			<h2 id="mash-confirm-title" class="mash-display text-base font-semibold tracking-tight">
-				{title}
-			</h2>
-			<p id="mash-confirm-msg" class="mash-dialog-message">
-				{message}
-			</p>
+			<div class:has-illustration={Boolean(illustration)} class="mash-confirm-content">
+				{#if illustration}
+					<img
+						src={illustration}
+						alt=""
+						width="112"
+						height="112"
+						class="mash-confirm-illustration"
+						draggable="false"
+					/>
+				{/if}
+				<div class="mash-confirm-copy">
+					<h2 id="mash-confirm-title" class="mash-display text-base font-semibold tracking-tight">
+						{title}
+					</h2>
+					<p id="mash-confirm-msg" class="mash-dialog-message">
+						{message}
+					</p>
+				</div>
+			</div>
 			<div class="mash-dialog-actions">
 				<button
 					type="button"

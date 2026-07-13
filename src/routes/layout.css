@@ -75,6 +75,19 @@
 
 	--mash-font-ui: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
 	--mash-font-display: 'Fraunces', ui-serif, Georgia, serif;
+
+	/* Semantic type scale. Text-size preferences change type only, never board geometry. */
+	--mash-type-optical-adjust: 0px;
+	--mash-type-micro-base: 11px;
+	--mash-type-caption-base: 12px;
+	--mash-type-control-base: 13px;
+	--mash-type-body-base: 14px;
+	--mash-type-reading-base: 16px;
+	--mash-type-micro: calc(var(--mash-type-micro-base) + var(--mash-type-optical-adjust));
+	--mash-type-caption: calc(var(--mash-type-caption-base) + var(--mash-type-optical-adjust));
+	--mash-type-control: calc(var(--mash-type-control-base) + var(--mash-type-optical-adjust));
+	--mash-type-body: calc(var(--mash-type-body-base) + var(--mash-type-optical-adjust));
+	--mash-type-reading: calc(var(--mash-type-reading-base) + var(--mash-type-optical-adjust));
 	--mash-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(0, 0, 0, 0.28);
 	--mash-shadow-lift: 0 4px 8px rgba(0, 0, 0, 0.4), 0 16px 40px rgba(0, 0, 0, 0.45);
 
@@ -83,6 +96,28 @@
 	--mash-scrollbar-thumb: rgba(240, 230, 210, 0.26);
 	--mash-scrollbar-thumb-hover: rgba(240, 230, 210, 0.44);
 	--mash-scrollbar-track: transparent;
+}
+
+html[data-text-size='compact'] {
+	--mash-type-micro-base: 10px;
+	--mash-type-caption-base: 11px;
+	--mash-type-control-base: 12px;
+	--mash-type-body-base: 13px;
+	--mash-type-reading-base: 15px;
+}
+
+html[data-text-size='large'] {
+	--mash-type-micro-base: 12px;
+	--mash-type-caption-base: 13px;
+	--mash-type-control-base: 14px;
+	--mash-type-body-base: 16px;
+	--mash-type-reading-base: 18px;
+}
+
+html[data-typography='napkin'],
+html[data-typography='terminal'] {
+	/* These faces read optically smaller than the proportional suites. */
+	--mash-type-optical-adjust: 0.5px;
 }
 
 [data-theme='light'] {
@@ -163,6 +198,22 @@ body {
 	/* Firefox: thin + kitchen thumb */
 	scrollbar-width: thin;
 	scrollbar-color: var(--mash-scrollbar-thumb) var(--mash-scrollbar-track);
+}
+
+.mash-type-micro {
+	font-size: var(--mash-type-micro);
+}
+.mash-type-caption {
+	font-size: var(--mash-type-caption);
+}
+.mash-type-control {
+	font-size: var(--mash-type-control);
+}
+.mash-type-body {
+	font-size: var(--mash-type-body);
+}
+.mash-type-reading {
+	font-size: var(--mash-type-reading);
 }
 
 /* Global narrow scrollbars (Chrome / Safari / Edge) */
@@ -553,6 +604,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 .mash-card-title-row {
 	letter-spacing: -0.015em;
 	line-height: 1.3;
+	font-size: var(--mash-type-control);
 	color: var(--mash-card-ink);
 }
 .mash-card-title-row > span {
@@ -578,7 +630,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	gap: 0.25rem;
 	min-width: 0;
 	flex: 1 1 auto;
-	font-size: 10px;
+	font-size: var(--mash-type-micro);
 	color: var(--mash-card-muted);
 }
 .mash-folder-field-icon {
@@ -599,7 +651,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	border-radius: 0.25rem;
 	background: transparent;
 	padding: 0.125rem 0;
-	font-size: 11px;
+	font-size: var(--mash-type-caption);
 	line-height: 1.35;
 	outline: none;
 	color: var(--mash-card-ink);
@@ -636,7 +688,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	padding: 7px 9px;
 	border-radius: 7px;
 	text-align: left;
-	font-size: 11px;
+	font-size: var(--mash-type-caption);
 	line-height: 1.3;
 	color: var(--mash-ink);
 	white-space: nowrap;
@@ -648,7 +700,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 		transform 140ms ease;
 }
 .mash-folder-suggest-option.is-muted {
-	font-size: 10px;
+	font-size: var(--mash-type-micro);
 	color: var(--mash-ink-muted);
 }
 .mash-folder-suggest-option:hover,
@@ -725,7 +777,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 }
 .mash-tag-suggest-create-label {
 	min-width: 0;
-	font-size: 11px;
+	font-size: var(--mash-type-caption);
 	line-height: 1.3;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -750,7 +802,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 }
 .mash-tag-suggest-empty {
 	padding: 8px 8px 6px;
-	font-size: 10px;
+	font-size: var(--mash-type-micro);
 	line-height: 1.35;
 	color: var(--mash-ink-muted);
 }
@@ -813,7 +865,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	border-radius: 7px;
 	padding: 3px 7px;
 	color: var(--mash-ink-muted);
-	font-size: 10px;
+	font-size: var(--mash-type-micro);
 	font-weight: 600;
 	line-height: 1;
 }
@@ -831,7 +883,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	width: 26px;
 	height: 26px;
 	border-radius: 6px;
-	font-size: 12px;
+	font-size: var(--mash-type-caption);
 	font-weight: 600;
 	color: var(--mash-chrome-muted);
 	line-height: 1;
@@ -883,7 +935,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 .mash-canvas-chrome-top .mash-board-chip,
 .mash-canvas-chrome-top .mash-board-chip-soft {
 	border-radius: 999px;
-	font-size: 10px;
+	font-size: var(--mash-type-caption);
 	line-height: 1.2;
 }
 .mash-canvas-chrome-top .mash-board-chip-btn {
@@ -912,7 +964,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	justify-content: center;
 	border-radius: 10px;
 	color: var(--mash-chrome-ink);
-	font-size: 12px;
+	font-size: var(--mash-type-caption);
 	font-weight: 600;
 }
 .mash-mobile-chrome-btn {
@@ -940,7 +992,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	border-radius: 10px;
 	padding: 8px 10px;
 	color: var(--mash-ink-muted);
-	font-size: 12px;
+	font-size: var(--mash-type-caption);
 	font-weight: 600;
 	text-align: left;
 }
@@ -1032,7 +1084,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	width: clamp(5rem, 11ch, 10rem);
 	background: transparent;
 	color: var(--mash-ink);
-	font-size: 12px;
+	font-size: var(--mash-type-caption);
 	font-weight: 650;
 	line-height: 1;
 	outline: none;
@@ -1046,7 +1098,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	border-radius: 999px;
 	background: color-mix(in srgb, var(--mash-accent) 14%, transparent);
 	color: var(--mash-accent-bright);
-	font-size: 9px;
+	font-size: var(--mash-type-micro);
 	font-weight: 700;
 	text-align: center;
 }
@@ -1073,7 +1125,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	background: color-mix(in srgb, var(--mash-panel) 94%, transparent);
 	box-shadow: var(--mash-shadow-card);
 	color: var(--mash-ink-muted);
-	font-size: 9px;
+	font-size: var(--mash-type-micro);
 	font-weight: 600;
 	letter-spacing: 0.01em;
 	opacity: 0;
@@ -1121,7 +1173,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	border: 1px solid var(--mash-chrome-chip-border);
 	background: var(--mash-chrome-chip);
 	color: var(--mash-accent-bright);
-	font-size: 9px;
+	font-size: var(--mash-type-micro);
 	font-weight: 700;
 	letter-spacing: 0.04em;
 	text-transform: uppercase;
@@ -1164,7 +1216,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 .mash-flow-end-menu-panel .mash-board-chip-btn {
 	border-radius: 7px;
 	padding: 3px 7px;
-	font-size: 10px;
+	font-size: var(--mash-type-micro);
 	font-weight: 600;
 	color: var(--mash-chrome-muted);
 }
@@ -1176,7 +1228,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 }
 .mash-flow-end-menu-hint {
 	padding: 2px 6px;
-	font-size: 9px;
+	font-size: var(--mash-type-micro);
 	font-weight: 600;
 	color: var(--mash-danger);
 }
@@ -1195,7 +1247,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	border: 1px solid color-mix(in srgb, var(--mash-accent) 55%, transparent);
 	background: var(--mash-accent);
 	color: var(--mash-accent-ink);
-	font-size: 9px;
+	font-size: var(--mash-type-micro);
 	font-weight: 700;
 	font-variant-numeric: tabular-nums;
 	line-height: 1;
@@ -1435,7 +1487,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	translate: 0 -50%;
 	padding: 4px 8px;
 	border-radius: 8px;
-	font-size: 11px;
+	font-size: var(--mash-type-caption);
 	font-weight: 600;
 	letter-spacing: 0.01em;
 	white-space: nowrap;
@@ -1530,7 +1582,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 }
 .mash-peel-title {
 	margin: 0;
-	font-size: 12px;
+	font-size: var(--mash-type-control);
 	font-weight: 600;
 	letter-spacing: -0.01em;
 	line-height: 1.25;
@@ -1538,7 +1590,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 }
 .mash-peel-subtitle {
 	margin: 2px 0 0;
-	font-size: 10px;
+	font-size: var(--mash-type-caption);
 	line-height: 1.35;
 	color: var(--mash-ink-muted);
 }
@@ -1598,7 +1650,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 .mash-peel-footer {
 	padding: 9px 14px 10px;
 	border-top: 1px solid var(--mash-divider);
-	font-size: 10px;
+	font-size: var(--mash-type-micro);
 	line-height: 1.4;
 	letter-spacing: 0.01em;
 	color: var(--mash-ink-muted);
@@ -1632,6 +1684,20 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 }
 
 /* Settings tray — same chrome as peel, scrollable sections */
+.mash-settings-header {
+	min-height: 72px;
+	padding-top: 8px;
+	padding-bottom: 8px;
+}
+.mash-settings-mascot {
+	display: block;
+	width: 52px;
+	height: 52px;
+	flex-shrink: 0;
+	object-fit: contain;
+	filter: drop-shadow(0 4px 8px color-mix(in srgb, var(--mash-bg) 42%, transparent));
+	user-select: none;
+}
 .mash-settings .mash-settings-body {
 	flex: 1;
 	min-height: 0;
@@ -1648,7 +1714,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 }
 .mash-settings-heading {
 	margin: 0 0 10px;
-	font-size: 10px;
+	font-size: var(--mash-type-micro);
 	font-weight: 600;
 	letter-spacing: 0.08em;
 	text-transform: uppercase;
@@ -1661,7 +1727,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	gap: 10px;
 }
 .mash-settings-label {
-	font-size: 12px;
+	font-size: var(--mash-type-control);
 	color: var(--mash-ink);
 }
 .mash-settings-seg {
@@ -1678,7 +1744,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	gap: 5px;
 	padding: 6px 11px;
 	border-radius: 7px;
-	font-size: 11px;
+	font-size: var(--mash-type-caption);
 	font-weight: 500;
 	color: var(--mash-ink-muted);
 	background: transparent;
@@ -1688,6 +1754,22 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 		color 150ms ease,
 		background 150ms ease,
 		box-shadow 150ms ease;
+}
+.mash-settings-text-block {
+	margin-top: 14px;
+	display: flex;
+	flex-direction: column;
+	gap: 7px;
+}
+.mash-settings-text-size {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	width: 100%;
+}
+.mash-settings-text-size .mash-settings-seg-btn {
+	justify-content: center;
+	min-width: 0;
+	padding-inline: 6px;
 }
 .mash-settings-seg-btn:hover {
 	color: var(--mash-ink);
@@ -1743,17 +1825,17 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	min-width: 0;
 }
 .mash-settings-type-name {
-	font-size: 12px;
+	font-size: var(--mash-type-control);
 	font-weight: 600;
 	color: var(--mash-ink);
 }
 .mash-settings-type-hint {
-	font-size: 10px;
+	font-size: var(--mash-type-caption);
 	line-height: 1.35;
 	color: var(--mash-ink-muted);
 }
 .mash-settings-type-sample {
-	font-size: 13px;
+	font-size: var(--mash-type-body);
 	font-weight: 500;
 	line-height: 1.3;
 	color: var(--mash-ink);
@@ -1761,7 +1843,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 }
 .mash-settings-hint {
 	margin: 8px 0 0;
-	font-size: 10px;
+	font-size: var(--mash-type-caption);
 	line-height: 1.45;
 	color: var(--mash-ink-muted);
 }
@@ -1775,7 +1857,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	gap: 7px;
 }
 .mash-settings-value {
-	font-size: 11px;
+	font-size: var(--mash-type-caption);
 	color: var(--mash-ink-muted);
 	text-align: right;
 }
@@ -1799,7 +1881,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	padding: 5px 9px;
 	border-radius: 8px;
 	border: 1px solid var(--mash-divider);
-	font-size: 10px;
+	font-size: var(--mash-type-micro);
 	color: var(--mash-ink);
 	background: var(--mash-tray);
 	cursor: pointer;
@@ -1824,7 +1906,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	padding: 8px 11px;
 	border-radius: 9px;
 	border: 1px solid transparent;
-	font-size: 12px;
+	font-size: var(--mash-type-control);
 	color: var(--mash-ink);
 	background: transparent;
 	cursor: pointer;
@@ -1849,13 +1931,13 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	align-items: baseline;
 	justify-content: space-between;
 	gap: 10px;
-	font-size: 11px;
+	font-size: var(--mash-type-caption);
 	color: var(--mash-ink-muted);
 }
 .mash-settings-shortcuts kbd {
 	flex-shrink: 0;
 	font-family: var(--mash-font-ui, 'IBM Plex Sans', sans-serif);
-	font-size: 10px;
+	font-size: var(--mash-type-micro);
 	font-weight: 600;
 	padding: 2px 6px;
 	border-radius: 6px;
@@ -1865,7 +1947,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 }
 .mash-settings-about {
 	margin: 0;
-	font-size: 11px;
+	font-size: var(--mash-type-caption);
 	line-height: 1.5;
 	color: var(--mash-ink-muted);
 }
@@ -1883,7 +1965,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	min-height: 168px;
 	padding: 28px 22px;
 	text-align: center;
-	font-size: 13px;
+	font-size: var(--mash-type-control);
 	line-height: 1.45;
 	color: var(--mash-ink-muted);
 }
@@ -1897,7 +1979,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	width: 100%;
 	padding: 9px 12px 9px 14px;
 	text-align: left;
-	font-size: 13px;
+	font-size: var(--mash-type-control);
 	color: var(--mash-ink-muted);
 	border-bottom: 1px solid var(--mash-divider);
 	background: transparent;
@@ -1959,7 +2041,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 }
 .mash-session-header-desc {
 	margin: 3px 0 0;
-	font-size: 12px;
+	font-size: var(--mash-type-caption);
 	line-height: 1.4;
 	color: var(--mash-ink-muted);
 }
@@ -1983,7 +2065,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	padding: 18px 20px 20px;
 }
 .mash-session-section-label {
-	font-size: 10px;
+	font-size: var(--mash-type-micro);
 	font-weight: 600;
 	letter-spacing: 0.12em;
 	text-transform: uppercase;
@@ -1991,7 +2073,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 }
 .mash-session-section-hint {
 	margin: 4px 0 0;
-	font-size: 11px;
+	font-size: var(--mash-type-caption);
 	line-height: 1.4;
 	color: var(--mash-ink-muted);
 }
@@ -2039,7 +2121,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	flex-shrink: 0;
 }
 .mash-session-row-badge {
-	font-size: 10px;
+	font-size: var(--mash-type-micro);
 	font-weight: 600;
 	letter-spacing: 0.06em;
 	text-transform: uppercase;
@@ -2084,7 +2166,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	gap: 12px;
 	padding: 12px 20px;
 	border-top: 1px solid var(--mash-divider);
-	font-size: 11px;
+	font-size: var(--mash-type-caption);
 	line-height: 1.4;
 	color: var(--mash-ink-muted);
 }
@@ -2115,7 +2197,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 }
 .mash-finish-heading {
 	margin: 0;
-	font-size: 10px;
+	font-size: var(--mash-type-micro);
 	font-weight: 600;
 	letter-spacing: 0.12em;
 	text-transform: uppercase;
@@ -2142,7 +2224,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	border: 1px solid transparent;
 	cursor: pointer;
 	text-align: center;
-	font-size: 12px;
+	font-size: var(--mash-type-caption);
 	font-weight: 600;
 	color: var(--mash-ink-muted);
 	transition:
@@ -2163,7 +2245,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 .mash-finish-preview {
 	margin: 10px 0 0;
 	min-height: 1.25rem;
-	font-size: 12px;
+	font-size: var(--mash-type-caption);
 	line-height: 1.4;
 	color: var(--mash-ink-muted);
 }
@@ -2215,7 +2297,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	margin: 12px 0 0;
 	padding: 9px 12px;
 	border-radius: 9px;
-	font-size: 12px;
+	font-size: var(--mash-type-caption);
 	line-height: 1.4;
 }
 .mash-finish-status.is-ok {
@@ -2246,7 +2328,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	border: 1px solid var(--mash-divider);
 	cursor: pointer;
 	text-align: left;
-	font-size: 12px;
+	font-size: var(--mash-type-caption);
 	line-height: 1.3;
 	transition:
 		background 150ms ease,
@@ -2271,7 +2353,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	border: 1px solid var(--mash-divider);
 	background: var(--mash-hover-fill-soft);
 	cursor: pointer;
-	font-size: 12px;
+	font-size: var(--mash-type-caption);
 	line-height: 1.35;
 }
 .mash-finish-footer {
@@ -2295,20 +2377,20 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	min-height: 44px;
 	padding: 10px 20px;
 	border-radius: 11px;
-	font-size: 12px;
+	font-size: var(--mash-type-caption);
 	font-weight: 600;
 }
 .mash-finish-footer-secondary {
 	min-height: 44px;
 	padding: 10px 16px;
 	border-radius: 11px;
-	font-size: 12px;
+	font-size: var(--mash-type-caption);
 }
 .mash-finish-footer-link {
 	min-height: 44px;
 	width: 100%;
 	text-align: left;
-	font-size: 12px;
+	font-size: var(--mash-type-caption);
 	color: var(--mash-ink-muted);
 	text-underline-offset: 4px;
 	transition: color 150ms ease;
@@ -2354,13 +2436,13 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 }
 .mash-dialog-subtitle {
 	margin: 0.2rem 0 0;
-	font-size: 11px;
+	font-size: var(--mash-type-caption);
 	line-height: 1.4;
 	color: var(--mash-ink-muted);
 }
 .mash-dialog-message {
 	margin: 0.55rem 0 0;
-	font-size: 0.875rem;
+	font-size: var(--mash-type-body);
 	line-height: 1.55;
 	color: var(--mash-ink-muted);
 }
@@ -2375,7 +2457,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	min-height: 2rem;
 	padding: 0.4rem 0.85rem;
 	border-radius: 0.55rem;
-	font-size: 0.75rem;
+	font-size: var(--mash-type-caption);
 	font-weight: 600;
 	line-height: 1.2;
 }
@@ -2400,6 +2482,40 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	box-shadow:
 		var(--mash-panel-shadow),
 		inset 0 1px 0 var(--mash-glass-highlight);
+}
+.mash-confirm-dialog.has-illustration {
+	width: min(100%, 420px);
+}
+.mash-confirm-content.has-illustration {
+	display: grid;
+	grid-template-columns: 112px minmax(0, 1fr);
+	align-items: center;
+	gap: 1rem;
+}
+.mash-confirm-illustration {
+	display: block;
+	width: 112px;
+	height: 112px;
+	object-fit: contain;
+	filter: drop-shadow(0 8px 12px color-mix(in srgb, var(--mash-bg) 32%, transparent));
+	user-select: none;
+}
+.mash-confirm-copy {
+	min-width: 0;
+}
+.mash-confirm-content.has-illustration .mash-dialog-message {
+	margin-top: 0.45rem;
+}
+
+@media (max-width: 420px) {
+	.mash-confirm-content.has-illustration {
+		grid-template-columns: 84px minmax(0, 1fr);
+		gap: 0.75rem;
+	}
+	.mash-confirm-illustration {
+		width: 84px;
+		height: 84px;
+	}
 }
 
 /* Paste intake */
@@ -2433,7 +2549,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	background: var(--mash-hover-fill-soft);
 	color: var(--mash-ink-muted);
 	font-family: var(--mash-font-ui);
-	font-size: 0.75rem;
+	font-size: var(--mash-type-caption);
 	line-height: 1.5;
 	white-space: pre-wrap;
 	scrollbar-width: thin;
@@ -2467,13 +2583,13 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 }
 .mash-paste-choice strong {
 	margin-top: 0.7rem;
-	font-size: 0.875rem;
+	font-size: var(--mash-type-body);
 	font-weight: 650;
 	color: var(--mash-ink);
 }
 .mash-paste-choice small {
 	margin-top: 0.3rem;
-	font-size: 0.7rem;
+	font-size: var(--mash-type-caption);
 	line-height: 1.4;
 	color: var(--mash-ink-muted);
 }
@@ -2485,7 +2601,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 .mash-paste-suggested {
 	margin-top: auto;
 	padding-top: 0.55rem;
-	font-size: 9px;
+	font-size: var(--mash-type-micro);
 	font-weight: 650;
 	letter-spacing: 0.04em;
 	text-transform: uppercase;
@@ -2534,7 +2650,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 }
 .mash-shortcuts-group-title {
 	margin: 0 0 6px;
-	font-size: 10px;
+	font-size: var(--mash-type-micro);
 	font-weight: 650;
 	letter-spacing: 0.06em;
 	text-transform: uppercase;
@@ -2557,7 +2673,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	padding: 0.15rem 0;
 }
 .mash-shortcuts-label {
-	font-size: 12px;
+	font-size: var(--mash-type-caption);
 	line-height: 1.35;
 	color: var(--mash-ink);
 }
@@ -2578,14 +2694,14 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	border: 1px solid var(--mash-tray-edge);
 	background: color-mix(in srgb, var(--mash-tray) 88%, transparent);
 	font-family: var(--mash-font-ui);
-	font-size: 10.5px;
+	font-size: var(--mash-type-caption);
 	font-weight: 600;
 	color: var(--mash-ink-muted);
 	box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--mash-ink) 6%, transparent);
 }
 .mash-shortcuts-plus,
 .mash-shortcuts-or {
-	font-size: 10px;
+	font-size: var(--mash-type-micro);
 	color: var(--mash-ink-muted);
 	opacity: 0.85;
 }
@@ -2699,7 +2815,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	padding: 7px 9px 8px;
 }
 .mash-spaces-card-title {
-	font-size: 12px;
+	font-size: var(--mash-type-caption);
 	font-weight: 600;
 	color: var(--mash-ink);
 	overflow: hidden;
@@ -2710,7 +2826,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 }
 .mash-spaces-card-count {
 	flex-shrink: 0;
-	font-size: 10px;
+	font-size: var(--mash-type-micro);
 	color: var(--mash-ink-muted);
 	font-variant-numeric: tabular-nums;
 }
@@ -2848,14 +2964,14 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 }
 .mash-reader-return span {
 	flex: none;
-	font-size: 12px;
+	font-size: var(--mash-type-caption);
 	font-weight: 650;
 }
 .mash-reader-return small {
 	min-width: 0;
 	overflow: hidden;
 	color: var(--mash-ink-muted);
-	font-size: 10px;
+	font-size: var(--mash-type-micro);
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
@@ -2920,7 +3036,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 }
 .mash-search-dropdown-empty {
 	padding: 12px 14px;
-	font-size: 12px;
+	font-size: var(--mash-type-caption);
 	color: var(--mash-ink-muted);
 }
 .mash-search-dropdown-row {
@@ -3024,7 +3140,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 		border-radius: 10px;
 		padding: 8px 10px;
 		color: var(--mash-ink-muted);
-		font-size: 12px;
+		font-size: var(--mash-type-caption);
 		font-weight: 600;
 		transition:
 			background 150ms ease,
@@ -3199,7 +3315,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	margin: 0;
 	padding: 0 4px 2px;
 	text-align: left;
-	font-size: 12px;
+	font-size: var(--mash-type-caption);
 	font-weight: 600;
 	letter-spacing: 0.02em;
 	color: var(--mash-chrome-ink);
@@ -3208,7 +3324,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 .mash-empty-half-label span {
 	display: block;
 	margin-top: 0.25rem;
-	font-size: 10px;
+	font-size: var(--mash-type-micro);
 	font-weight: 500;
 	color: var(--mash-chrome-muted);
 }
@@ -3249,7 +3365,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	align-items: center;
 	gap: 6px;
 	width: 100%;
-	font-size: 12px;
+	font-size: var(--mash-type-caption);
 	font-weight: 600;
 	color: var(--mash-ink);
 	overflow: hidden;
@@ -3258,7 +3374,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 }
 .mash-empty-half-item-preview {
 	width: 100%;
-	font-size: 10px;
+	font-size: var(--mash-type-micro);
 	line-height: 1.35;
 	color: var(--mash-ink-muted);
 	display: -webkit-box;
@@ -3267,7 +3383,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	overflow: hidden;
 }
 .mash-empty-half-item-meta {
-	font-size: 9px;
+	font-size: var(--mash-type-micro);
 	color: var(--mash-ink-muted);
 	opacity: 0.85;
 }
@@ -3365,7 +3481,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	overflow-x: auto;
 	padding: 0.32rem 0.7rem;
 	border-bottom: 1px solid var(--mash-card-edge);
-	font-size: 0.625rem;
+	font-size: var(--mash-type-micro);
 	color: var(--mash-card-muted);
 	background: color-mix(in srgb, var(--mash-accent-wash) 28%, transparent);
 	scrollbar-width: thin;
@@ -3456,7 +3572,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 		min-width: 36px;
 	}
 	.mash-peel-footer {
-		font-size: 11px;
+		font-size: var(--mash-type-caption);
 	}
 }
 

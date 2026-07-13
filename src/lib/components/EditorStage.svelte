@@ -333,7 +333,7 @@
 							type="text"
 							value={note.title}
 							readonly={isPermanentWelcome}
-							class="mash-focus min-w-0 flex-1 bg-transparent text-sm font-semibold tracking-tight outline-none"
+							class="mash-focus mash-type-body min-w-0 flex-1 bg-transparent font-semibold tracking-tight outline-none"
 							style="color: var(--mash-card-ink);"
 							onpointerdown={(e) => e.stopPropagation()}
 							oninput={(e) => onTitleChange(note.id, (e.currentTarget as HTMLInputElement).value)}
@@ -479,6 +479,5 @@
 				onkeydown={(e) => onSplitterKeydown(e, 'v')}
 			></div>
 		{/if}
-
 	</div>
 {/if}

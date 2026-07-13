@@ -24,8 +24,11 @@ import {
 } from './note-library.svelte';
 import { THEME_STORAGE_KEY, isMashTheme, readStoredTheme, THEME_META_COLOR } from './theme.svelte';
 import {
+	TEXT_SIZE_STORAGE_KEY,
 	TYPOGRAPHY_STORAGE_KEY,
+	isTextSizeId,
 	isTypographySuiteId,
+	readStoredTextSize,
 	readStoredTypography,
 	suiteById
 } from './typography.svelte';
@@ -144,6 +147,17 @@ describe('stores helpers', () => {
 		expect(readStoredTypography()).toBe('atelier');
 		localStorage.setItem(TYPOGRAPHY_STORAGE_KEY, 'nope');
 		expect(readStoredTypography()).toBe('kitchen');
+
+		expect(isTextSizeId('compact')).toBe(true);
+		expect(isTextSizeId('comfortable')).toBe(true);
+		expect(isTextSizeId('large')).toBe(true);
+		expect(isTextSizeId('huge')).toBe(false);
+		localStorage.removeItem(TEXT_SIZE_STORAGE_KEY);
+		expect(readStoredTextSize()).toBe('comfortable');
+		localStorage.setItem(TEXT_SIZE_STORAGE_KEY, 'large');
+		expect(readStoredTextSize()).toBe('large');
+		localStorage.setItem(TEXT_SIZE_STORAGE_KEY, 'nope');
+		expect(readStoredTextSize()).toBe('comfortable');
 	});
 
 	it('dispatchDockAction toggles settings and closes peel', () => {

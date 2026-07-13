@@ -128,7 +128,7 @@
 	clippingsCountLabel={`${clippings.length} saved from this document`}
 	emptyClippingsHint="Select text to capture an excerpt."
 	clippings={shellClippings}
-	onClose={onClose}
+	{onClose}
 	onOpenClippings={() => void onOpenClippings(clippings.map((clipping) => clipping.noteId))}
 >
 	{#snippet stage()}
@@ -148,11 +148,7 @@
 			{:else}
 				<div bind:this={pageShellEl} class="mash-docx-page">
 					<!-- Local user-chosen file: trust model for mammoth HTML (no remote content). -->
-					<article
-						bind:this={articleEl}
-						class="mash-docx-article"
-						data-testid="docx-reader-stage"
-					>
+					<article bind:this={articleEl} class="mash-docx-article" data-testid="docx-reader-stage">
 						{@html html}
 					</article>
 					{#if selectionText}
@@ -198,7 +194,7 @@
 		background: color-mix(in srgb, var(--mash-panel) 96%, white);
 		box-shadow: 0 16px 44px rgb(0 0 0 / 0.16);
 		color: var(--mash-ink);
-		font-size: 15.5px;
+		font-size: var(--mash-type-reading);
 		line-height: 1.68;
 		letter-spacing: -0.005em;
 		user-select: text;
@@ -264,7 +260,7 @@
 		border-radius: 999px;
 		background: var(--mash-accent);
 		color: var(--mash-accent-ink);
-		font-size: 12px;
+		font-size: var(--mash-type-caption);
 		font-weight: 650;
 		box-shadow: 0 8px 24px rgb(0 0 0 / 0.28);
 		transition:
@@ -285,7 +281,7 @@
 		min-height: 70%;
 		place-items: center;
 		color: var(--mash-ink-muted);
-		font-size: 13px;
+		font-size: var(--mash-type-control);
 	}
 	.mash-docx-error {
 		display: grid;
@@ -305,7 +301,7 @@
 		border-radius: 9px;
 		background: var(--mash-accent);
 		color: var(--mash-accent-ink);
-		font-size: 12px;
+		font-size: var(--mash-type-caption);
 		font-weight: 650;
 	}
 

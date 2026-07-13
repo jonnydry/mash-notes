@@ -185,8 +185,7 @@
 				<div class="mash-peel-title truncate">{title}</div>
 				{#if mode === 'notes'}
 					<div class="mash-peel-subtitle">
-						{subtitle ??
-							`${notes.length} note${notes.length === 1 ? '' : 's'}`}
+						{subtitle ?? `${notes.length} note${notes.length === 1 ? '' : 's'}`}
 						{#if saveStatus}
 							· {saveStatus === 'saving' ? 'Saving' : 'Saved'}
 						{/if}
@@ -214,7 +213,12 @@
 					<LockOpen class="h-3.5 w-3.5" />
 				{/if}
 			</button>
-			<button type="button" class="mash-peel-icon-btn" onclick={onClose} aria-label="Close ingredients">
+			<button
+				type="button"
+				class="mash-peel-icon-btn"
+				onclick={onClose}
+				aria-label="Close ingredients"
+			>
 				<X class="h-3.5 w-3.5" />
 			</button>
 		</div>
@@ -227,7 +231,7 @@
 					type="text"
 					value={filterText}
 					placeholder="Filter ingredients…"
-					class="mash-focus w-full rounded-md border bg-transparent px-2.5 py-1.5 text-xs outline-none"
+					class="mash-focus mash-type-caption w-full rounded-md border bg-transparent px-2.5 py-1.5 outline-none"
 					style="border-color: var(--mash-tray-edge); color: var(--mash-ink);"
 					oninput={(e) => onFilterText((e.currentTarget as HTMLInputElement).value)}
 				/>
@@ -241,7 +245,7 @@
 				>
 					<button
 						type="button"
-						class="mash-chip mash-chip-hover rounded-full px-2 py-0.5 text-[10px] font-semibold"
+						class="mash-chip mash-chip-hover mash-type-micro rounded-full px-2 py-0.5 font-semibold"
 						class:is-active={scopeFilter === 'ingredients'}
 						data-testid="peel-scope-ingredients"
 						onclick={() => onScopeFilter('ingredients')}
@@ -250,7 +254,7 @@
 					</button>
 					<button
 						type="button"
-						class="mash-chip mash-chip-hover rounded-full px-2 py-0.5 text-[10px] font-semibold"
+						class="mash-chip mash-chip-hover mash-type-micro rounded-full px-2 py-0.5 font-semibold"
 						class:is-active={scopeFilter === 'desk'}
 						data-testid="peel-scope-desk"
 						onclick={() => onScopeFilter('desk')}
@@ -262,7 +266,7 @@
 					</button>
 					<button
 						type="button"
-						class="mash-chip mash-chip-hover rounded-full px-2 py-0.5 text-[10px] font-semibold"
+						class="mash-chip mash-chip-hover mash-type-micro rounded-full px-2 py-0.5 font-semibold"
 						class:is-active={scopeFilter === 'kept'}
 						data-testid="peel-scope-kept"
 						onclick={() => onScopeFilter('kept')}
@@ -337,7 +341,7 @@
 						<div class="mash-peel-empty">Select a note to see links</div>
 					{:else}
 						<div
-							class="px-2.5 py-1.5 text-[10px] font-medium tracking-wide uppercase"
+							class="mash-type-micro px-2.5 py-1.5 font-medium tracking-wide uppercase"
 							style="color: var(--mash-accent-bright);"
 						>
 							<span class="inline-flex items-center gap-1"
@@ -354,12 +358,12 @@
 									onclick={() => onNoteOpen(note.id)}
 								>
 									<Link2 class="h-3.5 w-3.5 shrink-0 opacity-60" />
-									<span class="truncate text-[12px]">{note.title}</span>
+									<span class="mash-type-caption truncate">{note.title}</span>
 								</button>
 							{/each}
 						{/if}
 						<div
-							class="mt-2 px-2.5 py-1.5 text-[10px] font-medium tracking-wide uppercase"
+							class="mash-type-micro mt-2 px-2.5 py-1.5 font-medium tracking-wide uppercase"
 							style="color: var(--mash-accent-bright);"
 						>
 							<span class="inline-flex items-center gap-1"
@@ -376,7 +380,7 @@
 									onclick={() => onNoteOpen(note.id)}
 								>
 									<Link2 class="h-3.5 w-3.5 shrink-0 opacity-60" />
-									<span class="truncate text-[12px]">{note.title}</span>
+									<span class="mash-type-caption truncate">{note.title}</span>
 								</button>
 							{/each}
 						{/if}
@@ -396,10 +400,13 @@
 								<div class="flex min-w-0 items-start gap-2">
 									<Diff class="mt-0.5 h-3.5 w-3.5 shrink-0 opacity-60" />
 									<div class="min-w-0 flex-1">
-										<div class="truncate text-[12px] font-medium" style="color: var(--mash-ink);">
+										<div
+											class="mash-type-caption truncate font-medium"
+											style="color: var(--mash-ink);"
+										>
 											{row.noteTitle}
 										</div>
-										<div class="text-[10px]" style="color: var(--mash-ink-muted);">
+										<div class="mash-type-micro" style="color: var(--mash-ink-muted);">
 											{row.field} · kept {row.chosen}
 										</div>
 									</div>
@@ -443,7 +450,7 @@
 					{#if onNewNote}
 						<button
 							type="button"
-							class="mash-btn mt-3 rounded-lg px-3 py-1.5 text-xs font-semibold"
+							class="mash-btn mash-type-caption mt-3 rounded-lg px-3 py-1.5 font-semibold"
 							onclick={onNewNote}
 						>
 							Start a note
@@ -496,7 +503,7 @@
 							>
 								<div class="flex items-center justify-between gap-2">
 									<span
-										class="truncate text-sm font-medium"
+										class="mash-type-body truncate font-medium"
 										style="color: {isSelected ? 'var(--mash-ink)' : 'var(--mash-ink-muted)'};"
 									>
 										{note.title}
@@ -506,13 +513,13 @@
 									{/if}
 								</div>
 								<div
-									class="mt-0.5 line-clamp-2 text-[11px] leading-snug"
+									class="mash-type-caption mt-0.5 line-clamp-2 leading-snug"
 									style="color: var(--mash-ink-muted);"
 								>
 									{notePreview(note.body, 72)}
 								</div>
 								<div
-									class="mt-1 flex items-center justify-between text-[9px] tabular-nums"
+									class="mash-type-micro mt-1 flex items-center justify-between tabular-nums"
 									style="color: var(--mash-ink-muted);"
 								>
 									<span class="truncate">{note.folder || '—'}</span>

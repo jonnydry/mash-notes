@@ -97,10 +97,7 @@
 		withNoteId
 	} from '$lib/document-clipping';
 	import { createFinishSessionUi } from '$lib/finish-session-ui';
-	import {
-		buildBasePaletteActions,
-		buildOperatorActions
-	} from '$lib/command-palette';
+	import { buildBasePaletteActions, buildOperatorActions } from '$lib/command-palette';
 	import { createContentOperators } from '$lib/content-operators';
 	import { createAppKeydown } from '$lib/app-keyboard';
 	import { createGlobalPasteHandler } from '$lib/global-paste';
@@ -342,9 +339,7 @@
 		},
 		onNotesDeleted: (ids) => {
 			const idSet = new Set(ids);
-			const removedItemIds = canvas.canvasItems
-				.filter((i) => idSet.has(i.noteId))
-				.map((i) => i.id);
+			const removedItemIds = canvas.canvasItems.filter((i) => idSet.has(i.noteId)).map((i) => i.id);
 			canvas.canvasItems = canvas.canvasItems.filter((i) => !idSet.has(i.noteId));
 			if (removedItemIds.length > 0) {
 				const removeSet = new Set(removedItemIds);
@@ -605,9 +600,7 @@
 		keepSelection
 	} = selectionOps;
 
-	const keepableSelectionIds = $derived(
-		keepableNoteIds(library.selectionIds, library.notesById)
-	);
+	const keepableSelectionIds = $derived(keepableNoteIds(library.selectionIds, library.notesById));
 
 	async function prepareSessionSwitch() {
 		await library.flushPendingSaveAsync();
@@ -652,8 +645,7 @@
 		flashToast,
 		askConfirm,
 		offerPersistentStorageOnce: () => offerPersistentStorageOnce(),
-		getTheme: () =>
-			document.documentElement.dataset.theme === 'light' ? 'light' : 'dark'
+		getTheme: () => (document.documentElement.dataset.theme === 'light' ? 'light' : 'dark')
 	});
 
 	const {
@@ -778,14 +770,14 @@
 		isPasteBlocked: () =>
 			Boolean(
 				showPalette ||
-					settingsOpen ||
-					shortcutsOpen ||
-					spacesOverviewOpen ||
-					sessionPanelOpen ||
-					pasteDialogOpen ||
-					gifExplodeDialogOpen ||
-					documentReaders.documentReaderOpen ||
-					editorStage.open
+				settingsOpen ||
+				shortcutsOpen ||
+				spacesOverviewOpen ||
+				sessionPanelOpen ||
+				pasteDialogOpen ||
+				gifExplodeDialogOpen ||
+				documentReaders.documentReaderOpen ||
+				editorStage.open
 			),
 		placeNoteDraftsOnDesk: (drafts) => placeNoteDraftsOnDesk(drafts),
 		queueGifExplodeChoice: (file, fileName, frameCount, origin, caption) => {
@@ -811,19 +803,18 @@
 			if (showPalette) paletteQuery = '';
 		},
 		handleNewNote: () => handleNewNote(),
-		startTypingNote: (initialBody) =>
-			handleNewNote('Untitled', { initialBody, focus: 'body' }),
+		startTypingNote: (initialBody) => handleNewNote('Untitled', { initialBody, focus: 'body' }),
 		canStartTypingNote: () =>
 			!Boolean(
 				showPalette ||
-					settingsOpen ||
-					shortcutsOpen ||
-					spacesOverviewOpen ||
-					sessionPanelOpen ||
-					pasteDialogOpen ||
-					gifExplodeDialogOpen ||
-					documentReaders.documentReaderOpen ||
-					editorStage.open
+				settingsOpen ||
+				shortcutsOpen ||
+				spacesOverviewOpen ||
+				sessionPanelOpen ||
+				pasteDialogOpen ||
+				gifExplodeDialogOpen ||
+				documentReaders.documentReaderOpen ||
+				editorStage.open
 			),
 		invokeCombineSelection: () => invokeOperatorAction('combine-selection'),
 		getSelectionCount: () => library.selectionIds.length,
@@ -900,23 +891,6 @@
 		}
 	});
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 	async function adoptClipDraft(draft: Awaited<ReturnType<typeof buildPdfClippingDraft>>) {
 		if (!draft) return;
 		const note = await createNote({
@@ -972,10 +946,7 @@
 		flashToast(adopted.toast);
 	}
 
-	async function openClippingsOnCanvas(
-		noteIds: string[],
-		close: () => void
-	) {
+	async function openClippingsOnCanvas(noteIds: string[], close: () => void) {
 		if (noteIds.length === 0) return;
 		const spawn = canvas.canvasBoard?.getSpawnPoint(COLLAPSED_CARD, canvas.canvasItems.length) ?? {
 			x: 80,
@@ -1060,7 +1031,10 @@
 			imageCompacted = imageResult.compacted;
 			failedCount += imageResult.failed;
 			if (imageResult.skippedCap > 0) {
-				flashToast(`Imported ${DESK_IMAGE_MAX_PER_ACTION} of ${batch.imageFiles.length} images`, 3600);
+				flashToast(
+					`Imported ${DESK_IMAGE_MAX_PER_ACTION} of ${batch.imageFiles.length} images`,
+					3600
+				);
 			}
 		}
 
@@ -1121,13 +1095,13 @@
 		const parts: string[] = [];
 		if (openedDocName) parts.push(`Opened ${openedDocName}`);
 		if (imageCreated > 0) {
-			parts.push(
-				imageCreated === 1 ? 'Added 1 image card' : `Added ${imageCreated} image cards`
-			);
+			parts.push(imageCreated === 1 ? 'Added 1 image card' : `Added ${imageCreated} image cards`);
 		}
 		if (imageCompacted > 0) {
 			parts.push(
-				imageCompacted === 1 ? 'Image resized for the desk' : `${imageCompacted} images resized for the desk`
+				imageCompacted === 1
+					? 'Image resized for the desk'
+					: `${imageCompacted} images resized for the desk`
 			);
 		}
 		if (uniqueNoteIds.length > 0) {
@@ -1224,10 +1198,7 @@
 	let peelScopeStats = $derived(peelScopeCounts(filteredNotes));
 	let peelNotes = $derived(
 		sortNotesForPeel(
-			filterPeelNotes(
-				filterNotesByPeelScope(filteredNotes, peelScopeFilter),
-				peel.peelFilterText
-			)
+			filterPeelNotes(filterNotesByPeelScope(filteredNotes, peelScopeFilter), peel.peelFilterText)
 		)
 	);
 	let peelNotesSubtitle = $derived(
@@ -1243,9 +1214,7 @@
 	);
 	let headerSearchResults = $derived.by(() => {
 		if (!peel.searchQuery.trim()) return [];
-		const hits = searchNotes(peel.searchQuery).filter((result) =>
-			library.notesById.has(result.id)
-		);
+		const hits = searchNotes(peel.searchQuery).filter((result) => library.notesById.has(result.id));
 		const rankedIds = rankSearchIdsForPeel(
 			hits.map((h) => h.id),
 			library.notesById
@@ -1400,9 +1369,7 @@
 				flashToast('Could not export PDF');
 				return;
 			}
-			flashToast(
-				notes.length === 1 ? 'PDF downloaded' : `PDF downloaded · ${notes.length} notes`
-			);
+			flashToast(notes.length === 1 ? 'PDF downloaded' : `PDF downloaded · ${notes.length} notes`);
 		} catch (cause) {
 			console.error(cause);
 			flashToast('Could not export PDF');
@@ -1499,9 +1466,7 @@
 		getNotesById: () => library.notesById,
 		selectedCanvasCount: () => selectedCanvasItems().length,
 		splitCandidate,
-		setBulkMenu: (
-			menu: 'tag' | 'folder' | 'align' | 'operators' | 'mash' | 'more' | null
-		) => {
+		setBulkMenu: (menu: 'tag' | 'folder' | 'align' | 'operators' | 'mash' | 'more' | null) => {
 			library.bulkMenu = menu;
 		},
 		handleDelete: () => library.handleDelete(),
@@ -1548,8 +1513,8 @@
 	const canUndoKitchenReceipt = $derived(
 		Boolean(
 			latestKitchenReceipt &&
-				canvas.canvasUndoOperationId &&
-				latestKitchenReceipt.id === canvas.canvasUndoOperationId
+			canvas.canvasUndoOperationId &&
+			latestKitchenReceipt.id === canvas.canvasUndoOperationId
 		)
 	);
 
@@ -1719,7 +1684,7 @@
 	style="color: var(--mash-ink);"
 >
 	<!-- Header -->
-	<header class="mash-app-header flex items-center justify-between px-5 py-3.5">
+	<header class="mash-app-header flex items-center justify-between px-5 py-1.5">
 		<div class="flex items-center gap-3.5">
 			<img
 				src="/icons/mash-logo-sprouts.png"
@@ -1733,7 +1698,7 @@
 			<div class="flex flex-col leading-none">
 				<span class="mash-display text-[22px] font-semibold tracking-tight">Mash</span>
 				<span
-					class="mt-1 text-[11px] font-medium tracking-[0.14em] uppercase"
+					class="mash-type-caption mt-1 font-medium tracking-[0.14em] uppercase"
 					style="color: var(--mash-accent-bright);"
 				>
 					Infinite textual stovetop
@@ -1757,7 +1722,7 @@
 						if (peel.searchQuery.trim()) searchDropdownOpen = true;
 					}}
 					onkeydown={onGlobalSearchKeydown}
-					class="mash-focus mash-header-search w-full rounded-lg border py-2 pr-14 pl-9 text-sm transition-colors"
+					class="mash-focus mash-header-search mash-type-body w-full rounded-lg border py-2 pr-14 pl-9 transition-colors"
 					style="border-color: var(--mash-tray-edge); color: var(--mash-ink);"
 					role="combobox"
 					aria-autocomplete="list"
@@ -1768,7 +1733,7 @@
 						: undefined}
 				/>
 				<kbd
-					class="pointer-events-none absolute top-1/2 right-2.5 hidden -translate-y-1/2 items-center gap-0.5 rounded border px-1.5 py-0.5 text-[10px] font-medium sm:flex"
+					class="mash-type-micro pointer-events-none absolute top-1/2 right-2.5 hidden -translate-y-1/2 items-center gap-0.5 rounded border px-1.5 py-0.5 font-medium sm:flex"
 					style="border-color: var(--mash-tray-edge); color: var(--mash-ink-muted);"
 				>
 					/
@@ -1794,7 +1759,7 @@
 			{#if sessionManager.activeSession}
 				<button
 					type="button"
-					class="mash-btn mash-focus inline-flex h-[38px] items-center rounded-[11px] px-3.5 text-xs font-semibold"
+					class="mash-btn mash-focus mash-type-caption inline-flex h-[38px] items-center rounded-[11px] px-3.5 font-semibold"
 					onclick={() => openSessionPanel('finish')}
 					onpointerenter={preloadSessionPanel}
 					onfocus={preloadSessionPanel}
@@ -1807,7 +1772,8 @@
 					type="button"
 					class="mash-reader-launch mash-focus"
 					class:is-active={documentReaders.pdfReaderOpen}
-					class:has-session={Boolean(documentReaders.pdfReaderFile) && !documentReaders.pdfReaderOpen}
+					class:has-session={Boolean(documentReaders.pdfReaderFile) &&
+						!documentReaders.pdfReaderOpen}
 					onclick={() => (documentReaders.pdfReaderFile ? resumePdfReader() : pdfInputEl?.click())}
 					aria-label={documentReaders.pdfReaderFile ? 'Return to PDF reader' : 'Open PDF reader'}
 					title={documentReaders.pdfReaderFile
@@ -1848,9 +1814,12 @@
 					{/if}
 				</button>
 			</div>
-			<div class="hidden items-center gap-1 text-xs lg:flex" style="color: var(--mash-ink-muted);">
+			<div
+				class="mash-type-caption hidden items-center gap-1 lg:flex"
+				style="color: var(--mash-ink-muted);"
+			>
 				<kbd
-					class="flex items-center gap-0.5 rounded border px-1.5 py-0.5 text-[10px] font-medium"
+					class="mash-type-micro flex items-center gap-0.5 rounded border px-1.5 py-0.5 font-medium"
 					style="border-color: var(--mash-tray-edge);"
 				>
 					<Command class="h-2.5 w-2.5" />K
@@ -1861,13 +1830,13 @@
 
 	{#if library.loadError}
 		<div
-			class="flex items-center justify-between gap-3 border-b px-4 py-2 text-xs"
+			class="mash-type-caption flex items-center justify-between gap-3 border-b px-4 py-2"
 			style="border-color: var(--mash-tray-edge); background: var(--mash-danger-wash); color: var(--mash-ink);"
 		>
 			<span>{library.loadError}</span>
 			<button
 				type="button"
-				class="mash-btn rounded-md px-2.5 py-1 text-[11px] font-semibold"
+				class="mash-btn mash-type-caption rounded-md px-2.5 py-1 font-semibold"
 				onclick={() => void library.loadNotes()}
 			>
 				Retry
@@ -1876,28 +1845,28 @@
 	{/if}
 	{#if library.writeError}
 		<div
-			class="flex flex-wrap items-center gap-2 border-b px-4 py-2 text-xs"
+			class="mash-type-caption flex flex-wrap items-center gap-2 border-b px-4 py-2"
 			style="border-color: var(--mash-tray-edge); background: var(--mash-danger-wash); color: var(--mash-ink);"
 			role="alert"
 		>
 			<span class="min-w-0 flex-1">{library.writeError}</span>
 			<button
 				type="button"
-				class="mash-btn-ghost rounded-md px-2.5 py-1 text-[11px] font-semibold"
+				class="mash-btn-ghost mash-type-caption rounded-md px-2.5 py-1 font-semibold"
 				onclick={() => void library.retryPendingWrites()}
 			>
 				Retry save
 			</button>
 			<button
 				type="button"
-				class="mash-btn-ghost rounded-md px-2.5 py-1 text-[11px] font-semibold"
+				class="mash-btn-ghost mash-type-caption rounded-md px-2.5 py-1 font-semibold"
 				onclick={() => void library.copySelection(library.notes)}
 			>
 				Copy desk
 			</button>
 			<button
 				type="button"
-				class="mash-btn rounded-md px-2.5 py-1 text-[11px] font-semibold"
+				class="mash-btn mash-type-caption rounded-md px-2.5 py-1 font-semibold"
 				onclick={() => exportNotesJson(library.notes, 'mash-emergency-export.json')}
 			>
 				Emergency export
@@ -1910,7 +1879,7 @@
 		<div class="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
 			{#if !documentReaders.documentReaderOpen}
 				<div
-					class="mash-canvas-title-chip is-spaces-trigger absolute top-3 left-[4.75rem] z-10 rounded-full border px-3 py-1 text-[10px] backdrop-blur-sm"
+					class="mash-canvas-title-chip is-spaces-trigger mash-type-caption absolute top-3 left-[4.75rem] z-10 rounded-full border px-3 py-1 backdrop-blur-sm"
 					class:pointer-events-none={spacesOverviewOpen}
 					style="border-color: var(--mash-chrome-chip-border); background: var(--mash-chrome-chip-soft); color: var(--mash-chrome-muted);"
 					role="button"
@@ -1998,9 +1967,9 @@
 							}
 						: undefined}
 					showEmptyState={showCanvasEmptyState}
-					showTryAMash={showTryAMash}
+					{showTryAMash}
 					tryAMash={runTryAMash}
-					tryAMashBusy={tryAMashBusy}
+					{tryAMashBusy}
 					dismissTryAMash={dismissTryAMashForever}
 					onSelect={canvas.handleCanvasSelect}
 					onSelectNotes={canvas.handleCanvasSelectNotes}
@@ -2057,7 +2026,7 @@
 				{:else if documentReaders.pdfReaderOpen}
 					<section class="mash-pdf-reader" aria-label="PDF reader">
 						<div
-							class="flex h-full items-center justify-center text-sm"
+							class="mash-type-body flex h-full items-center justify-center"
 							style="color: var(--mash-ink-muted);"
 						>
 							Loading PDF tools…
@@ -2079,7 +2048,7 @@
 				{:else if documentReaders.docxReaderOpen}
 					<section class="mash-pdf-reader" aria-label="Word document reader">
 						<div
-							class="flex h-full items-center justify-center text-sm"
+							class="mash-type-body flex h-full items-center justify-center"
 							style="color: var(--mash-ink-muted);"
 						>
 							Loading Word document tools…
@@ -2101,7 +2070,7 @@
 				{:else if documentReaders.htmlReaderOpen}
 					<section class="mash-pdf-reader" aria-label="HTML document reader">
 						<div
-							class="flex h-full items-center justify-center text-sm"
+							class="mash-type-body flex h-full items-center justify-center"
 							style="color: var(--mash-ink-muted);"
 						>
 							Loading HTML document tools…
@@ -2212,13 +2181,11 @@
 					isLoading={library.isLoading}
 					scopeFilter={peel.currentFilter.type === null ? peelScopeFilter : undefined}
 					scopeCounts={peel.currentFilter.type === null ? peelScopeStats : undefined}
-					onScopeFilter={
-						peel.currentFilter.type === null
-							? (scope) => {
-									peelScopeFilter = scope;
-								}
-							: undefined
-					}
+					onScopeFilter={peel.currentFilter.type === null
+						? (scope) => {
+								peelScopeFilter = scope;
+							}
+						: undefined}
 					onClose={() => peel.closePeel(true)}
 					onTogglePin={peel.togglePin}
 					onFilterText={(v) => (peel.peelFilterText = v)}
@@ -2277,10 +2244,12 @@
 				style="left: {canvas.touchPlaceGhost.clientX - 40}px; top: {canvas.touchPlaceGhost.clientY -
 					20}px; border-color: var(--mash-paper-chip-border); background: var(--mash-paper-chip);"
 			>
-				<div class="text-xs font-semibold" style="color: var(--mash-card-ink);">
+				<div class="mash-type-caption font-semibold" style="color: var(--mash-card-ink);">
 					{ghostNote?.title ?? 'Note'}
 				</div>
-				<div class="mt-0.5 text-[10px]" style="color: var(--mash-card-muted);">Drop on canvas</div>
+				<div class="mash-type-micro mt-0.5" style="color: var(--mash-card-muted);">
+					Drop on canvas
+				</div>
 			</div>
 		{/if}
 
@@ -2304,7 +2273,7 @@
 						style="border-color: var(--mash-panel-border); background: var(--mash-panel); backdrop-filter: blur(10px);"
 					>
 						<div
-							class="mb-2 text-[10px] font-medium tracking-wide uppercase"
+							class="mash-type-micro mb-2 font-medium tracking-wide uppercase"
 							style="color: var(--mash-accent-bright);"
 						>
 							Tag {library.selectionIds.length} note{library.selectionIds.length === 1 ? '' : 's'}
@@ -2313,7 +2282,7 @@
 							type="text"
 							bind:value={library.bulkTagDraft}
 							placeholder="new tag…"
-							class="mash-focus mb-2 w-full rounded-md border bg-transparent px-2 py-1.5 text-xs outline-none"
+							class="mash-focus mash-type-caption mb-2 w-full rounded-md border bg-transparent px-2 py-1.5 outline-none"
 							style="border-color: var(--mash-tray-edge); color: var(--mash-ink);"
 							onkeydown={(e) => {
 								if (e.key === 'Enter') library.tagSelection(library.bulkTagDraft);
@@ -2324,7 +2293,7 @@
 							{#each library.uniqueTags as tag (tag)}
 								<button
 									type="button"
-									class="mash-chip mash-chip-hover rounded-full px-2 py-0.5 text-[10px]"
+									class="mash-chip mash-chip-hover mash-type-micro rounded-full px-2 py-0.5"
 									onclick={() => library.tagSelection(tag)}
 								>
 									#{tag}
@@ -2338,7 +2307,7 @@
 						style="border-color: var(--mash-panel-border); background: var(--mash-panel); backdrop-filter: blur(10px);"
 					>
 						<div
-							class="mb-2 text-[10px] font-medium tracking-wide uppercase"
+							class="mash-type-micro mb-2 font-medium tracking-wide uppercase"
 							style="color: var(--mash-accent-bright);"
 						>
 							Move {library.selectionIds.length} to folder
@@ -2347,7 +2316,7 @@
 							type="text"
 							bind:value={library.bulkFolderDraft}
 							placeholder="new or existing folder…"
-							class="mash-focus mb-2 w-full rounded-md border bg-transparent px-2 py-1.5 text-xs outline-none"
+							class="mash-focus mash-type-caption mb-2 w-full rounded-md border bg-transparent px-2 py-1.5 outline-none"
 							style="border-color: var(--mash-tray-edge); color: var(--mash-ink);"
 							onkeydown={(e) => {
 								if (e.key === 'Enter') library.assignFolderToSelection(library.bulkFolderDraft);
@@ -2359,7 +2328,7 @@
 							class="mash-peel-meta-row rounded-md"
 							onclick={() => library.assignFolderToSelection('')}
 						>
-							<span class="text-[11px]">No folder</span>
+							<span class="mash-type-caption">No folder</span>
 						</button>
 						<div class="max-h-28 overflow-auto">
 							{#each library.uniqueFolders as folder (folder)}
@@ -2369,7 +2338,7 @@
 									onclick={() => library.assignFolderToSelection(folder)}
 								>
 									<Folder class="h-3.5 w-3.5 shrink-0 opacity-60" />
-									<span class="truncate text-[11px]">{folder}</span>
+									<span class="mash-type-caption truncate">{folder}</span>
 								</button>
 							{/each}
 						</div>
@@ -2383,7 +2352,7 @@
 					>
 						<button
 							type="button"
-							class="mash-btn-ghost rounded-lg px-3 py-2 text-left text-xs"
+							class="mash-btn-ghost mash-type-caption rounded-lg px-3 py-2 text-left"
 							onclick={() => (library.bulkMenu = 'tag')}
 						>
 							<strong class="flex items-center gap-1.5"><Tag class="h-3.5 w-3.5" /> Tag…</strong>
@@ -2391,7 +2360,7 @@
 						</button>
 						<button
 							type="button"
-							class="mash-btn-ghost rounded-lg px-3 py-2 text-left text-xs"
+							class="mash-btn-ghost mash-type-caption rounded-lg px-3 py-2 text-left"
 							onclick={() => (library.bulkMenu = 'folder')}
 						>
 							<strong class="flex items-center gap-1.5"
@@ -2401,7 +2370,7 @@
 						</button>
 						<button
 							type="button"
-							class="mash-btn-ghost rounded-lg px-3 py-2 text-left text-xs"
+							class="mash-btn-ghost mash-type-caption rounded-lg px-3 py-2 text-left"
 							onclick={() => {
 								library.bulkMenu = null;
 								void library.copySelection();
@@ -2412,7 +2381,7 @@
 						</button>
 						<button
 							type="button"
-							class="mash-btn-ghost rounded-lg px-3 py-2 text-left text-xs"
+							class="mash-btn-ghost mash-type-caption rounded-lg px-3 py-2 text-left"
 							onclick={downloadSelectionMarkdown}
 						>
 							<strong class="flex items-center gap-1.5"
@@ -2422,7 +2391,7 @@
 						</button>
 						<button
 							type="button"
-							class="mash-btn-ghost rounded-lg px-3 py-2 text-left text-xs"
+							class="mash-btn-ghost mash-type-caption rounded-lg px-3 py-2 text-left"
 							onclick={() => void exportSelectionPdf()}
 						>
 							<strong class="flex items-center gap-1.5"
@@ -2432,7 +2401,7 @@
 						</button>
 						<button
 							type="button"
-							class="mash-btn-ghost rounded-lg px-3 py-2 text-left text-xs"
+							class="mash-btn-ghost mash-type-caption rounded-lg px-3 py-2 text-left"
 							onclick={printSelection}
 						>
 							<strong class="flex items-center gap-1.5"
@@ -2452,11 +2421,10 @@
 							<section class="min-w-0" aria-label={section.label}>
 								<div class="mb-1 flex items-baseline justify-between gap-2 px-1">
 									<span
-										class="text-[10px] font-semibold tracking-wide uppercase"
-										style="color: var(--mash-accent-bright);"
-										>{section.label}</span
+										class="mash-type-micro font-semibold tracking-wide uppercase"
+										style="color: var(--mash-accent-bright);">{section.label}</span
 									>
-									<span class="truncate text-[9px]" style="color: var(--mash-ink-muted);"
+									<span class="mash-type-micro truncate" style="color: var(--mash-ink-muted);"
 										>{section.hint}</span
 									>
 								</div>
@@ -2464,7 +2432,7 @@
 									{#each section.actions as operator (operator.id)}
 										<button
 											type="button"
-											class="mash-btn-ghost rounded-lg px-3 py-2 text-left text-xs"
+											class="mash-btn-ghost mash-type-caption rounded-lg px-3 py-2 text-left"
 											data-action-id={operator.id}
 											onclick={() => {
 												library.bulkMenu = null;
@@ -2483,7 +2451,10 @@
 							</section>
 						{/each}
 						{#if kitchenMenuSections.length === 0}
-							<p class="px-2 py-3 text-center text-[11px]" style="color: var(--mash-ink-muted);">
+							<p
+								class="mash-type-caption px-2 py-3 text-center"
+								style="color: var(--mash-ink-muted);"
+							>
 								Select cards on the desk to open the kitchen toolkit.
 							</p>
 						{/if}
@@ -2591,164 +2562,164 @@
 				{/if}
 
 				{#if library.selectionIds.length > 0}
-				<div
-					class="mash-dock mash-selection-bar flex items-center gap-1 rounded-2xl border px-2 py-1.5 shadow-xl"
-					style="border-color: var(--mash-panel-border); background: var(--mash-panel); backdrop-filter: blur(10px);"
-				>
-					<span
-						class="px-2 text-[10px] font-medium tracking-wide uppercase"
-						style="color: var(--mash-accent-bright);"
+					<div
+						class="mash-dock mash-selection-bar flex items-center gap-1 rounded-2xl border px-2 py-1.5 shadow-xl"
+						style="border-color: var(--mash-panel-border); background: var(--mash-panel); backdrop-filter: blur(10px);"
 					>
-						{library.selectionIds.length} selected
-					</span>
-					{#if keepableSelectionIds.length > 0}
+						<span
+							class="mash-type-micro px-2 font-medium tracking-wide uppercase"
+							style="color: var(--mash-accent-bright);"
+						>
+							{library.selectionIds.length} selected
+						</span>
+						{#if keepableSelectionIds.length > 0}
+							<button
+								type="button"
+								data-testid="keep-selection"
+								onclick={() => void keepSelection()}
+								class="mash-btn-ghost mash-selection-primary mash-type-caption flex items-center gap-1 rounded-xl px-2.5 py-1.5"
+								title="Keep on this device — survives clearing this scratch desk"
+								aria-label="Keep selected on this device"
+							>
+								<Bookmark class="h-3.5 w-3.5" />
+								Keep
+							</button>
+						{/if}
+						{#if library.selectionIds.length >= 2}
+							<button
+								type="button"
+								onclick={onMashButtonClick}
+								class="mash-btn mash-selection-primary mash-type-caption flex items-center gap-1.5 rounded-xl px-3 py-1.5 font-semibold"
+								title="Combine into one sticky — sources leave the desk until Unmash"
+								data-testid="selection-mash"
+							>
+								<Combine class="h-3.5 w-3.5" />
+								Mash
+							</button>
+						{/if}
+						{#if library.selectionIds.length >= 2}
+							<button
+								type="button"
+								onclick={() => void bowlSelection()}
+								class="mash-btn-ghost mash-selection-secondary mash-type-caption flex items-center gap-1 rounded-xl px-2.5 py-1.5"
+								title="Group selected cards in a temporary bowl"
+								data-testid="selection-bowl"
+							>
+								<IceCreamBowl class="h-3.5 w-3.5" />
+								Bowl
+							</button>
+						{/if}
+						{#if kitchenMenuSections.length > 0}
+							<button
+								type="button"
+								onclick={() =>
+									(library.bulkMenu = library.bulkMenu === 'operators' ? null : 'operators')}
+								class="mash-btn-ghost mash-selection-secondary mash-type-caption flex items-center gap-1 rounded-xl px-2.5 py-1.5 {library.bulkMenu ===
+								'operators'
+									? 'border-[var(--mash-accent)] text-[var(--mash-accent-bright)]'
+									: ''}"
+								title="Operator kitchen — shape or arrange the selected set"
+								data-testid="operator-kitchen-toggle"
+							>
+								<Sparkles class="h-3.5 w-3.5" />
+								Transform
+							</button>
+						{/if}
+						{#if library.selectionIds.length >= 2}
+							<button
+								type="button"
+								onclick={() => (library.bulkMenu = library.bulkMenu === 'align' ? null : 'align')}
+								class="mash-btn-ghost mash-selection-secondary mash-type-caption flex items-center gap-1 rounded-xl px-2.5 py-1.5 {library.bulkMenu ===
+								'align'
+									? 'border-[var(--mash-accent)] text-[var(--mash-accent-bright)]'
+									: ''}"
+								title="Pack selected into a column, row, stack, or grid"
+							>
+								<AlignLeft class="h-3.5 w-3.5" />
+								Pack
+							</button>
+						{/if}
+						{#if library.selectionIds.length >= 2}
+							<button
+								type="button"
+								onclick={openSelectionInStage}
+								class="mash-btn-ghost mash-type-caption flex items-center gap-1 rounded-xl px-2.5 py-1.5"
+								title="Edit the first two selected notes side by side"
+							>
+								<Columns2 class="h-3.5 w-3.5" />
+								Split
+							</button>
+						{:else if editorStage.open}
+							<button
+								type="button"
+								onclick={openBesideSelection}
+								class="mash-btn-ghost mash-type-caption flex items-center gap-1 rounded-xl px-2.5 py-1.5"
+								title="Open this note in the empty half"
+							>
+								<Columns2 class="h-3.5 w-3.5" />
+								Beside
+							</button>
+						{:else}
+							<button
+								type="button"
+								onclick={() => {
+									const id = library.selectedId ?? library.selectionIds[0];
+									if (id) openInStage(id, 'maximize');
+								}}
+								class="mash-btn-ghost mash-type-caption flex items-center gap-1 rounded-xl px-2.5 py-1.5"
+								title="Open large editor"
+							>
+								<Columns2 class="h-3.5 w-3.5" />
+								Edit
+							</button>
+						{/if}
+						{#if library.canUnmash}
+							<button
+								type="button"
+								onclick={() => void invokeOperatorAction('unmash-selection')}
+								class="mash-btn-ghost mash-type-caption flex items-center gap-1 rounded-xl px-2.5 py-1.5"
+								title="Restore source notes and remove mash"
+							>
+								Unmash
+							</button>
+						{/if}
 						<button
 							type="button"
-							data-testid="keep-selection"
-							onclick={() => void keepSelection()}
-							class="mash-btn-ghost mash-selection-primary flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs"
-							title="Keep on this device — survives clearing this scratch desk"
-							aria-label="Keep selected on this device"
-						>
-							<Bookmark class="h-3.5 w-3.5" />
-							Keep
-						</button>
-					{/if}
-					{#if library.selectionIds.length >= 2}
-						<button
-							type="button"
-							onclick={onMashButtonClick}
-							class="mash-btn mash-selection-primary flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold"
-							title="Combine into one sticky — sources leave the desk until Unmash"
-							data-testid="selection-mash"
-						>
-							<Combine class="h-3.5 w-3.5" />
-							Mash
-						</button>
-					{/if}
-					{#if library.selectionIds.length >= 2}
-						<button
-							type="button"
-							onclick={() => void bowlSelection()}
-							class="mash-btn-ghost mash-selection-secondary flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs"
-							title="Group selected cards in a temporary bowl"
-							data-testid="selection-bowl"
-						>
-							<IceCreamBowl class="h-3.5 w-3.5" />
-							Bowl
-						</button>
-					{/if}
-					{#if kitchenMenuSections.length > 0}
-						<button
-							type="button"
-							onclick={() =>
-								(library.bulkMenu = library.bulkMenu === 'operators' ? null : 'operators')}
-							class="mash-btn-ghost mash-selection-secondary flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs {library.bulkMenu ===
-							'operators'
-								? 'border-[var(--mash-accent)] text-[var(--mash-accent-bright)]'
-								: ''}"
-							title="Operator kitchen — shape or arrange the selected set"
-							data-testid="operator-kitchen-toggle"
-						>
-							<Sparkles class="h-3.5 w-3.5" />
-							Transform
-						</button>
-					{/if}
-					{#if library.selectionIds.length >= 2}
-						<button
-							type="button"
-							onclick={() => (library.bulkMenu = library.bulkMenu === 'align' ? null : 'align')}
-							class="mash-btn-ghost mash-selection-secondary flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs {library.bulkMenu ===
-							'align'
-								? 'border-[var(--mash-accent)] text-[var(--mash-accent-bright)]'
-								: ''}"
-							title="Pack selected into a column, row, stack, or grid"
-						>
-							<AlignLeft class="h-3.5 w-3.5" />
-							Pack
-						</button>
-					{/if}
-					{#if library.selectionIds.length >= 2}
-						<button
-							type="button"
-							onclick={openSelectionInStage}
-							class="mash-btn-ghost flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs"
-							title="Edit the first two selected notes side by side"
-						>
-							<Columns2 class="h-3.5 w-3.5" />
-							Split
-						</button>
-					{:else if editorStage.open}
-						<button
-							type="button"
-							onclick={openBesideSelection}
-							class="mash-btn-ghost flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs"
-							title="Open this note in the empty half"
-						>
-							<Columns2 class="h-3.5 w-3.5" />
-							Beside
-						</button>
-					{:else}
-						<button
-							type="button"
-							onclick={() => {
-								const id = library.selectedId ?? library.selectionIds[0];
-								if (id) openInStage(id, 'maximize');
-							}}
-							class="mash-btn-ghost flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs"
-							title="Open large editor"
-						>
-							<Columns2 class="h-3.5 w-3.5" />
-							Edit
-						</button>
-					{/if}
-					{#if library.canUnmash}
-						<button
-							type="button"
-							onclick={() => void invokeOperatorAction('unmash-selection')}
-							class="mash-btn-ghost flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs"
-							title="Restore source notes and remove mash"
-						>
-							Unmash
-						</button>
-					{/if}
-					<button
-						type="button"
-						onclick={toggleMoreMenu}
-						class="mash-btn-ghost flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs {library.bulkMenu ===
-							'more' ||
-						library.bulkMenu === 'tag' ||
-						library.bulkMenu === 'folder'
-							? 'border-[var(--mash-accent)] text-[var(--mash-accent-bright)]'
-							: ''}"
-						title="Tag, folder, copy, and export"
-						aria-label="More selection actions"
-						aria-expanded={library.bulkMenu === 'more' ||
+							onclick={toggleMoreMenu}
+							class="mash-btn-ghost mash-type-caption flex items-center gap-1 rounded-xl px-2.5 py-1.5 {library.bulkMenu ===
+								'more' ||
 							library.bulkMenu === 'tag' ||
-							library.bulkMenu === 'folder'}
-						data-testid="selection-more-toggle"
-					>
-						<MoreHorizontal class="h-3.5 w-3.5" />
-						More
-					</button>
-					<button
-						type="button"
-						onclick={() => void library.handleDelete()}
-						class="mash-btn-ghost flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs hover:text-[var(--mash-danger)]"
-						title="Delete selected"
-						aria-label="Delete selected"
-					>
-						<Trash2 class="h-3.5 w-3.5" />
-					</button>
-					<button
-						type="button"
-						onclick={library.clearSelection}
-						class="mash-row-hover rounded-lg p-1.5 text-[var(--mash-ink-muted)] hover:text-[var(--mash-ink)]"
-						aria-label="Clear selection"
-					>
-						<X class="h-3.5 w-3.5" />
-					</button>
-				</div>
+							library.bulkMenu === 'folder'
+								? 'border-[var(--mash-accent)] text-[var(--mash-accent-bright)]'
+								: ''}"
+							title="Tag, folder, copy, and export"
+							aria-label="More selection actions"
+							aria-expanded={library.bulkMenu === 'more' ||
+								library.bulkMenu === 'tag' ||
+								library.bulkMenu === 'folder'}
+							data-testid="selection-more-toggle"
+						>
+							<MoreHorizontal class="h-3.5 w-3.5" />
+							More
+						</button>
+						<button
+							type="button"
+							onclick={() => void library.handleDelete()}
+							class="mash-btn-ghost mash-type-caption flex items-center gap-1 rounded-xl px-2.5 py-1.5 hover:text-[var(--mash-danger)]"
+							title="Delete selected"
+							aria-label="Delete selected"
+						>
+							<Trash2 class="h-3.5 w-3.5" />
+						</button>
+						<button
+							type="button"
+							onclick={library.clearSelection}
+							class="mash-row-hover rounded-lg p-1.5 text-[var(--mash-ink-muted)] hover:text-[var(--mash-ink)]"
+							aria-label="Clear selection"
+						>
+							<X class="h-3.5 w-3.5" />
+						</button>
+					</div>
 				{/if}
 			</div>
 		{/if}
@@ -2782,7 +2753,7 @@
 						type="text"
 						bind:value={paletteQuery}
 						placeholder="Type a command…"
-						class="mash-focus w-full rounded bg-transparent px-1 text-sm outline-none"
+						class="mash-focus mash-type-body w-full rounded bg-transparent px-1 outline-none"
 						style="color: var(--mash-ink);"
 						role="combobox"
 						aria-expanded="true"
@@ -2798,17 +2769,20 @@
 					id="mash-palette-listbox"
 					role="listbox"
 					aria-label="Commands"
-					class="max-h-80 overflow-auto p-1 text-sm"
+					class="mash-type-body max-h-80 overflow-auto p-1"
 				>
 					{#if paletteFlatCount === 0}
-						<div class="px-3 py-4 text-center text-xs" style="color: var(--mash-ink-muted);">
+						<div
+							class="mash-type-caption px-3 py-4 text-center"
+							style="color: var(--mash-ink-muted);"
+						>
 							No commands match
 						</div>
 					{:else}
 						{#each paletteRows as row (row.kind === 'group' ? `g-${row.id}` : row.kind === 'action' ? `a-${row.action.label}` : `n-${row.note.id}`)}
 							{#if row.kind === 'group'}
 								<div
-									class="mt-1 border-t px-3 pt-2 pb-0.5 text-[10px] font-medium tracking-wide uppercase first:mt-0 first:border-t-0"
+									class="mash-type-micro mt-1 border-t px-3 pt-2 pb-0.5 font-medium tracking-wide uppercase first:mt-0 first:border-t-0"
 									style="border-color: var(--mash-tray-edge); color: var(--mash-ink-muted);"
 								>
 									{row.label}
@@ -2828,7 +2802,7 @@
 										: ''}"
 								>
 									<span>{row.action.label}</span>
-									<span class="text-xs" style="color: var(--mash-ink-muted);"
+									<span class="mash-type-caption" style="color: var(--mash-ink-muted);"
 										>{row.action.shortcut}</span
 									>
 								</button>
@@ -2841,13 +2815,13 @@
 										void canvas.openStickyFromTray(row.note.id);
 										showPalette = false;
 									}}
-									class="mash-row-hover flex w-full items-center justify-between rounded px-3 py-1.5 text-left text-xs {row.flatIndex ===
+									class="mash-row-hover mash-type-caption flex w-full items-center justify-between rounded px-3 py-1.5 text-left {row.flatIndex ===
 									paletteHighlight
 										? 'mash-row-active'
 										: ''}"
 								>
 									<span class="truncate">{row.note.title}</span>
-									<span class="text-[10px]" style="color: var(--mash-ink-muted);"
+									<span class="mash-type-micro" style="color: var(--mash-ink-muted);"
 										>{row.note.folder}</span
 									>
 								</button>
@@ -2949,7 +2923,7 @@
 			aria-live="polite"
 			aria-atomic="true"
 			data-testid="action-status"
-			class="pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-lg border px-3 py-1.5 text-xs shadow-lg"
+			class="mash-type-caption pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-lg border px-3 py-1.5 shadow-lg"
 			style="border-color: var(--mash-tray-edge); background: var(--mash-panel); color: var(--mash-ink);"
 		>
 			{actionToast}
@@ -2971,6 +2945,9 @@
 		message={confirmDialog?.message ?? ''}
 		confirmLabel={confirmDialog?.confirmLabel ?? 'Confirm'}
 		danger={confirmDialog?.danger ?? false}
+		illustration={confirmDialog?.confirmLabel === 'Delete'
+			? '/icons/New%20Icons/holding-trash-bag@2x.png'
+			: undefined}
 		onConfirm={() => void runConfirmDialog()}
 		onCancel={() => (confirmDialog = null)}
 	/>

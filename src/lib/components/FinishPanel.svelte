@@ -143,7 +143,7 @@
 			<div class="flex items-center justify-between gap-3">
 				<h3 id="mash-finish-takeaway-title" class="mash-finish-heading">Takeaway</h3>
 				{#if activeOption}
-					<span class="text-[11px]" style="color: var(--mash-ink-muted);">
+					<span class="mash-type-caption" style="color: var(--mash-ink-muted);">
 						{activeOption.count} card{activeOption.count === 1 ? '' : 's'}
 					</span>
 				{/if}
@@ -199,8 +199,8 @@
 					>
 						<Icon class="h-4 w-4 shrink-0" aria-hidden="true" />
 						<span class="min-w-0 flex-1">
-							<strong class="block text-xs">{exportAction.label}</strong>
-							<small class="block truncate text-[10px] opacity-75">
+							<strong class="mash-type-caption block">{exportAction.label}</strong>
+							<small class="mash-type-micro block truncate opacity-75">
 								{busyKind === exportAction.kind ? 'Working…' : exportAction.detail}
 							</small>
 						</span>
@@ -224,16 +224,13 @@
 			{/if}
 		</section>
 
-		<section
-			class="mash-finish-section"
-			aria-labelledby="mash-finish-remain-title"
-		>
+		<section class="mash-finish-section" aria-labelledby="mash-finish-remain-title">
 			<h3 id="mash-finish-remain-title" class="mash-finish-heading">What stays here?</h3>
 			{#if activeSession?.mode === 'scratch' && scope !== 'desk' && hasTakeaway}
 				<label class="mash-finish-keep-takeaway">
 					<input type="checkbox" bind:checked={keepTakeaway} />
 					<span class="min-w-0 flex-1">
-						<strong class="block text-sm">Keep this takeaway on this device</strong>
+						<strong class="mash-type-body block">Keep this takeaway on this device</strong>
 						{activeOption?.count ?? 0} card{activeOption?.count === 1 ? '' : 's'} will also appear in
 						Kept takeaways.
 					</span>
@@ -243,10 +240,7 @@
 			<fieldset class="mt-0 border-0 p-0">
 				<legend class="sr-only">Choose what happens to this desk</legend>
 				<div class="mash-finish-disposition-grid">
-					<label
-						class="mash-finish-disposition"
-						class:is-selected={disposition === 'leave'}
-					>
+					<label class="mash-finish-disposition" class:is-selected={disposition === 'leave'}>
 						<input
 							class="sr-only"
 							type="radio"
@@ -262,10 +256,7 @@
 						>
 					</label>
 					{#if activeSession?.mode === 'scratch'}
-						<label
-							class="mash-finish-disposition"
-							class:is-selected={disposition === 'keep-desk'}
-						>
+						<label class="mash-finish-disposition" class:is-selected={disposition === 'keep-desk'}>
 							<input
 								class="sr-only"
 								type="radio"
@@ -294,7 +285,7 @@
 				</div>
 			</fieldset>
 			{#if activeSession}
-				<p class="mt-3 text-[11px]" style="color: var(--mash-ink-muted);">
+				<p class="mash-type-caption mt-3" style="color: var(--mash-ink-muted);">
 					{sessionLifecycleLabel(activeSession, Date.now())}
 				</p>
 			{/if}
@@ -313,10 +304,8 @@
 	</div>
 
 	<div data-testid="finish-footer" class="mash-finish-footer">
-		<button
-			type="button"
-			class="mash-btn-ghost mash-finish-footer-secondary"
-			onclick={onLeave}>Back to desk</button
+		<button type="button" class="mash-btn-ghost mash-finish-footer-secondary" onclick={onLeave}
+			>Back to desk</button
 		>
 		<button
 			type="button"

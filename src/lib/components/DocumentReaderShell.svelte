@@ -105,7 +105,7 @@
 							<p>{clipping.text}</p>
 						{/if}
 						{#if index === clippings.length - 1}<span class="mash-pdf-new-badge">Just added</span
-						>{/if}
+							>{/if}
 					</article>
 				{/each}
 			{/if}
@@ -170,7 +170,7 @@
 		min-width: 0;
 		align-items: center;
 		gap: 8px;
-		font-size: 13px;
+		font-size: var(--mash-type-control);
 		font-weight: 600;
 		letter-spacing: -0.01em;
 		color: var(--mash-ink);
@@ -244,7 +244,7 @@
 		display: block;
 		margin-top: 3px;
 		color: var(--mash-ink-muted);
-		font-size: 10px;
+		font-size: var(--mash-type-micro);
 		line-height: 1.35;
 	}
 	.mash-pdf-clipping-list {
@@ -285,7 +285,7 @@
 		margin-top: 6px;
 		max-width: 15rem;
 		color: var(--mash-ink-muted);
-		font-size: 11px;
+		font-size: var(--mash-type-caption);
 		line-height: 1.45;
 	}
 	.mash-pdf-clipping {
@@ -313,7 +313,7 @@
 		justify-content: space-between;
 		min-height: 1rem;
 		color: var(--mash-accent-bright);
-		font-size: 10px;
+		font-size: var(--mash-type-micro);
 		font-weight: 600;
 		letter-spacing: 0.01em;
 	}
@@ -329,7 +329,7 @@
 		-webkit-line-clamp: 4;
 		line-clamp: 4;
 		color: var(--mash-ink);
-		font-size: 12px;
+		font-size: var(--mash-type-caption);
 		line-height: 1.45;
 	}
 	.mash-pdf-clipping-thumb {
@@ -349,7 +349,7 @@
 		border-radius: 999px;
 		background: var(--mash-accent-wash);
 		color: var(--mash-accent-bright);
-		font-size: 8px;
+		font-size: var(--mash-type-micro);
 		font-weight: 650;
 		letter-spacing: 0.02em;
 		text-transform: uppercase;
@@ -364,7 +364,7 @@
 		width: 100%;
 		min-height: 38px;
 		border-radius: 10px;
-		font-size: 12px;
+		font-size: var(--mash-type-caption);
 		font-weight: 650;
 		transition:
 			background 140ms ease,
@@ -403,7 +403,7 @@
 	.mash-pdf-clippings-actions p {
 		margin: 9px 0 0;
 		color: var(--mash-ink-muted);
-		font-size: 9px;
+		font-size: var(--mash-type-micro);
 		line-height: 1.4;
 		text-align: center;
 		opacity: 0.9;

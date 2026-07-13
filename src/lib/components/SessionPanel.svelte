@@ -151,7 +151,7 @@
 						</div>
 						<button
 							type="button"
-							class="mash-btn flex items-center gap-1.5 rounded-[9px] px-3 py-2 text-xs font-semibold"
+							class="mash-btn mash-type-caption flex items-center gap-1.5 rounded-[9px] px-3 py-2 font-semibold"
 							onclick={onNewScratch}
 						>
 							<Plus class="h-3.5 w-3.5" /> New scratch desk
@@ -173,7 +173,7 @@
 										/>{/if}
 								</span>
 								<span class="min-w-0 flex-1">
-									<strong class="block truncate text-sm">{session.title}</strong>
+									<strong class="mash-type-body block truncate">{session.title}</strong>
 									<small style="color: var(--mash-ink-muted);"
 										>{sessionLifecycleLabel(session, Date.now())}</small
 									>
@@ -193,14 +193,14 @@
 									<div class="mash-session-recover-row">
 										<RotateCcw class="h-4 w-4 shrink-0" style="color: var(--mash-ink-muted);" />
 										<span class="min-w-0 flex-1">
-											<strong class="block truncate text-sm">{session.title}</strong>
+											<strong class="mash-type-body block truncate">{session.title}</strong>
 											<small style="color: var(--mash-ink-muted);"
 												>{sessionLifecycleLabel(session, Date.now())}</small
 											>
 										</span>
 										<button
 											type="button"
-											class="mash-btn-ghost rounded-[9px] px-3 py-1.5 text-xs"
+											class="mash-btn-ghost mash-type-caption rounded-[9px] px-3 py-1.5"
 											onclick={() => onRestore(session.id)}>Restore</button
 										>
 									</div>
@@ -211,13 +211,13 @@
 
 					<div class="mash-session-retention">
 						<div>
-							<strong class="block text-xs">Scratch retention</strong>
+							<strong class="mash-type-caption block">Scratch retention</strong>
 							<small style="color: var(--mash-ink-muted);"
 								>Meaningful activity resets the timer.</small
 							>
 						</div>
 						<select
-							class="mash-focus rounded-[9px] border bg-transparent px-2.5 py-1.5 text-xs"
+							class="mash-focus mash-type-caption rounded-[9px] border bg-transparent px-2.5 py-1.5"
 							style="border-color: var(--mash-divider);"
 							value={retentionDays}
 							onchange={(event) => onRetentionChange(Number(event.currentTarget.value))}
@@ -232,7 +232,9 @@
 			{#if storageHealth?.supported && view === 'desks'}
 				<div class="mash-session-storage">
 					<span class="min-w-0 flex-1">
-						<strong class="block text-xs" style="color: var(--mash-ink);">Local storage</strong>
+						<strong class="mash-type-caption block" style="color: var(--mash-ink);"
+							>Local storage</strong
+						>
 						{formatStorageBytes(storageHealth.usage)} used of {formatStorageBytes(
 							storageHealth.quota
 						)}
@@ -244,7 +246,7 @@
 					</span>
 					<button
 						type="button"
-						class="mash-btn-ghost rounded-[9px] px-2.5 py-1.5 text-xs"
+						class="mash-btn-ghost mash-type-caption rounded-[9px] px-2.5 py-1.5"
 						onclick={() => void onRefreshStorage?.()}
 					>
 						Refresh

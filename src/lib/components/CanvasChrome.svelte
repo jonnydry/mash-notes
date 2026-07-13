@@ -72,7 +72,7 @@
 	class="mash-canvas-chrome-top pointer-events-none absolute top-3 right-3 z-10 flex flex-col items-end gap-1.5"
 >
 	<div class="pointer-events-auto flex flex-wrap items-center justify-end gap-1.5">
-		<div class="mash-board-chip flex items-center rounded-full p-0.5 text-[10px]">
+		<div class="mash-board-chip mash-type-micro flex items-center rounded-full p-0.5">
 			<button
 				type="button"
 				class="mash-board-chip-btn rounded-full px-2.5 py-1 {!snapEnabled ? 'is-active' : ''}"
@@ -98,7 +98,7 @@
 		</div>
 		<button
 			type="button"
-			class="mash-board-chip mash-board-chip-btn rounded-full px-2.5 py-1 text-[10px] {flowMode
+			class="mash-board-chip mash-board-chip-btn mash-type-micro rounded-full px-2.5 py-1 {flowMode
 				? 'is-active'
 				: ''}"
 			onclick={(e) => {
@@ -125,7 +125,7 @@
 		</button>
 		<button
 			type="button"
-			class="mash-board-chip mash-board-chip-btn rounded-full px-2.5 py-1 text-[10px]"
+			class="mash-board-chip mash-board-chip-btn mash-type-micro rounded-full px-2.5 py-1"
 			onclick={(e) => {
 				e.stopPropagation();
 				zoomToFit(false);
@@ -136,7 +136,7 @@
 		</button>
 		<button
 			type="button"
-			class="mash-board-chip mash-board-chip-btn rounded-full px-2.5 py-1 text-[10px] disabled:opacity-35"
+			class="mash-board-chip mash-board-chip-btn mash-type-micro rounded-full px-2.5 py-1 disabled:opacity-35"
 			disabled={!canUndo}
 			onclick={(e) => {
 				e.stopPropagation();
@@ -148,7 +148,7 @@
 		</button>
 		<button
 			type="button"
-			class="mash-board-chip mash-board-chip-btn rounded-full px-2.5 py-1 text-[10px] {desktopViewOpen
+			class="mash-board-chip mash-board-chip-btn mash-type-micro rounded-full px-2.5 py-1 {desktopViewOpen
 				? 'is-active'
 				: ''}"
 			onclick={(e) => {
@@ -174,7 +174,7 @@
 			data-testid="board-view-menu"
 		>
 			<p
-				class="px-2 pb-1 text-[9px] font-semibold tracking-wide uppercase"
+				class="mash-type-micro px-2 pb-1 font-semibold tracking-wide uppercase"
 				style="color: var(--mash-ink-muted);"
 			>
 				{Math.round(scale * 100)}%{altHeld ? ' · Alt' : ''}
@@ -182,7 +182,7 @@
 			<button
 				type="button"
 				role="menuitem"
-				class="mash-btn-ghost rounded-lg px-2.5 py-1.5 text-left text-[11px]"
+				class="mash-btn-ghost mash-type-caption rounded-lg px-2.5 py-1.5 text-left"
 				disabled={itemCount === 0}
 				onclick={(e) => {
 					e.stopPropagation();
@@ -195,7 +195,7 @@
 			<button
 				type="button"
 				role="menuitem"
-				class="mash-btn-ghost rounded-lg px-2.5 py-1.5 text-left text-[11px]"
+				class="mash-btn-ghost mash-type-caption rounded-lg px-2.5 py-1.5 text-left"
 				disabled={itemCount === 0}
 				onclick={(e) => {
 					e.stopPropagation();
@@ -209,7 +209,7 @@
 				<button
 					type="button"
 					role="menuitem"
-					class="mash-btn-ghost rounded-lg px-2.5 py-1.5 text-left text-[11px]"
+					class="mash-btn-ghost mash-type-caption rounded-lg px-2.5 py-1.5 text-left"
 					onclick={(e) => {
 						e.stopPropagation();
 						zoomToFit(true);
@@ -222,7 +222,7 @@
 			<button
 				type="button"
 				role="menuitem"
-				class="mash-btn-ghost rounded-lg px-2.5 py-1.5 text-left text-[11px] disabled:opacity-35"
+				class="mash-btn-ghost mash-type-caption rounded-lg px-2.5 py-1.5 text-left disabled:opacity-35"
 				disabled={!canRedo}
 				onclick={(e) => {
 					e.stopPropagation();
@@ -235,7 +235,7 @@
 			<button
 				type="button"
 				role="menuitem"
-				class="mash-btn-ghost rounded-lg px-2.5 py-1.5 text-left text-[11px]"
+				class="mash-btn-ghost mash-type-caption rounded-lg px-2.5 py-1.5 text-left"
 				onclick={(e) => {
 					e.stopPropagation();
 					resetView();
@@ -248,7 +248,7 @@
 				<button
 					type="button"
 					role="menuitem"
-					class="mash-btn-ghost rounded-lg px-2.5 py-1.5 text-left text-[11px]"
+					class="mash-btn-ghost mash-type-caption rounded-lg px-2.5 py-1.5 text-left"
 					onclick={(e) => {
 						e.stopPropagation();
 						setDesktopViewOpen(false);

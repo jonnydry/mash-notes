@@ -11,6 +11,8 @@ export type TypographySuiteId =
 	| 'napkin'
 	| 'terminal';
 
+export type TextSizeId = 'compact' | 'comfortable' | 'large';
+
 export type TypographySuite = {
 	id: TypographySuiteId;
 	label: string;
@@ -24,6 +26,13 @@ export type TypographySuite = {
 };
 
 export const TYPOGRAPHY_STORAGE_KEY = 'mash-typography';
+export const TEXT_SIZE_STORAGE_KEY = 'mash-text-size';
+
+export const TEXT_SIZE_OPTIONS: readonly { id: TextSizeId; label: string; hint: string }[] = [
+	{ id: 'compact', label: 'Compact', hint: 'More room on screen' },
+	{ id: 'comfortable', label: 'Comfortable', hint: 'Balanced and readable' },
+	{ id: 'large', label: 'Large', hint: 'Easiest to read' }
+] as const;
 
 export const TYPOGRAPHY_SUITES: readonly TypographySuite[] = [
 	{
@@ -71,7 +80,8 @@ export const TYPOGRAPHY_SUITES: readonly TypographySuite[] = [
 		label: 'Terminal',
 		hint: 'All monospace — Plex Mono (typewriter / code desk)',
 		ui: "'IBM Plex Mono', ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, Consolas, monospace",
-		display: "'IBM Plex Mono', ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, Consolas, monospace",
+		display:
+			"'IBM Plex Mono', ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, Consolas, monospace",
 		sample: 'type notes on the wire · Mash'
 	}
 ] as const;
@@ -95,6 +105,21 @@ export function readStoredTypography(): TypographySuiteId {
 		/* private mode / blocked storage */
 	}
 	return 'kitchen';
+}
+
+export function isTextSizeId(value: string | null | undefined): value is TextSizeId {
+	return value === 'compact' || value === 'comfortable' || value === 'large';
+}
+
+export function readStoredTextSize(): TextSizeId {
+	if (typeof localStorage === 'undefined') return 'comfortable';
+	try {
+		const raw = localStorage.getItem(TEXT_SIZE_STORAGE_KEY);
+		if (isTextSizeId(raw)) return raw;
+	} catch {
+		/* private mode / blocked storage */
+	}
+	return 'comfortable';
 }
 
 const loadedFontSuites = new Set<TypographySuiteId>(['kitchen']);
@@ -133,8 +158,17 @@ export function applyTypography(id: TypographySuiteId): void {
 	root.style.setProperty('--mash-font-display', suite.display);
 }
 
-function createTypographySession(initial: TypographySuiteId = readStoredTypography()) {
+export function applyTextSize(id: TextSizeId): void {
+	if (typeof document === 'undefined') return;
+	document.documentElement.dataset.textSize = id;
+}
+
+function createTypographySession(
+	initial: TypographySuiteId = readStoredTypography(),
+	initialTextSize: TextSizeId = readStoredTextSize()
+) {
 	let suiteId = $state<TypographySuiteId>(initial);
+	let textSize = $state<TextSizeId>(initialTextSize);
 
 	function setSuite(next: TypographySuiteId) {
 		suiteId = next;
@@ -146,7 +180,18 @@ function createTypographySession(initial: TypographySuiteId = readStoredTypograp
 		void ensureTypographyFonts(next).then(() => applyTypography(next));
 	}
 
+	function setTextSize(next: TextSizeId) {
+		textSize = next;
+		try {
+			localStorage.setItem(TEXT_SIZE_STORAGE_KEY, next);
+		} catch {
+			/* ignore */
+		}
+		applyTextSize(next);
+	}
+
 	if (typeof document !== 'undefined') {
+		applyTextSize(initialTextSize);
 		if (initial !== 'kitchen') {
 			void ensureTypographyFonts(initial).then(() => applyTypography(initial));
 		} else {
@@ -164,7 +209,14 @@ function createTypographySession(initial: TypographySuiteId = readStoredTypograp
 		get suites() {
 			return TYPOGRAPHY_SUITES;
 		},
-		setSuite
+		get textSize() {
+			return textSize;
+		},
+		get textSizes() {
+			return TEXT_SIZE_OPTIONS;
+		},
+		setSuite,
+		setTextSize
 	};
 }
 

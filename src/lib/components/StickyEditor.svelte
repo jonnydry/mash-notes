@@ -177,9 +177,7 @@
 				embeddedImage.src,
 				quarterTurns
 			);
-			onBodyChange(
-				composeEmbeddedNoteImage(embeddedImage.alt, nextSrc, embeddedImage.caption)
-			);
+			onBodyChange(composeEmbeddedNoteImage(embeddedImage.alt, nextSrc, embeddedImage.caption));
 			// Body now points at the new blob; reclaim the prior pixels if unused.
 			// Ignore this note's stale IDB body until persist catches up.
 			void releaseRotatedBlob(previousBlobId, noteId);
@@ -670,11 +668,7 @@
 				use:clipZoomWheel
 			>
 				{#if resolvedImageSrc}
-					<img
-						src={resolvedImageSrc}
-						alt={embeddedImage.alt || 'Note image'}
-						draggable="false"
-					/>
+					<img src={resolvedImageSrc} alt={embeddedImage.alt || 'Note image'} draggable="false" />
 				{/if}
 			</div>
 		</div>
@@ -716,7 +710,7 @@
 		gap: 0.3rem;
 		padding: 0 0.3rem;
 		color: var(--mash-card-muted, #6b5e4e);
-		font-size: 9px;
+		font-size: var(--mash-type-micro);
 		font-weight: 550;
 		letter-spacing: 0.02em;
 		opacity: 0.88;
@@ -732,7 +726,7 @@
 	.mash-sticky-body,
 	.mash-sticky-preview {
 		padding: var(--mash-sticky-pad-y) var(--mash-sticky-pad-x);
-		font-size: 13px;
+		font-size: var(--mash-type-body);
 		line-height: 1.6;
 	}
 	.mash-sticky-body {
@@ -761,7 +755,7 @@
 		min-width: 2.35rem;
 		padding: 0 1px;
 		color: var(--mash-card-muted, #6b5e4e);
-		font-size: 9px;
+		font-size: var(--mash-type-micro);
 		font-variant-numeric: tabular-nums;
 		letter-spacing: 0.01em;
 		text-align: center;
@@ -881,7 +875,7 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-		font-size: 13px;
+		font-size: var(--mash-type-control);
 		font-weight: 600;
 		letter-spacing: -0.01em;
 	}

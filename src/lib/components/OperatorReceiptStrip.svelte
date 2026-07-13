@@ -22,18 +22,21 @@
 	>
 		<div class="min-w-0 flex-1">
 			<div class="flex items-baseline gap-2">
-				<strong class="text-xs font-semibold tracking-tight" style="color: var(--mash-ink);">
+				<strong
+					class="mash-type-caption font-semibold tracking-tight"
+					style="color: var(--mash-ink);"
+				>
 					{receipt.title}
 				</strong>
 				<span
-					class="shrink-0 rounded-md px-1.5 py-px text-[10px] font-semibold tabular-nums"
+					class="mash-type-micro shrink-0 rounded-md px-1.5 py-px font-semibold tabular-nums"
 					style="background: color-mix(in srgb, var(--mash-accent) 16%, transparent); color: var(--mash-accent);"
 					data-testid="operator-receipt-summary"
 				>
 					{receipt.summary}
 				</span>
 			</div>
-			<p class="truncate text-[10px]" style="color: var(--mash-ink-muted);">
+			<p class="mash-type-micro truncate" style="color: var(--mash-ink-muted);">
 				{receipt.detail}
 				{#if canUndo}
 					<span aria-hidden="true"> · Undo reverses this</span>
@@ -43,7 +46,7 @@
 		{#if canUndo && onUndo}
 			<button
 				type="button"
-				class="mash-btn-ghost flex shrink-0 items-center gap-1 rounded-xl px-2 py-1 text-[11px] font-semibold"
+				class="mash-btn-ghost mash-type-caption flex shrink-0 items-center gap-1 rounded-xl px-2 py-1 font-semibold"
 				data-testid="operator-receipt-undo"
 				onclick={() => void onUndo()}
 				title="Undo this transform"

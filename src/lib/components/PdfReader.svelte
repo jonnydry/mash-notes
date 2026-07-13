@@ -4,11 +4,7 @@
 	import type { PDFDocumentLoadingTask, PDFDocumentProxy, RenderTask } from 'pdfjs-dist';
 	import pdfWorkerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
 	import type { CssRect, PdfClipPayload, PdfClipping } from '$lib/pdf-clipping';
-	import {
-		cropPdfCanvasRegion,
-		normalizePdfExcerpt,
-		normalizeRegionRect
-	} from '$lib/pdf-clipping';
+	import { cropPdfCanvasRegion, normalizePdfExcerpt, normalizeRegionRect } from '$lib/pdf-clipping';
 	import {
 		PDFJS_CMAP_URL,
 		PDFJS_ICC_URL,
@@ -232,7 +228,11 @@
 			pageHeight = viewport.height;
 			const pixelW = Math.max(1, Math.floor(viewport.width * outputScale));
 			const pixelH = Math.max(1, Math.floor(viewport.height * outputScale));
-			if (pixelW * pixelH > MAX_CANVAS_PIXELS || pixelW > MAX_CANVAS_EDGE || pixelH > MAX_CANVAS_EDGE) {
+			if (
+				pixelW * pixelH > MAX_CANVAS_PIXELS ||
+				pixelW > MAX_CANVAS_EDGE ||
+				pixelH > MAX_CANVAS_EDGE
+			) {
 				throw new Error(`Page is too large to draw (${pixelW}×${pixelH}px)`);
 			}
 			canvas.width = pixelW;
@@ -473,7 +473,7 @@
 	emptyClippingsHint="Select text, or use Clip region for scans and diagrams."
 	emptyClippingsSubhint="Each clipping keeps its page reference."
 	clippings={shellClippings}
-	onClose={onClose}
+	{onClose}
 	onOpenClippings={() => void onOpenClippings(clippings.map((clipping) => clipping.noteId))}
 >
 	{#snippet children()}
@@ -630,7 +630,7 @@
 		align-items: center;
 		gap: 6px;
 		color: var(--mash-ink-muted);
-		font-size: 12px;
+		font-size: var(--mash-type-caption);
 	}
 	.mash-pdf-page-jump {
 		display: inline-flex;
@@ -683,7 +683,7 @@
 		text-align: center;
 		font-variant-numeric: tabular-nums;
 		font-weight: 600;
-		font-size: 11px;
+		font-size: var(--mash-type-caption);
 	}
 	.mash-pdf-region-tool.is-active {
 		background: var(--mash-accent-wash);
@@ -785,7 +785,7 @@
 		border-radius: 999px;
 		background: var(--mash-accent);
 		color: var(--mash-accent-ink);
-		font-size: 12px;
+		font-size: var(--mash-type-caption);
 		font-weight: 650;
 		box-shadow: 0 8px 24px rgb(0 0 0 / 0.28);
 		transition:
@@ -808,7 +808,7 @@
 		place-items: center;
 		background: rgb(255 255 255 / 0.72);
 		color: #5d5144;
-		font-size: 12px;
+		font-size: var(--mash-type-caption);
 	}
 	.mash-pdf-page-error {
 		position: absolute;
@@ -827,7 +827,7 @@
 	.mash-pdf-page-error p {
 		max-width: 320px;
 		margin: 0;
-		font-size: 13px;
+		font-size: var(--mash-type-control);
 	}
 	.mash-pdf-page-error-actions {
 		display: flex;
@@ -840,7 +840,7 @@
 		border-radius: 9px;
 		background: var(--mash-accent);
 		color: var(--mash-accent-ink);
-		font-size: 12px;
+		font-size: var(--mash-type-caption);
 		font-weight: 650;
 	}
 	.mash-pdf-page-error-actions button.is-quiet {
@@ -865,7 +865,7 @@
 		border-radius: 9px;
 		background: var(--mash-accent);
 		color: var(--mash-accent-ink);
-		font-size: 12px;
+		font-size: var(--mash-type-caption);
 		font-weight: 650;
 	}
 

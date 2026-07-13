@@ -18,6 +18,15 @@
 					if (meta) meta.setAttribute('content', t === 'light' ? '#efe6d8' : '#0e0c0a');
 				} catch (e) {}
 				try {
+					var textSize = localStorage.getItem('mash-text-size');
+					if (textSize !== 'compact' && textSize !== 'comfortable' && textSize !== 'large') {
+						textSize = 'comfortable';
+					}
+					document.documentElement.dataset.textSize = textSize;
+				} catch (e) {
+					document.documentElement.dataset.textSize = 'comfortable';
+				}
+				try {
 					var suites = {
 						kitchen: {
 							ui: "'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif",
@@ -41,7 +50,8 @@
 						},
 						terminal: {
 							ui: "'IBM Plex Mono', ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, Consolas, monospace",
-							display: "'IBM Plex Mono', ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, Consolas, monospace"
+							display:
+								"'IBM Plex Mono', ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, Consolas, monospace"
 						}
 					};
 					var ty = localStorage.getItem('mash-typography');
