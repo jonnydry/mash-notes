@@ -548,7 +548,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 }
 .mash-note-card.is-selected {
 	/* Lift above overlapping unselected cards so the highlight is readable. */
-	z-index: 4;
+	z-index: 6;
 	border-color: var(--mash-accent-select);
 	/* Tight accent edge + soft wash ring — clear multi-select without shouting */
 	box-shadow:
@@ -583,6 +583,10 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	min-width: 280px;
 	min-height: 220px;
 }
+.mash-note-card.is-expanded.is-selected {
+	/* The active card always wins the local stack, even over an open editor. */
+	z-index: 6;
+}
 .mash-note-card.is-dragging-card {
 	opacity: 0.94;
 	z-index: 8;
@@ -613,6 +617,31 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 .mash-card-header {
 	/* Expanded sticky drag chrome */
 	min-height: 2.25rem;
+}
+.mash-card-grab-handle {
+	display: inline-flex;
+	width: 1.25rem;
+	min-width: 1.25rem;
+	min-height: 1.5rem;
+	align-self: center;
+	align-items: center;
+	justify-content: center;
+	margin-left: -0.35rem;
+	border-radius: 0.35rem;
+	color: var(--mash-card-muted);
+	opacity: 0.62;
+	touch-action: none;
+	transition:
+		opacity 120ms ease,
+		color 120ms ease,
+		background-color 120ms ease;
+}
+.mash-note-card:hover .mash-card-grab-handle,
+.mash-note-card.is-selected .mash-card-grab-handle,
+.mash-note-card.is-dragging-card .mash-card-grab-handle {
+	background: var(--mash-card-hover);
+	color: var(--mash-card-ink);
+	opacity: 1;
 }
 .mash-card-meta {
 	/* Folder / tags strip under expanded title */

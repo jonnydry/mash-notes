@@ -57,12 +57,9 @@
 		type SnapZone
 	} from '$lib/stores/editor-stage.svelte';
 	import { canvasBowlBounds } from '$lib/canvas-bowls';
+	import { COLLAPSED_CARD, EXPANDED_CARD } from '$lib/canvas-card-sizing';
 
 	const NOTE_MIME = 'application/x-mash-notes';
-	const COLLAPSED_W = 220;
-	const COLLAPSED_H = 120;
-	const EXPANDED_W = 360;
-	const EXPANDED_H = 320;
 	const MASH_OVERLAP = 0.28;
 	const POINTER_DRAG_THRESHOLD = 4;
 	const MIN_SCALE = 0.4;
@@ -70,7 +67,12 @@
 	const ZOOM_BUTTON_FACTOR = 1.1;
 	const MASH_CONFIRM_SEEN_KEY = 'mash.dragMashConfirmSeen';
 	const COLLAPSED_BOUNDS = { minW: 160, minH: 96, maxW: 360, maxH: 240 };
-	const EXPANDED_BOUNDS = { minW: 280, minH: 220, maxW: 640, maxH: 720 };
+	const EXPANDED_BOUNDS = {
+		minW: EXPANDED_CARD.w,
+		minH: EXPANDED_CARD.h,
+		maxW: 640,
+		maxH: 720
+	};
 
 	function hasSeenDragMashConfirm(): boolean {
 		try {
@@ -541,13 +543,13 @@
 		const expanded = expandedNoteId === noteId;
 		if (expanded) {
 			return {
-				w: item.w ?? EXPANDED_W,
-				h: item.h ?? EXPANDED_H
+				w: Math.max(item.w ?? 0, EXPANDED_CARD.w),
+				h: Math.max(item.h ?? 0, EXPANDED_CARD.h)
 			};
 		}
 		return {
-			w: item.w ?? COLLAPSED_W,
-			h: item.h ?? COLLAPSED_H
+			w: item.w ?? COLLAPSED_CARD.w,
+			h: item.h ?? COLLAPSED_CARD.h
 		};
 	}
 
@@ -2106,6 +2108,9 @@
 							data-drag-handle
 							class="mash-card-header flex cursor-grab items-center gap-1 border-b border-[var(--mash-card-edge)] px-2.5 py-1.5 active:cursor-grabbing"
 						>
+							<span class="mash-card-grab-handle" title="Drag note" aria-hidden="true">
+								<GripVertical class="h-4 w-4" />
+							</span>
 							<input
 								bind:this={titleInputEl}
 								type="text"
@@ -2225,8 +2230,12 @@
 						</div>
 					{:else}
 						<div
-							class="mash-card-title-row flex items-start justify-between gap-1.5 border-b border-[var(--mash-card-edge)] px-2.5 py-2"
+							data-drag-handle
+							class="mash-card-title-row flex cursor-grab items-start justify-between gap-1 border-b border-[var(--mash-card-edge)] px-2.5 py-2 active:cursor-grabbing"
 						>
+							<span class="mash-card-grab-handle -mt-0.5" title="Drag note" aria-hidden="true">
+								<GripVertical class="h-4 w-4" />
+							</span>
 							<span
 								class="mash-type-control flex min-w-0 items-center gap-1 truncate font-semibold tracking-tight"
 							>

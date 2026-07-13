@@ -51,9 +51,9 @@ import {
 } from '$lib/canvas-flow';
 import type { SnapZone } from '$lib/stores/editor-stage.svelte';
 import { cleanCanvasBowls, createBowlMembership, removeItemsFromBowls } from '$lib/canvas-bowls';
+import { COLLAPSED_CARD, EXPANDED_CARD } from '$lib/canvas-card-sizing';
 
-export const COLLAPSED_CARD = { w: 220, h: 120 };
-export const EXPANDED_CARD = { w: 360, h: 320 };
+export { COLLAPSED_CARD, EXPANDED_CARD } from '$lib/canvas-card-sizing';
 export const BUMP_GAP = 24;
 export const NOTE_MIME = 'application/x-mash-notes';
 
@@ -1352,9 +1352,24 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		);
 	}
 
+	async function compactSticky(noteId: string) {
+		const item = canvasItems.find((i) => i.noteId === noteId);
+		if (!item) return;
+		// Expanded defaults collapse back to the canonical card size. Preserve
+		// deliberately compact custom sizes rather than snapping every card.
+		const tooBig = (item.w ?? 0) > COLLAPSED_CARD.w + 40 || (item.h ?? 0) > COLLAPSED_CARD.h + 40;
+		if (!tooBig) return;
+		const w = COLLAPSED_CARD.w;
+		const h = COLLAPSED_CARD.h;
+		patchCanvasItems(new Map([[item.id, { w, h }]]));
+		await updateCanvasItemPosition(item.id, { x: item.x, y: item.y, w, h });
+	}
+
 	function expandSticky(noteId: string, focus: 'title' | 'body' = 'body') {
-		if (expandedNoteId && expandedNoteId !== noteId) {
+		const previousExpandedId = expandedNoteId;
+		if (previousExpandedId && previousExpandedId !== noteId) {
 			void restoreBumpLayout();
+			void compactSticky(previousExpandedId);
 		}
 		opts.selectNote(noteId, { keepSelection: true });
 		expandFocus = focus;
@@ -1371,21 +1386,16 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		void bumpNeighborsAround(item.id, { w, h });
 	}
 
-	function collapseSticky() {
+	async function collapseSticky() {
 		const noteId = expandedNoteId;
 		expandedNoteId = null;
 		expandFocus = null;
-		void restoreBumpLayout();
-		if (!noteId) return;
-		const item = canvasItems.find((i) => i.noteId === noteId);
-		if (!item) return;
-		// Shrink oversized expanded cards back to a compact default; keep intentional small sizes.
-		const tooBig = (item.w ?? 0) > COLLAPSED_CARD.w + 40 || (item.h ?? 0) > COLLAPSED_CARD.h + 40;
-		if (!tooBig) return;
-		const w = COLLAPSED_CARD.w;
-		const h = COLLAPSED_CARD.h;
-		patchCanvasItems(new Map([[item.id, { w, h }]]));
-		void updateCanvasItemPosition(item.id, { x: item.x, y: item.y, w, h });
+		const restore = restoreBumpLayout();
+		if (!noteId) {
+			await restore;
+			return;
+		}
+		await Promise.all([restore, compactSticky(noteId)]);
 	}
 
 	/** Tray / search / peel: ensure note is on canvas, then open in the stage editor. */
