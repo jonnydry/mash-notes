@@ -35,7 +35,7 @@
 	const listId = `mash-folder-suggest-${Math.random().toString(36).slice(2, 9)}`;
 
 	let open = $state(false);
-	// svelte-ignore state_referenced_locally -- the effect below resyncs external changes while closed
+	// svelte-ignore state_referenced_locally
 	let query = $state(value);
 	let highlight = $state(-1);
 	let controlEl: HTMLDivElement | undefined = $state();
@@ -71,11 +71,15 @@
 			menuPos = null;
 			return;
 		}
-		return trackSuggestAnchor(() => controlEl, (pos) => (menuPos = pos), {
-			gap: 6,
-			maxH: 200,
-			minWidth: 160
-		});
+		return trackSuggestAnchor(
+			() => controlEl,
+			(pos) => (menuPos = pos),
+			{
+				gap: 6,
+				maxH: 200,
+				minWidth: 160
+			}
+		);
 	});
 
 	function openMenu(fromValue: string) {

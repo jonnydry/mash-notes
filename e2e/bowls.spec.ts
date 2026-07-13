@@ -25,7 +25,10 @@ test('creates, renames, selects, and dissolves a bowl', async ({ page }) => {
 	await expect(bowl.locator('.mash-canvas-bowl-count')).toHaveText('2');
 
 	const cards = page.locator('[data-canvas-card]');
-	const beforeBowlMove = await Promise.all([cards.nth(0).boundingBox(), cards.nth(1).boundingBox()]);
+	const beforeBowlMove = await Promise.all([
+		cards.nth(0).boundingBox(),
+		cards.nth(1).boundingBox()
+	]);
 	const grip = await bowl.locator('.mash-canvas-bowl-grip').boundingBox();
 	expect(grip).not.toBeNull();
 	await page.mouse.move(grip!.x + grip!.width / 2, grip!.y + grip!.height / 2);

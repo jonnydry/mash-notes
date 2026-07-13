@@ -15,7 +15,7 @@ test.describe('Linked peel', () => {
 
 		// Existing target: open Linked + stage, no create dialog.
 		await page.locator('.mash-wikilink').filter({ hasText: 'Link Target' }).click();
-		const peel = page.getByRole('complementary', { name: 'Note scanner' });
+		const peel = page.getByRole('complementary', { name: 'Ingredients' });
 		await expect(peel).toBeVisible();
 		await expect(peel.getByText('Outgoing', { exact: true })).toBeVisible();
 		await expect(peel.getByText('Backlinks')).toBeVisible();

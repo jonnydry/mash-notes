@@ -583,7 +583,6 @@
 		openHtmlReader,
 		resumePdfReader,
 		resumeDocxReader,
-		resumeHtmlReader,
 		hidePdfReader,
 		hideDocxReader,
 		hideHtmlReader
@@ -700,14 +699,8 @@
 		refreshOperationHistory: () => refreshOperationHistory()
 	});
 
-	const {
-		splitCandidate,
-		splitSelection,
-		mashNotesIntoBubble,
-		combineSelection,
-		unmashSelection,
-		handleMashCards
-	} = contentOps;
+	const { splitCandidate, splitSelection, combineSelection, unmashSelection, handleMashCards } =
+		contentOps;
 
 	function queueGifExplodeChoice(
 		file: File | Blob,
@@ -754,7 +747,7 @@
 		handleOpenImageFiles
 	} = deskPlacement;
 
-	async function handleGifExplodeChoice(mode: import('$lib/gif-explode').GifExplodeMode) {
+	async function handleGifExplodeChoice(mode: GifExplodeMode) {
 		const pending = gifExplodePending;
 		gifExplodePending = null;
 		if (!pending) return;
@@ -805,7 +798,7 @@
 		handleNewNote: () => handleNewNote(),
 		startTypingNote: (initialBody) => handleNewNote('Untitled', { initialBody, focus: 'body' }),
 		canStartTypingNote: () =>
-			!Boolean(
+			!(
 				showPalette ||
 				settingsOpen ||
 				shortcutsOpen ||
@@ -1009,19 +1002,19 @@
 		let imageCompacted = 0;
 
 		if (batch.pdfFiles.length > 0) {
-			openPdfReader(batch.pdfFiles[0]!);
-			openedDocName = batch.pdfFiles[0]!.name;
+			if (openPdfReader(batch.pdfFiles[0]!)) openedDocName = batch.pdfFiles[0]!.name;
+			else failedCount++;
 			if (batch.pdfFiles.length > 1) failedCount += batch.pdfFiles.length - 1;
 			if (batch.docxFiles.length > 0) failedCount += batch.docxFiles.length;
 			if (batch.htmlFiles.length > 0) failedCount += batch.htmlFiles.length;
 		} else if (batch.docxFiles.length > 0) {
-			await openDocxReader(batch.docxFiles[0]!);
-			openedDocName = batch.docxFiles[0]!.name;
+			if (await openDocxReader(batch.docxFiles[0]!)) openedDocName = batch.docxFiles[0]!.name;
+			else failedCount++;
 			if (batch.docxFiles.length > 1) failedCount += batch.docxFiles.length - 1;
 			if (batch.htmlFiles.length > 0) failedCount += batch.htmlFiles.length;
 		} else if (batch.htmlFiles.length > 0) {
-			openHtmlReader(batch.htmlFiles[0]!);
-			openedDocName = batch.htmlFiles[0]!.name;
+			if (openHtmlReader(batch.htmlFiles[0]!)) openedDocName = batch.htmlFiles[0]!.name;
+			else failedCount++;
 			if (batch.htmlFiles.length > 1) failedCount += batch.htmlFiles.length - 1;
 		}
 
@@ -1206,8 +1199,6 @@
 			? peelScopeSubtitle(peelScopeStats, peelScopeFilter)
 			: undefined
 	);
-	/** Multiple open boards: chip shows the active board name (not the Screenplay metaphor). */
-	let screenplayActive = $derived(spaces.openKeys.length > 1);
 	let screenplayChipTitle = $derived(peel.canvasTitle);
 	let canvasPlaceCount = $derived(
 		canvas.canvasItems.filter((item) => library.notesById.has(item.noteId)).length
@@ -1591,6 +1582,8 @@
 	let paletteRows = $derived.by((): PaletteRow[] => {
 		const q = paletteQuery.toLowerCase();
 		const matches = paletteActions.filter((a) => a.label.toLowerCase().includes(q));
+		// Local aggregation only; this Map never escapes or participates in Svelte reactivity.
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity
 		const groups = new Map<string, typeof matches>();
 		for (const action of matches) {
 			const g = paletteGroupFor(action.label);

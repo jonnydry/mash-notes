@@ -12,6 +12,7 @@ const deferredFeatureEntries = new Set([
 	'DocxReader',
 	'HtmlReader',
 	'gifuct-js',
+	'image-headers',
 	// Chrome panels loaded on demand from +page
 	'SettingsPanel',
 	'ShortcutsModal',
@@ -67,7 +68,7 @@ export default defineConfig({
 				name: 'Mash',
 				short_name: 'Mash',
 				description:
-					'Mash your ideas together in a reliable place. Cute, fast, minimal web notes. Open source, private, keyboard-first PWA.',
+					'A fast, local-first scratch workbench for turning messy text and files into useful, portable results.',
 				theme_color: '#0e0c0a',
 				background_color: '#0e0c0a',
 				display: 'standalone',

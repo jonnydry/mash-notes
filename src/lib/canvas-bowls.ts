@@ -4,7 +4,10 @@ export const BOWL_MIN_ITEMS = 2;
 export const BOWL_PAD_X = 72;
 export const BOWL_PAD_Y = 64;
 
-export function cleanCanvasBowls(bowls: CanvasBowl[], validItemIds: Iterable<string>): CanvasBowl[] {
+export function cleanCanvasBowls(
+	bowls: CanvasBowl[],
+	validItemIds: Iterable<string>
+): CanvasBowl[] {
 	const valid = new Set(validItemIds);
 	const claimed = new Set<string>();
 	const cleaned: CanvasBowl[] = [];

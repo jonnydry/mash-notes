@@ -7,9 +7,7 @@ export const portal: Action<HTMLElement, HTMLElement | string | undefined> = (
 ) => {
 	function mount(next: HTMLElement | string | undefined) {
 		const parent =
-			typeof next === 'string'
-				? document.querySelector(next)
-				: (next ?? document.body);
+			typeof next === 'string' ? document.querySelector(next) : (next ?? document.body);
 		parent?.appendChild(node);
 	}
 

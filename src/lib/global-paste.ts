@@ -1,7 +1,13 @@
 /**
  * Desk-level paste intake (images, URL lines, multi-line text → cards).
  */
-import { clipboardImageBlob, isGifFile, persistImageNoteBody, prepareDeskImage, imageNoteSource } from './desk-image';
+import {
+	clipboardImageBlob,
+	isGifFile,
+	persistImageNoteBody,
+	prepareDeskImage,
+	imageNoteSource
+} from './desk-image';
 import {
 	analyzePastedText,
 	draftsFromPastedText,
@@ -90,12 +96,10 @@ export function createGlobalPasteHandler(deps: GlobalPasteDeps) {
 					return;
 				}
 				const title = prepared.titleHint || 'Pasted image';
-				const { body } = await persistImageNoteBody(
-					prepared.dataUrl,
-					title,
-					caption,
-					{ width: prepared.width, height: prepared.height }
-				);
+				const { body } = await persistImageNoteBody(prepared.dataUrl, title, caption, {
+					width: prepared.width,
+					height: prepared.height
+				});
 				const notes = await deps.placeNoteDraftsOnDesk([
 					{
 						title,

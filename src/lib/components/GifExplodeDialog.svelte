@@ -90,9 +90,7 @@
 						onclick={() => onChoose('frames')}
 					>
 						<Film class="h-5 w-5 text-[var(--mash-accent-bright)]" />
-						<strong
-							>{importCount} frame card{importCount === 1 ? '' : 's'}</strong
-						>
+						<strong>{importCount} frame card{importCount === 1 ? '' : 's'}</strong>
 						<small>
 							{#if willSample}
 								Evenly sample {importCount} of {frameCount} frames

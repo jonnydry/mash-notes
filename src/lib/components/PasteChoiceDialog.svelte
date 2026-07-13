@@ -45,7 +45,10 @@
 		>
 			<header class="mash-paste-header">
 				<div class="min-w-0 flex-1">
-					<h2 id="mash-paste-choice-title" class="mash-display text-lg font-semibold tracking-tight">
+					<h2
+						id="mash-paste-choice-title"
+						class="mash-display text-lg font-semibold tracking-tight"
+					>
 						How should this land?
 					</h2>
 					<p class="mash-dialog-subtitle">

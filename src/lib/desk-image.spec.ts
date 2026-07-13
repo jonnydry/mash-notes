@@ -6,11 +6,22 @@ import {
 	imageNoteSource,
 	imageTitleFromFileName,
 	isImageFile,
-	prepareDeskImage
+	prepareDeskImage,
+	readEncodedImageDimensions
 } from './desk-image';
 
 function file(name: string, type: string, bytes = 16): File {
 	return new File([new Uint8Array(bytes)], name, { type });
+}
+
+function pngHeader(width: number, height: number): Blob {
+	const bytes = new Uint8Array(24);
+	bytes.set([0x89, 0x50, 0x4e, 0x47], 0);
+	bytes.set([0x49, 0x48, 0x44, 0x52], 12);
+	const view = new DataView(bytes.buffer);
+	view.setUint32(16, width);
+	view.setUint32(20, height);
+	return new Blob([bytes], { type: 'image/png' });
 }
 
 describe('desk-image helpers', () => {
@@ -53,6 +64,15 @@ describe('desk-image helpers', () => {
 			type: 'image/png'
 		});
 		const result = await prepareDeskImage(huge, { fileName: 'huge.png' });
+		expect(result).toEqual({ ok: false, error: 'too-large' });
+	});
+
+	it('preflights encoded dimensions before decoding pixels', async () => {
+		expect(await readEncodedImageDimensions(pngHeader(640, 480))).toEqual({
+			width: 640,
+			height: 480
+		});
+		const result = await prepareDeskImage(pngHeader(5000, 5000), { fileName: 'bomb.png' });
 		expect(result).toEqual({ ok: false, error: 'too-large' });
 	});
 

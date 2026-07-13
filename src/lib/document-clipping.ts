@@ -76,10 +76,7 @@ export async function buildPdfClippingDraft(
 	};
 }
 
-export function buildDocxClippingDraft(
-	file: File,
-	excerpt: DocxClipPayload
-): ClipNoteDraft | null {
+export function buildDocxClippingDraft(file: File, excerpt: DocxClipPayload): ClipNoteDraft | null {
 	const text = normalizeDocxExcerpt(excerpt.text ?? '');
 	if (!text) return null;
 	return {
@@ -96,10 +93,7 @@ export function buildDocxClippingDraft(
 	};
 }
 
-export function buildHtmlClippingDraft(
-	file: File,
-	excerpt: HtmlClipPayload
-): ClipNoteDraft | null {
+export function buildHtmlClippingDraft(file: File, excerpt: HtmlClipPayload): ClipNoteDraft | null {
 	const text = normalizeHtmlExcerpt(excerpt.text ?? '');
 	if (!text) return null;
 	return {

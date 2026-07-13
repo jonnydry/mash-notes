@@ -6,6 +6,7 @@ import { untrack } from 'svelte';
 import {
 	addCanvasEdge,
 	addNoteToCanvas,
+	db,
 	getCanvasItems,
 	getOrCreateFolderCanvas,
 	listCanvasEdges,
@@ -49,11 +50,7 @@ import {
 	listFlowSequences
 } from '$lib/canvas-flow';
 import type { SnapZone } from '$lib/stores/editor-stage.svelte';
-import {
-	cleanCanvasBowls,
-	createBowlMembership,
-	removeItemsFromBowls
-} from '$lib/canvas-bowls';
+import { cleanCanvasBowls, createBowlMembership, removeItemsFromBowls } from '$lib/canvas-bowls';
 
 export const COLLAPSED_CARD = { w: 220, h: 120 };
 export const EXPANDED_CARD = { w: 360, h: 320 };
@@ -125,14 +122,6 @@ export function computeExpandBumps(
 		moves.push({ itemId: id, x: pos.x, y: pos.y });
 	}
 	return { moves, restore };
-}
-
-function escapeHtml(s: string): string {
-	return s
-		.replace(/&/g, '&amp;')
-		.replace(/</g, '&lt;')
-		.replace(/>/g, '&gt;')
-		.replace(/"/g, '&quot;');
 }
 
 export type CanvasBoardApi = {
@@ -262,16 +251,22 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 			let items = await getCanvasItems(canvas.id);
 			if (seq !== canvasLoadSeq) return;
 
-			// Drop placements whose notes are gone from the active library (session
-			// switch / kept scope / soft-delete). Prevents blank boards with a
-			// non-zero "on canvas" count.
+			// Hide placements outside the active library. Only delete them from storage
+			// when the underlying note is truly gone/deleted: during a session switch,
+			// the next session's notes can arrive one reactive tick after its canvas.
 			const libraryIds = new Set(opts.getNotes().map((n) => n.id));
 			const orphanNoteIds = [
 				...new Set(items.filter((i) => !libraryIds.has(i.noteId)).map((i) => i.noteId))
 			];
 			if (orphanNoteIds.length > 0) {
-				await removeNotesFromCanvas(canvas.id, orphanNoteIds);
-				if (seq !== canvasLoadSeq) return;
+				const orphanNotes = await db.notes.bulkGet(orphanNoteIds);
+				const permanentlyGoneIds = orphanNoteIds.filter(
+					(_id, index) => !orphanNotes[index] || orphanNotes[index]?.deletedAt != null
+				);
+				if (permanentlyGoneIds.length > 0) {
+					await removeNotesFromCanvas(canvas.id, permanentlyGoneIds);
+					if (seq !== canvasLoadSeq) return;
+				}
 				items = items.filter((i) => libraryIds.has(i.noteId));
 			}
 
@@ -311,7 +306,10 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 			}
 
 			if (seq !== canvasLoadSeq) return;
-			const cleanedBowls = cleanCanvasBowls(canvas.bowls ?? [], items.map((item) => item.id));
+			const cleanedBowls = cleanCanvasBowls(
+				canvas.bowls ?? [],
+				items.map((item) => item.id)
+			);
 			const bowlsChanged = JSON.stringify(cleanedBowls) !== JSON.stringify(canvas.bowls ?? []);
 			activeCanvas = { ...canvas, bowls: cleanedBowls };
 			if (bowlsChanged) await updateCanvasBowls(canvas.id, cleanedBowls);
@@ -1440,7 +1438,13 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 			ghost.className = 'mash-note-card';
 			ghost.style.cssText =
 				'position:absolute;top:-999px;left:-999px;width:180px;padding:10px 12px;border-radius:12px;font:500 12px var(--mash-font-ui);';
-			ghost.innerHTML = `<div style="font-weight:600;margin-bottom:4px">${escapeHtml(note.title)}</div><div style="font-size:10px;opacity:.65">${escapeHtml(notePreview(note.body, 60))}</div>`;
+			const title = document.createElement('div');
+			title.style.cssText = 'font-weight:600;margin-bottom:4px';
+			title.textContent = note.title;
+			const preview = document.createElement('div');
+			preview.style.cssText = 'font-size:10px;opacity:.65';
+			preview.textContent = notePreview(note.body, 60);
+			ghost.append(title, preview);
 			document.body.appendChild(ghost);
 			e.dataTransfer.setDragImage(ghost, 40, 20);
 			requestAnimationFrame(() => ghost.remove());

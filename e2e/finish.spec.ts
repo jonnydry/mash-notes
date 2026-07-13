@@ -40,7 +40,7 @@ test.describe('Consolidated Finish takeaway', () => {
 		await desks.getByRole('button').filter({ hasText: 'Kept takeaways' }).click();
 		await expect(desks).toBeHidden();
 		await page.locator('[data-dock-item="all"]').click();
-		const ingredients = page.getByRole('complementary', { name: 'Note scanner' });
+		const ingredients = page.getByRole('complementary', { name: 'Ingredients' });
 		await expect(
 			ingredients.getByRole('option').filter({ hasText: 'Durable takeaway' })
 		).toBeVisible();
@@ -113,7 +113,7 @@ test.describe('Consolidated Finish takeaway', () => {
 		const bundlePath = path.join(os.tmpdir(), `mash-finish-${Date.now()}.json`);
 		await bundle.saveAs(bundlePath);
 		const bundleJson = JSON.parse(fs.readFileSync(bundlePath, 'utf8'));
-		expect(bundleJson.version).toBe(4);
+		expect(bundleJson.version).toBe(5);
 		expect(bundleJson.notes.map((note: { title: string }) => note.title)).toEqual(
 			expect.arrayContaining(['Finish Alpha', 'Finish Beta'])
 		);

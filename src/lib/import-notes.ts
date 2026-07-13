@@ -3,11 +3,15 @@
  */
 import type { Note } from './types';
 
+export const NOTES_IMPORT_MAX_CHARS = 8_000_000;
 const MAX_NOTES = 5000;
 const MAX_BODY = 500_000;
 const MAX_TITLE = 200;
+const MAX_ID = 128;
 const MAX_TAGS = 50;
 const MAX_TAG_LEN = 64;
+const MAX_LINKS = 500;
+const MAX_LINEAGE = 500;
 
 export type ImportResult = { ok: true; notes: Note[] } | { ok: false; error: string };
 
@@ -23,11 +27,23 @@ function asNumber(v: unknown, fallback: number): number {
 	return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
 }
 
+function boundedStringArray(
+	raw: unknown,
+	maxItems: number,
+	maxChars: number
+): string[] | undefined {
+	if (!Array.isArray(raw)) return undefined;
+	return raw
+		.slice(0, maxItems)
+		.filter((value): value is string => typeof value === 'string')
+		.map((value) => value.slice(0, maxChars));
+}
+
 /** Normalize/validate a single note from untrusted JSON. */
 export function normalizeImportedNote(raw: unknown, index: number): Note | string {
 	if (!isRecord(raw)) return `Note ${index + 1} is not an object`;
 	const now = Date.now();
-	const id = asString(raw.id).trim() || crypto.randomUUID();
+	const id = asString(raw.id).trim().slice(0, MAX_ID) || crypto.randomUUID();
 	const title = asString(raw.title, 'Untitled').trim().slice(0, MAX_TITLE) || 'Untitled';
 	const body = asString(raw.body).slice(0, MAX_BODY);
 	const folder = asString(raw.folder).slice(0, 200);
@@ -38,14 +54,12 @@ export function normalizeImportedNote(raw: unknown, index: number): Note | strin
 		.map((t) => t.trim().slice(0, MAX_TAG_LEN))
 		.filter(Boolean);
 	const pinned: 0 | 1 = raw.pinned === 1 ? 1 : 0;
-	const links = Array.isArray(raw.links)
-		? raw.links.filter((l): l is string => typeof l === 'string').map((l) => l.slice(0, 200))
-		: undefined;
-	const mashedFrom = Array.isArray(raw.mashedFrom)
-		? raw.mashedFrom.filter((l): l is string => typeof l === 'string')
-		: undefined;
+	const links = boundedStringArray(raw.links, MAX_LINKS, 200);
+	const mashedFrom = boundedStringArray(raw.mashedFrom, MAX_LINEAGE, MAX_ID);
 	const operationId =
-		typeof raw.operationId === 'string' ? raw.operationId.trim() || undefined : undefined;
+		typeof raw.operationId === 'string'
+			? raw.operationId.trim().slice(0, MAX_ID) || undefined
+			: undefined;
 	const textAlignRaw = asString(raw.textAlign);
 	const textAlign =
 		textAlignRaw === 'left' || textAlignRaw === 'center' || textAlignRaw === 'right'
@@ -62,7 +76,7 @@ export function normalizeImportedNote(raw: unknown, index: number): Note | strin
 		source = {
 			kind: 'pdf',
 			title: sourceRaw.title.trim().slice(0, 300),
-			page: Math.max(1, Math.floor(sourceRaw.page))
+			page: Math.min(1_000_000, Math.max(1, Math.floor(sourceRaw.page)))
 		};
 	} else if (sourceRaw?.kind === 'docx' && typeof sourceRaw.title === 'string') {
 		source = {
@@ -114,6 +128,9 @@ export function normalizeImportedNote(raw: unknown, index: number): Note | strin
  * Parse and validate a Mash JSON export (array of notes).
  */
 export function parseNotesJson(text: string): ImportResult {
+	if (text.length > NOTES_IMPORT_MAX_CHARS) {
+		return { ok: false, error: 'Import file too large' };
+	}
 	let parsed: unknown;
 	try {
 		parsed = JSON.parse(text);

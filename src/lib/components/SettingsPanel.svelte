@@ -328,8 +328,9 @@
 		<section class="mash-settings-section mash-settings-section--last">
 			<h2 class="mash-settings-heading">About</h2>
 			<p class="mash-settings-about">
-				<strong class="mash-display">Mash</strong> v0.1.0 — local-only notes PWA. MIT licensed. Install
-				via your browser’s Add to Home Screen / Install app when offered.
+				<strong class="mash-display">Mash</strong> v0.2.0 — a local-first scratch workbench. No account
+				or application server. MIT licensed. Install via your browser’s Add to Home Screen / Install app
+				when offered.
 			</p>
 		</section>
 	</div>

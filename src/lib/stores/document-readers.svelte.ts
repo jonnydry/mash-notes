@@ -7,6 +7,10 @@ import type { DocxClipping } from '$lib/docx-clipping';
 import type { HtmlClipping } from '$lib/html-clipping';
 import type { PdfClipping } from '$lib/pdf-clipping';
 
+const MAX_PDF_BYTES = 50 * 1024 * 1024;
+const MAX_DOCX_BYTES = 8_000_000;
+const MAX_HTML_BYTES = 5 * 1024 * 1024;
+
 export type DocumentReadersOpts = {
 	flashToast: (msg: string, ms?: number) => void;
 	/** Close peel, selection, sticky expand, stage, palette, settings before opening a reader. */
@@ -24,7 +28,6 @@ export function createDocumentReaders(opts: DocumentReadersOpts) {
 	let docxReaderFile = $state<File | null>(null);
 	let docxReaderOpen = $state(false);
 	let LazyDocxReader = $state<Component | null>(null);
-	let docxReaderModuleLoading = $state(false);
 	let docxReaderModulePromise: Promise<void> | null = null;
 	let docxClippings = $state<DocxClipping[]>([]);
 
@@ -59,7 +62,6 @@ export function createDocumentReaders(opts: DocumentReadersOpts) {
 		if (LazyDocxReader) return;
 		if (docxReaderModulePromise) return docxReaderModulePromise;
 		docxReaderModulePromise = (async () => {
-			docxReaderModuleLoading = true;
 			try {
 				const { loadDocxReader } = await import('$lib/lazy-docx-reader');
 				LazyDocxReader = (await loadDocxReader()) as Component;
@@ -68,7 +70,6 @@ export function createDocumentReaders(opts: DocumentReadersOpts) {
 				docxReaderOpen = false;
 				opts.flashToast('Couldn’t load Word document tools', 3600);
 			} finally {
-				docxReaderModuleLoading = false;
 				docxReaderModulePromise = null;
 			}
 		})();
@@ -91,6 +92,10 @@ export function createDocumentReaders(opts: DocumentReadersOpts) {
 	}
 
 	function openPdfReader(file: File) {
+		if (file.size > MAX_PDF_BYTES) {
+			opts.flashToast('This PDF is too large to open safely (max 50 MB).', 3600);
+			return false;
+		}
 		pdfReaderFile = file;
 		pdfReaderOpen = true;
 		docxReaderOpen = false;
@@ -99,9 +104,14 @@ export function createDocumentReaders(opts: DocumentReadersOpts) {
 		pdfClippings = [];
 		prepareChrome();
 		void ensurePdfReaderModule();
+		return true;
 	}
 
 	async function openDocxReader(file: File) {
+		if (file.size > MAX_DOCX_BYTES) {
+			opts.flashToast('This Word document is too large to open safely (max 8 MB).', 3600);
+			return false;
+		}
 		docxReaderFile = file;
 		docxReaderOpen = true;
 		pdfReaderOpen = false;
@@ -109,9 +119,14 @@ export function createDocumentReaders(opts: DocumentReadersOpts) {
 		docxClippings = [];
 		prepareChrome();
 		await ensureDocxReaderModule();
+		return Boolean(LazyDocxReader);
 	}
 
 	function openHtmlReader(file: File) {
+		if (file.size > MAX_HTML_BYTES) {
+			opts.flashToast('This HTML document is too large to open safely (max 5 MB).', 3600);
+			return false;
+		}
 		htmlReaderFile = file;
 		htmlReaderOpen = true;
 		pdfReaderOpen = false;
@@ -119,6 +134,7 @@ export function createDocumentReaders(opts: DocumentReadersOpts) {
 		htmlClippings = [];
 		prepareChrome();
 		void ensureHtmlReaderModule();
+		return true;
 	}
 
 	function resumePdfReader() {

@@ -5,6 +5,7 @@
 	 * New tags are committed via the + action at the top of the menu.
 	 */
 	import { Plus, Tag } from 'lucide-svelte';
+	import { SvelteSet } from 'svelte/reactivity';
 	import { fly } from 'svelte/transition';
 	import { portal } from '$lib/portal';
 	import {
@@ -35,7 +36,7 @@
 	const listId = `mash-tag-suggest-${Math.random().toString(36).slice(2, 9)}`;
 
 	let open = $state(false);
-	// svelte-ignore state_referenced_locally -- the effect below resyncs external changes while closed
+	// svelte-ignore state_referenced_locally
 	let draft = $state(formatDraft(value));
 	let highlight = $state(-1);
 	let controlEl: HTMLDivElement | undefined = $state();
@@ -70,8 +71,8 @@
 		};
 	}
 
-	function ownedSet(raw: string, current: string[]): Set<string> {
-		const have = new Set(current.map((t) => t.toLowerCase()));
+	function ownedSet(raw: string, current: string[]): ReadonlySet<string> {
+		const have = new SvelteSet(current.map((t) => t.toLowerCase()));
 		for (const t of parseTags(tokenParts(raw).prefix)) have.add(t.toLowerCase());
 		return have;
 	}
@@ -105,11 +106,15 @@
 			menuPos = null;
 			return;
 		}
-		return trackSuggestAnchor(() => controlEl, (pos) => (menuPos = pos), {
-			gap: 6,
-			maxH: 220,
-			minWidth: 168
-		});
+		return trackSuggestAnchor(
+			() => controlEl,
+			(pos) => (menuPos = pos),
+			{
+				gap: 6,
+				maxH: 220,
+				minWidth: 168
+			}
+		);
 	});
 
 	function placeCaretAtEnd() {

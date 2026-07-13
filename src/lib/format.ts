@@ -23,10 +23,7 @@ export function formatNoteTimestamp(ms: number, now = Date.now()): string {
 
 export function notePreview(body: string, max = 92): string {
 	// Avoid scanning multi‑MB data-URL bodies; mash-blob: bodies are already short.
-	if (
-		body.startsWith('![') &&
-		(body.includes('data:image') || body.includes('mash-blob:'))
-	) {
+	if (body.startsWith('![') && (body.includes('data:image') || body.includes('mash-blob:'))) {
 		const embedded = parseEmbeddedNoteImage(body);
 		if (embedded?.caption.trim()) {
 			const cap = embedded.caption

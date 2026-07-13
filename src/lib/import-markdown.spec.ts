@@ -4,6 +4,7 @@ import {
 	filesFromFileList,
 	firstHeadingTitle,
 	isMarkdownNotePath,
+	MARKDOWN_IMPORT_MAX_FILE_BYTES,
 	markdownFileToNote,
 	parseFrontmatter,
 	parseMarkdownVault,
@@ -116,5 +117,12 @@ See [[Other]] and #urgent
 		const result = parseMarkdownVault(files);
 		expect(result.ok).toBe(true);
 		if (result.ok) expect(result.notes[0]?.title).toBe('scratch');
+	});
+
+	it('rejects oversized browser files before reading them', async () => {
+		const large = new File([new Uint8Array(MARKDOWN_IMPORT_MAX_FILE_BYTES + 1)], 'oversized.md', {
+			type: 'text/markdown'
+		});
+		await expect(filesFromFileList([large])).rejects.toThrow(/too large/i);
 	});
 });

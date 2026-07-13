@@ -24,8 +24,12 @@ export function htmlTitleFromFileName(name: string): string {
 	return (withoutExt || 'HTML document').slice(0, 200);
 }
 
-const DANGEROUS_TAGS = new Set([
+/** Elements whose contents must never survive sanitization. */
+const BLOCKED_TAGS = new Set([
 	'script',
+	'style',
+	'template',
+	'noscript',
 	'iframe',
 	'object',
 	'embed',
@@ -40,8 +44,91 @@ const DANGEROUS_TAGS = new Set([
 	'option',
 	'frame',
 	'frameset',
-	'applet'
+	'applet',
+	'svg',
+	'math',
+	'canvas',
+	'video',
+	'audio',
+	'source',
+	'track',
+	'picture'
 ]);
+
+/** Deliberately small reading-format allowlist. Unknown markup is unwrapped as text. */
+const ALLOWED_TAGS = new Set([
+	'a',
+	'abbr',
+	'article',
+	'b',
+	'blockquote',
+	'br',
+	'caption',
+	'code',
+	'col',
+	'colgroup',
+	'dd',
+	'del',
+	'details',
+	'div',
+	'dl',
+	'dt',
+	'em',
+	'figcaption',
+	'figure',
+	'footer',
+	'h1',
+	'h2',
+	'h3',
+	'h4',
+	'h5',
+	'h6',
+	'header',
+	'hr',
+	'i',
+	'img',
+	'ins',
+	'kbd',
+	'li',
+	'main',
+	'mark',
+	'ol',
+	'p',
+	'pre',
+	'q',
+	's',
+	'samp',
+	'section',
+	'small',
+	'span',
+	'strong',
+	'sub',
+	'summary',
+	'sup',
+	'table',
+	'tbody',
+	'td',
+	'tfoot',
+	'th',
+	'thead',
+	'tr',
+	'u',
+	'ul',
+	'var'
+]);
+
+const GLOBAL_ATTRIBUTES = new Set(['title']);
+const TAG_ATTRIBUTES: Readonly<Record<string, ReadonlySet<string>>> = {
+	a: new Set(['href']),
+	col: new Set(['span']),
+	colgroup: new Set(['span']),
+	details: new Set(['open']),
+	img: new Set(['src', 'alt', 'width', 'height']),
+	li: new Set(['value']),
+	ol: new Set(['start', 'reversed']),
+	td: new Set(['colspan', 'rowspan']),
+	th: new Set(['colspan', 'rowspan', 'scope'])
+};
 
 export type HtmlSanitizeOptions = {
 	/** DOCX conversion emits trusted local raster bytes as data URIs. */
@@ -49,6 +136,17 @@ export type HtmlSanitizeOptions = {
 };
 
 const SAFE_DATA_IMAGE = /^data:image\/(?:png|jpe?g|gif|webp|bmp);base64,[a-z0-9+/=\s]+$/i;
+
+function escapeHtml(value: string): string {
+	return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function safeLinkHref(value: string): boolean {
+	const href = value.trim();
+	if (!href) return false;
+	if (href.startsWith('#')) return true;
+	return /^(?:https?:|mailto:)/i.test(href);
+}
 
 function allowedDataImage(tag: string, name: string, value: string, options: HtmlSanitizeOptions) {
 	return (
@@ -62,67 +160,76 @@ function allowedDataImage(tag: string, name: string, value: string, options: Htm
 /** Strip active content; keep readable structure for local user files. */
 export function sanitizeHtmlFragment(raw: string, options: HtmlSanitizeOptions = {}): string {
 	if (typeof DOMParser === 'undefined') {
-		// Node/unit fallback: strip script blocks, event handlers, and unsafe URLs.
+		// Conservative non-browser fallback: preserve text and approved local images only.
+		// It deliberately does not try to parse arbitrary HTML with regular expressions.
 		const preservedImages: string[] = [];
-		const input = options.allowDataImages
-			? raw.replace(
-					/(<img\b[^>]*\bsrc\s*=\s*)(["'])(data:image\/(?:png|jpe?g|gif|webp|bmp);base64,[a-z0-9+/=\s]+)\2/gi,
-					(_match, prefix: string, quote: string, url: string) => {
-						const index = preservedImages.push(url) - 1;
-						return `${prefix}${quote}__MASH_DATA_IMAGE_${index}__${quote}`;
-					}
-				)
-			: raw;
-		const sanitized = input
-			.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-			.replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
-			.replace(
-				/\s(href|src|xlink:href)\s*=\s*("|\')\s*(javascript:|data:|vbscript:|\/\/)[^"']*\2/gi,
-				''
-			)
-			.replace(/\s(href|src|xlink:href)\s*=\s*(javascript:|data:|vbscript:|\/\/)[^\s>]*/gi, '')
-			.replace(/javascript:/gi, '');
-		return sanitized.replace(/__MASH_DATA_IMAGE_(\d+)__/g, (_match, index: string) => {
-			return preservedImages[Number(index)] ?? '';
+		const withoutActiveBlocks = raw.replace(
+			/<(?:script|style|template|noscript|iframe|object|embed|svg|math)\b[^>]*>[\s\S]*?<\/(?:script|style|template|noscript|iframe|object|embed|svg|math)\s*>/gi,
+			''
+		);
+		const withImageTokens = options.allowDataImages
+			? withoutActiveBlocks.replace(/<img\b[^>]*>/gi, (tag) => {
+					const match = tag.match(/\bsrc\s*=\s*(["'])([^"']+)\1/i);
+					const src = match?.[2]?.trim() ?? '';
+					if (!SAFE_DATA_IMAGE.test(src)) return '';
+					const index = preservedImages.push(src) - 1;
+					return `__MASH_DATA_IMAGE_${index}__`;
+				})
+			: withoutActiveBlocks;
+		const text = escapeHtml(withImageTokens.replace(/<[^>]*>/g, ' '));
+		return text.replace(/__MASH_DATA_IMAGE_(\d+)__/g, (_match, index: string) => {
+			const src = preservedImages[Number(index)];
+			return src ? `<img src="${src}" alt="" loading="lazy" decoding="async">` : '';
 		});
 	}
 	const parser = new DOMParser();
 	const doc = parser.parseFromString(raw, 'text/html');
-	const walk = (root: Element | Document) => {
+	const walk = (root: Element) => {
 		const nodes = [...root.querySelectorAll('*')];
 		for (const el of nodes) {
 			const tag = el.tagName.toLowerCase();
-			if (DANGEROUS_TAGS.has(tag)) {
+			if (BLOCKED_TAGS.has(tag) || el.namespaceURI !== 'http://www.w3.org/1999/xhtml') {
 				el.remove();
+				continue;
+			}
+			if (!ALLOWED_TAGS.has(tag)) {
+				el.replaceWith(...el.childNodes);
 				continue;
 			}
 			for (const attr of [...el.attributes]) {
 				const name = attr.name.toLowerCase();
-				const value = attr.value;
-				if (name.startsWith('on')) {
+				const tagAttributes = TAG_ATTRIBUTES[tag];
+				if (!GLOBAL_ATTRIBUTES.has(name) && !tagAttributes?.has(name)) {
 					el.removeAttribute(attr.name);
 					continue;
 				}
-				if (name === 'href' || name === 'src' || name === 'xlink:href') {
-					const v = value.trim().toLowerCase();
-					if (allowedDataImage(tag, name, value, options)) continue;
-					if (
-						v.startsWith('javascript:') ||
-						v.startsWith('data:') ||
-						v.startsWith('vbscript:') ||
-						v.startsWith('//')
-					) {
-						el.removeAttribute(attr.name);
-					}
+				if (tag === 'a' && name === 'href' && !safeLinkHref(attr.value)) {
+					el.removeAttribute(attr.name);
 				}
+				if (tag === 'img' && name === 'src' && !allowedDataImage(tag, name, attr.value, options)) {
+					el.removeAttribute(attr.name);
+				}
+			}
+			if (tag === 'a' && el.hasAttribute('href')) {
+				el.setAttribute('target', '_blank');
+				el.setAttribute('rel', 'noopener noreferrer');
+			}
+			if (tag === 'img') {
+				if (!el.hasAttribute('src')) {
+					el.replaceWith(doc.createTextNode(el.getAttribute('alt') ?? ''));
+					continue;
+				}
+				el.setAttribute('loading', 'lazy');
+				el.setAttribute('decoding', 'async');
 			}
 		}
 	};
-	walk(doc);
-	// Prefer body content; fall back to full document HTML
+	// Sanitize only the parsed fragment. Walking the whole document would also visit
+	// the browser-created <html>/<head>/<body> wrappers and could detach the body.
+	walk(doc.body);
 	const body = doc.body?.innerHTML?.trim();
 	if (body) return body;
-	return doc.documentElement?.innerHTML?.trim() || '';
+	return '';
 }
 
 export function extractHtmlDocumentTitle(raw: string, fileName: string): string {

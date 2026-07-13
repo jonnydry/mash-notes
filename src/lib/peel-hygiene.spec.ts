@@ -59,9 +59,7 @@ describe('peel-hygiene', () => {
 			'2 on desk · 3 kept'
 		);
 		expect(peelScopeSubtitle({ desk: 1, kept: 0, total: 1 }, 'ingredients')).toBe('1 on desk');
-		expect(peelScopeSubtitle({ desk: 0, kept: 4, total: 4 }, 'kept')).toBe(
-			'4 kept on this device'
-		);
+		expect(peelScopeSubtitle({ desk: 0, kept: 4, total: 4 }, 'kept')).toBe('4 kept on this device');
 	});
 
 	it('ranks search hits desk-first', () => {

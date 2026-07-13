@@ -33,10 +33,7 @@ function loadImage(src: string): Promise<HTMLImageElement> {
  * Rotate an image source (data URL or mash-blob:) by 90° increments.
  * Returns a PNG data URL (caller may persist as a new blob).
  */
-export async function rotateImageDataUrl(
-	src: string,
-	quarterTurns: QuarterTurns
-): Promise<string> {
+export async function rotateImageDataUrl(src: string, quarterTurns: QuarterTurns): Promise<string> {
 	if (typeof document === 'undefined') {
 		throw new Error('Image rotation requires a browser');
 	}
@@ -54,7 +51,11 @@ export async function rotateImageDataUrl(
 	if (turns === 0) return loadSrc;
 
 	const img = await loadImage(loadSrc);
-	const size = rotatedCanvasSize(img.naturalWidth || img.width, img.naturalHeight || img.height, turns);
+	const size = rotatedCanvasSize(
+		img.naturalWidth || img.width,
+		img.naturalHeight || img.height,
+		turns
+	);
 	if (size.width < 1 || size.height < 1) {
 		throw new Error('Image has no dimensions');
 	}

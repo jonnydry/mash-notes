@@ -2,7 +2,14 @@
  * Sequence → PDF — each note starts on its own page; long notes continue.
  * Embedded data-URL images (PDF clippings) are drawn into the page.
  */
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFImage, type PDFPage } from 'pdf-lib';
+import {
+	PDFDocument,
+	StandardFonts,
+	rgb,
+	type PDFFont,
+	type PDFImage,
+	type PDFPage
+} from 'pdf-lib';
 import { parseEmbeddedNoteImage } from './markdown';
 import type { Note } from './types';
 import { slugifyFilename } from './mash';
@@ -21,9 +28,7 @@ const META_LEADING = 12;
 export function decodeDataUrlImage(
 	dataUrl: string
 ): { bytes: Uint8Array; format: 'png' | 'jpg' } | null {
-	const match = dataUrl
-		.trim()
-		.match(/^data:(image\/(?:png|jpeg|jpg));base64,([a-z0-9+/=\s]+)$/i);
+	const match = dataUrl.trim().match(/^data:(image\/(?:png|jpeg|jpg));base64,([a-z0-9+/=\s]+)$/i);
 	if (!match) return null;
 	const mime = match[1].toLowerCase();
 	const b64 = match[2].replace(/\s+/g, '');

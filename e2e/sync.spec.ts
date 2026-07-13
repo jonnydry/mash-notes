@@ -55,7 +55,7 @@ test.describe('Sync bundle', () => {
 			.getByRole('navigation', { name: 'Mash dock' })
 			.getByRole('button', { name: 'Desk' })
 			.click();
-		const peel = page.getByRole('complementary', { name: 'Note scanner' });
+		const peel = page.getByRole('complementary', { name: 'Ingredients' });
 		await expect(peel.getByRole('option').filter({ hasText: 'Sync Alpha' }).first()).toBeVisible({
 			timeout: 10_000
 		});
@@ -130,7 +130,7 @@ test.describe('Sync bundle', () => {
 			.getByRole('navigation', { name: 'Mash dock' })
 			.getByRole('button', { name: 'Desk' })
 			.click();
-		const peel = page.getByRole('complementary', { name: 'Note scanner' });
+		const peel = page.getByRole('complementary', { name: 'Ingredients' });
 		await expect(peel.getByRole('option').filter({ hasText: 'Keep Me' })).toBeVisible({
 			timeout: 10_000
 		});
@@ -200,7 +200,7 @@ test.describe('Sync bundle', () => {
 			.getByRole('navigation', { name: 'Mash dock' })
 			.getByRole('button', { name: 'Desk' })
 			.click();
-		const peel = page.getByRole('complementary', { name: 'Note scanner' });
+		const peel = page.getByRole('complementary', { name: 'Ingredients' });
 		const row = peel.getByRole('option').filter({ hasText: 'Conflict Note' });
 		await row.dblclick();
 		await expect(page.locator('textarea.mash-sticky-body').first()).toHaveValue('local body', {

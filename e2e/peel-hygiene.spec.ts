@@ -13,14 +13,20 @@ test.describe('Peel hygiene', () => {
 		// Keep may offer browser persistence protection — dismiss if shown.
 		const persistDialog = page.getByRole('alertdialog');
 		if (await persistDialog.isVisible().catch(() => false)) {
-			await persistDialog.getByRole('button', { name: /Cancel|Close|Not now/i }).click().catch(async () => {
-				await page.keyboard.press('Escape');
-			});
+			await persistDialog
+				.getByRole('button', { name: /Cancel|Close|Not now/i })
+				.click()
+				.catch(async () => {
+					await page.keyboard.press('Escape');
+				});
 		}
 		await page.keyboard.press('Escape');
 
-		await page.getByRole('button', { name: 'Desk' }).click();
-		const peel = page.getByRole('complementary', { name: 'Note scanner' });
+		await page
+			.getByRole('navigation', { name: 'Mash dock' })
+			.getByRole('button', { name: 'Desk', exact: true })
+			.click();
+		const peel = page.getByRole('complementary', { name: 'Ingredients' });
 		await expect(peel).toBeVisible();
 		await expect(peel.getByText('Ingredients', { exact: true })).toBeVisible();
 		await expect(peel.getByTestId('peel-scope-filter')).toBeVisible();

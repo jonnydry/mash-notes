@@ -11,7 +11,13 @@ import {
 	type FinishScope,
 	type FinishSnapshot
 } from './finish-model';
-import { combineNotes, copyText, exportNotesMarkdown, printSequenceAsPdf, slugifyFilename } from './mash';
+import {
+	combineNotes,
+	copyText,
+	exportNotesMarkdown,
+	printSequenceAsPdf,
+	slugifyFilename
+} from './mash';
 import { sessionLifecycleLabel } from './session-lifecycle';
 
 export type FinishSessionUiDeps = {
@@ -213,9 +219,7 @@ export function createFinishSessionUi(deps: FinishSessionUiDeps) {
 		deps.setSessionPanelOpen(false);
 		const active = deps.getActiveSession();
 		if (active) {
-			deps.flashToast(
-				`Opened ${active.title}. ${sessionLifecycleLabel(active, Date.now())}`
-			);
+			deps.flashToast(`Opened ${active.title}. ${sessionLifecycleLabel(active, Date.now())}`);
 		}
 	}
 

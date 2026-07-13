@@ -14,9 +14,7 @@ async function openFreshEmptyDesk(page: import('@playwright/test').Page) {
 }
 
 test.describe('Try a mash teaching', () => {
-	test('empty desk offers a one-shot demo that lands two cards ready to mash', async ({
-		page
-	}) => {
+	test('empty desk offers a one-shot demo that lands two cards ready to mash', async ({ page }) => {
 		test.setTimeout(60_000);
 		await openFreshEmptyDesk(page);
 
@@ -32,9 +30,9 @@ test.describe('Try a mash teaching', () => {
 		await expect(page.getByTestId('selection-mash')).toBeVisible();
 		await page.getByTestId('selection-mash').click();
 		await confirmMashDialog(page);
-		await expect(
-			page.getByRole('group', { name: /Half-baked idea \+ Another scrap/ })
-		).toBeVisible({ timeout: 10_000 });
+		await expect(page.getByRole('group', { name: /Half-baked idea \+ Another scrap/ })).toBeVisible(
+			{ timeout: 10_000 }
+		);
 		// Demo mash stays on the desk (no editor stage) and points at Unmash
 		await expect(page.locator('.mash-editor-stage.is-open')).toHaveCount(0);
 		await expect(page.getByTestId('action-status')).toContainText(/Unmash|Undo/i);

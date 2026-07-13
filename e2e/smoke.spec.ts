@@ -57,7 +57,7 @@ test.describe('Mash smoke', () => {
 
 		await openPalette(page, 'Export all as JSON');
 		const downloadPromise = page.waitForEvent('download');
-		await page.getByRole('button', { name: /Export all as JSON/i }).click();
+		await page.getByRole('option', { name: 'Export all as JSON', exact: true }).click();
 		const download = await downloadPromise;
 		await expect(page.getByTestId('action-status')).toContainText('Exported');
 		const tmp = path.join(os.tmpdir(), `mash-smoke-${Date.now()}.json`);
@@ -70,7 +70,7 @@ test.describe('Mash smoke', () => {
 		await openPalette(page, 'Import notes from JSON');
 		const [fileChooser] = await Promise.all([
 			page.waitForEvent('filechooser'),
-			page.getByRole('button', { name: /Import notes from JSON/i }).click()
+			page.getByRole('option', { name: /Import notes from JSON/i }).click()
 		]);
 		await fileChooser.setFiles(tmp);
 		await expect(page.getByText(/Imported/i).first()).toBeVisible({ timeout: 10_000 });

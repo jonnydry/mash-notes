@@ -36,9 +36,7 @@ describe('url-source', () => {
 	});
 
 	it('detects url-only multi-line pastes', () => {
-		const drafts = draftsFromUrlOnlyText(
-			'https://a.example/\nhttps://b.example/path\n'
-		);
+		const drafts = draftsFromUrlOnlyText('https://a.example/\nhttps://b.example/path\n');
 		expect(drafts).toHaveLength(2);
 		expect(drafts![0]!.source.url).toBe('https://a.example/');
 		expect(drafts![1]!.title).toBe('b.example');

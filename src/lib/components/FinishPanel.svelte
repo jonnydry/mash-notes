@@ -163,7 +163,7 @@
 								type="radio"
 								name="finish-scope"
 								value={option.scope}
-								checked={scope === option.scope}
+								bind:group={scope}
 								disabled={!option.enabled}
 								onchange={() => {
 									scope = option.scope;

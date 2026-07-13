@@ -393,8 +393,7 @@ export function buildOperatorActions(deps: CommandPaletteDeps): MashActionDefini
 			shortcut: '',
 			mutation: 'content',
 			surfaces: ['palette', 'selection'],
-			available: () =>
-				keepableNoteIds(deps.getSelectionIds(), deps.getNotesById()).length > 0,
+			available: () => keepableNoteIds(deps.getSelectionIds(), deps.getNotesById()).length > 0,
 			action: () => void deps.keepSelection()
 		}
 	]);

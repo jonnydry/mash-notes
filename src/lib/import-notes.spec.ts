@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseNotesJson } from './import-notes';
+import { NOTES_IMPORT_MAX_CHARS, parseNotesJson } from './import-notes';
 
 describe('import-notes', () => {
 	it('parses a valid export', () => {
@@ -26,6 +26,13 @@ describe('import-notes', () => {
 	it('rejects non-arrays and bad json', () => {
 		expect(parseNotesJson('{}').ok).toBe(false);
 		expect(parseNotesJson('not json').ok).toBe(false);
+	});
+
+	it('rejects oversized input before parsing', () => {
+		expect(parseNotesJson(' '.repeat(NOTES_IMPORT_MAX_CHARS + 1))).toEqual({
+			ok: false,
+			error: 'Import file too large'
+		});
 	});
 
 	it('preserves textAlign when present', () => {

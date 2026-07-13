@@ -5,11 +5,7 @@ import { createNote, createOperationRecord, db, replaceNoteSubset } from './db';
 import { extractWikilinks } from './markdown';
 import { combineNotes } from './mash';
 import { formatContentOperatorToast } from './operator-kitchen';
-import {
-	splitNoteFragments,
-	type ContentSplitMode,
-	type SplitFragment
-} from './split-content';
+import { splitNoteFragments, type ContentSplitMode, type SplitFragment } from './split-content';
 import type { CanvasItem, Note } from './types';
 import { shouldStayOnDeskAfterMash, tryAMashAfterMashToast } from './try-a-mash';
 
@@ -45,11 +41,7 @@ export type ContentOperatorsDeps = {
 		mash: Note,
 		sources: Note[]
 	) => Promise<{ missing: number; itemIds: string[]; restored: number }>;
-	splitCanvasItem: (
-		sourceNoteId: string,
-		outputs: Note[],
-		operationId: string
-	) => Promise<boolean>;
+	splitCanvasItem: (sourceNoteId: string, outputs: Note[], operationId: string) => Promise<boolean>;
 	adoptNotes: (notes: Note[]) => void;
 	setSettlingIds: (ids: Set<string>) => void;
 	getExpandedNoteId: () => string | null;
@@ -108,11 +100,7 @@ export function createContentOperators(deps: ContentOperatorsDeps) {
 			await db.operations.update(operation.id, {
 				outputNoteIds: outputs.map((note) => note.id)
 			});
-			const applied = await deps.splitCanvasItem(
-				candidate.note.id,
-				outputs,
-				operation.id
-			);
+			const applied = await deps.splitCanvasItem(candidate.note.id, outputs, operation.id);
 			if (!applied) throw new Error('Canvas split was not applied');
 			deps.adoptNotes(outputs);
 			deps.closeBulkMenu();

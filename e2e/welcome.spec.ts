@@ -4,7 +4,7 @@ import { wipeIndexedDb } from './helpers';
 test.describe('Mash team welcome', () => {
 	test('stays pinned and opens as a read-only illustrated guide', async ({ page }) => {
 		await wipeIndexedDb(page);
-		const peel = page.getByRole('complementary', { name: 'Note scanner' });
+		const peel = page.getByRole('complementary', { name: 'Ingredients' });
 		const row = peel.getByRole('option').filter({ hasText: "Hi — I'm Scoop" });
 		await expect(row.locator('img')).toBeVisible();
 		await row.dblclick();

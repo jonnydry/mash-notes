@@ -55,6 +55,10 @@ describe('markdown', () => {
 		expect(blobHtml).toContain('src="mash-blob:abc-12345"');
 		const blocked = renderMarkdown('![x](javascript:alert(1))');
 		expect(blocked).not.toContain('javascript:');
+		expect(isSafeImageSrc('https://tracker.example/pixel.png')).toBe(false);
+		expect(renderMarkdown('![tracker](https://tracker.example/pixel.png)')).not.toContain(
+			'tracker.example'
+		);
 	});
 
 	it('parses and rebuilds leading embedded note images', () => {
