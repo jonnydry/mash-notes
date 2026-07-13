@@ -59,13 +59,13 @@ Sticky editor body text is 13px and would benefit from 14px as the comfortable d
 
 ## Recommended normalized scale
 
-| Token | Comfortable default | Use |
-|---|---:|---|
-| Micro | 11px | badges and very short status labels only |
-| Caption | 12px | hints, metadata, timestamps, secondary labels |
-| Control | 13px | buttons, tabs, menus, card titles |
-| UI body | 14px | settings explanations, tray rows, collapsed cards |
-| Reading | 16px | document/editor body text |
+| Token   | Comfortable default | Use                                               |
+| ------- | ------------------: | ------------------------------------------------- |
+| Micro   |                11px | badges and very short status labels only          |
+| Caption |                12px | hints, metadata, timestamps, secondary labels     |
+| Control |                13px | buttons, tabs, menus, card titles                 |
+| UI body |                14px | settings explanations, tray rows, collapsed cards |
+| Reading |                16px | document/editor body text                         |
 
 No meaningful text should remain at 8–9px. Ten pixels should be reserved for nonessential keyboard glyphs or ornamental marks, not instructions or metadata.
 

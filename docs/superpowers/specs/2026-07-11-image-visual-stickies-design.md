@@ -33,27 +33,27 @@ PDF region clippings already prove the path: notes with a leading `![…](data:i
 
 ## Decisions (from design dialogue)
 
-| Topic | Choice |
-|--------|--------|
-| Season order | Images → Links → Documents |
-| Card metaphor | **Visual sticky** (image-forward face, optional caption) |
-| Architecture | Extend PDF-clipping-style embedded data URLs in note body |
-| Entry points | Drop + paste + palette/Settings open |
-| Resize | Soft cap + gentle resize; hard reject only extremes |
-| Multi-image | One card per image; cascade/grid set near origin |
-| Tags | **Source-only** — no auto `image` tag |
+| Topic                | Choice                                                    |
+| -------------------- | --------------------------------------------------------- |
+| Season order         | Images → Links → Documents                                |
+| Card metaphor        | **Visual sticky** (image-forward face, optional caption)  |
+| Architecture         | Extend PDF-clipping-style embedded data URLs in note body |
+| Entry points         | Drop + paste + palette/Settings open                      |
+| Resize               | Soft cap + gentle resize; hard reject only extremes       |
+| Multi-image          | One card per image; cascade/grid set near origin          |
+| Tags                 | **Source-only** — no auto `image` tag                     |
 | Clipboard image+text | One card: image + text body (composed, not pick-a-winner) |
-| Explode GIF | Deferred sequel |
+| Explode GIF          | Deferred sequel                                           |
 
 ## Approach
 
 **Extend the visual-note pattern (chosen)**
 
-| Option | Summary | Decision |
-|--------|---------|----------|
-| **A (chosen)** | Note body holds `![alt](dataUrl)`; `source.kind === 'image'`; soft resize; multi-card place | Ship this |
-| B | Separate blob table + note refs | Deferred; heavier sync/export |
-| C | Session-only object URLs | Rejected; breaks local-first |
+| Option         | Summary                                                                                     | Decision                      |
+| -------------- | ------------------------------------------------------------------------------------------- | ----------------------------- |
+| **A (chosen)** | Note body holds `![alt](dataUrl)`; `source.kind === 'image'`; soft resize; multi-card place | Ship this                     |
+| B              | Separate blob table + note refs                                                             | Deferred; heavier sync/export |
+| C              | Session-only object URLs                                                                    | Rejected; breaks local-first  |
 
 ## Product shape
 
@@ -69,13 +69,13 @@ PDF region clippings already prove the path: notes with a leading `![…](data:i
 
 A normal `Note` + `CanvasItem` placement:
 
-| Field | Behavior |
-|--------|----------|
-| `title` | Filename without extension; clipboard defaults: `Screenshot` / `Pasted image`. Truncate ~200 chars (paste parity). |
-| `body` | Leading markdown image + optional caption/text: `![title](data:image/…)\n\n` + optional text. Same shape as PDF region clips so `parseEmbeddedNoteImage`, rotate, board export, sequence PDF keep working. |
-| `source` | `{ kind: 'image'; title: string }` — display/filename title or `Clipboard`. |
-| `tags` | Unchanged by import (no auto tag). |
-| session/scope | Same as any new card on the active desk. |
+| Field         | Behavior                                                                                                                                                                                                   |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `title`       | Filename without extension; clipboard defaults: `Screenshot` / `Pasted image`. Truncate ~200 chars (paste parity).                                                                                         |
+| `body`        | Leading markdown image + optional caption/text: `![title](data:image/…)\n\n` + optional text. Same shape as PDF region clips so `parseEmbeddedNoteImage`, rotate, board export, sequence PDF keep working. |
+| `source`      | `{ kind: 'image'; title: string }` — display/filename title or `Clipboard`.                                                                                                                                |
+| `tags`        | Unchanged by import (no auto tag).                                                                                                                                                                         |
+| session/scope | Same as any new card on the active desk.                                                                                                                                                                   |
 
 **Canvas chrome:** Image-forward preview (large image, title secondary)—not a wall of raw markdown. Prefer `source.kind === 'image'` for chrome; pixels remain in body.
 
@@ -89,10 +89,10 @@ A normal `Note` + `CanvasItem` placement:
 
 ### File recognition
 
-| Signal | Kind |
-|--------|------|
+| Signal                                                                | Kind    |
+| --------------------------------------------------------------------- | ------- |
 | Extension `.png`, `.jpg`, `.jpeg`, `.webp`, `.gif` (case-insensitive) | `image` |
-| MIME `image/png`, `image/jpeg`, `image/webp`, `image/gif` | `image` |
+| MIME `image/png`, `image/jpeg`, `image/webp`, `image/gif`             | `image` |
 
 **v1 unsupported** (named feedback, no silent fail): HEIC/HEIF, SVG, BMP, TIFF, AVIF, and anything else.
 
@@ -102,12 +102,12 @@ Extend:
 type ExternalImportKind = 'note-text' | 'json' | 'pdf' | 'docx' | 'image' | 'unsupported';
 
 type ExternalImportBatch = {
-  noteTextFiles: File[];
-  jsonFiles: File[];
-  pdfFiles: File[];
-  docxFiles: File[];
-  imageFiles: File[];
-  unsupportedFiles: File[];
+	noteTextFiles: File[];
+	jsonFiles: File[];
+	pdfFiles: File[];
+	docxFiles: File[];
+	imageFiles: File[];
+	unsupportedFiles: File[];
 };
 ```
 
@@ -119,12 +119,12 @@ type ExternalImportBatch = {
 
 ### Clipboard paste
 
-| Clipboard content | Behavior |
-|-------------------|----------|
-| Image only | One visual sticky after prepare pipeline |
-| Text only | Existing paste split dialog / cards flow |
-| **Image + text** | **One** visual sticky: prepared image + text under it (composed as if mashed) |
-| Neither | No-op |
+| Clipboard content | Behavior                                                                      |
+| ----------------- | ----------------------------------------------------------------------------- |
+| Image only        | One visual sticky after prepare pipeline                                      |
+| Text only         | Existing paste split dialog / cards flow                                      |
+| **Image + text**  | **One** visual sticky: prepared image + text under it (composed as if mashed) |
+| Neither           | No-op                                                                         |
 
 Title for image+text: default image title (`Pasted image` / `Screenshot`); full text goes in body under the image. Optional later polish: first-line title heuristics—not required for v1.
 
@@ -156,14 +156,14 @@ Module e.g. `src/lib/desk-image.ts`:
 | { ok: false; error: 'too-large' | 'undecodable' | 'unsupported' }
 ```
 
-| Step | Rule |
-|------|------|
-| Hard reject | Original **> 20 MB** when size is known |
-| Decode | Browser-native (`createImageBitmap` / `Image`) |
-| Soft compact | If max edge **> ~2400px** or re-encode needed for size, draw to canvas and re-encode |
-| Output | **JPEG ~0.82** when no alpha; **PNG** when transparency needed; loop quality/dimensions if still huge |
-| GIF (v1) | **Still only** — first frame (or keep small single-frame-friendly file under budget). No animation playback. No frame explosion. |
-| Constants | Single module export for max bytes, max edge, quality, multi-import cap |
+| Step         | Rule                                                                                                                             |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| Hard reject  | Original **> 20 MB** when size is known                                                                                          |
+| Decode       | Browser-native (`createImageBitmap` / `Image`)                                                                                   |
+| Soft compact | If max edge **> ~2400px** or re-encode needed for size, draw to canvas and re-encode                                             |
+| Output       | **JPEG ~0.82** when no alpha; **PNG** when transparency needed; loop quality/dimensions if still huge                            |
+| GIF (v1)     | **Still only** — first frame (or keep small single-frame-friendly file under budget). No animation playback. No frame explosion. |
+| Constants    | Single module export for max bytes, max edge, quality, multi-import cap                                                          |
 
 ## Multi-image layout & caps
 
@@ -175,15 +175,15 @@ Module e.g. `src/lib/desk-image.ts`:
 
 ## Architecture
 
-| Piece | Role |
-|--------|------|
-| `types.ts` | `NoteSource` += `{ kind: 'image'; title: string }` |
-| `external-file-drop.ts` | `image` kind + batch partition |
-| `desk-image.ts` (new) | MIME/ext helpers, `prepareDeskImage`, body/title builders, GIF still policy |
-| Paste path (`+page.svelte` / paste helpers) | Image(+text) vs text-only branch |
-| Drop / open wiring | Create notes + placements; palette + Settings + hidden input |
-| Card UI | Image-forward chrome for `source.kind === 'image'` (and/or embedded image parse) |
-| Existing | `markdown.ts` data-URL safety, `image-rotate.ts`, board/sequence export, Finish |
+| Piece                                       | Role                                                                             |
+| ------------------------------------------- | -------------------------------------------------------------------------------- |
+| `types.ts`                                  | `NoteSource` += `{ kind: 'image'; title: string }`                               |
+| `external-file-drop.ts`                     | `image` kind + batch partition                                                   |
+| `desk-image.ts` (new)                       | MIME/ext helpers, `prepareDeskImage`, body/title builders, GIF still policy      |
+| Paste path (`+page.svelte` / paste helpers) | Image(+text) vs text-only branch                                                 |
+| Drop / open wiring                          | Create notes + placements; palette + Settings + hidden input                     |
+| Card UI                                     | Image-forward chrome for `source.kind === 'image'` (and/or embedded image parse) |
+| Existing                                    | `markdown.ts` data-URL safety, `image-rotate.ts`, board/sequence export, Finish  |
 
 **Not in v1:** new Dexie tables, blob refs, service worker image cache.
 

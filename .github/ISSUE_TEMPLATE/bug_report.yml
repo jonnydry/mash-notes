@@ -1,0 +1,77 @@
+name: Bug report
+description: Report a reproducible problem without sharing private source material.
+title: '[Bug]: '
+labels: ['bug']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping make Mash dependable. Use synthetic or redacted files and text. Do not upload private notes, documents, credentials, or personal data.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Describe the result you saw and what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      placeholder: |
+        1. Open a clean desk
+        2. Paste or drop…
+        3. Select…
+        4. Observe…
+    validations:
+      required: true
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and version
+      placeholder: Chrome 140, Firefox 142, Safari 20…
+    validations:
+      required: true
+
+  - type: input
+    id: operating-system
+    attributes:
+      label: Operating system
+      placeholder: macOS 26, Windows 11, Android 17…
+    validations:
+      required: true
+
+  - type: input
+    id: input
+    attributes:
+      label: Input type and approximate size
+      description: If a file was involved, provide only its type and approximate size unless a synthetic fixture is safe to attach.
+      placeholder: 4 MB DOCX, 30-page PDF, 120 pasted lines…
+
+  - type: dropdown
+    id: offline
+    attributes:
+      label: Does it also happen offline after Mash has loaded successfully once?
+      options:
+        - Not tested
+        - 'Yes'
+        - 'No'
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Safe diagnostics
+      description: Add console errors, screenshots, or a synthetic fixture only if they contain no private material.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues for this problem.
+          required: true
+        - label: I removed private or sensitive material from this report.
+          required: true

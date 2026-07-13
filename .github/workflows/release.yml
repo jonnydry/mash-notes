@@ -1,0 +1,42 @@
+name: Release static build
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify release
+        run: npm run lint && npm run check && npm test && npm run build && npm run perf:budget
+
+      - name: Package static site
+        run: |
+          cp LICENSE build/LICENSE.txt
+          cd build
+          zip -r ../mash-static-${{ github.ref_name }}.zip .
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${{ github.ref_name }}" "mash-static-${{ github.ref_name }}.zip" --generate-notes --verify-tag

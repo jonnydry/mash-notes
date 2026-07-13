@@ -38,11 +38,11 @@ macOS Pages (`.pages`) is desirable later but is a proprietary package; it is **
 
 **Lightweight HTML reader + shared document shell**
 
-| Option | Summary | Decision |
-|--------|---------|----------|
-| **A (chosen)** | mammoth → clean HTML; shared shell; text clip | Ship this |
-| B | High-fidelity `docx-preview`-style layout | Larger dep / more edge cases; not needed for notes workflow |
-| C | Convert to stickies only (no viewer) | Rejected; user wants read-only viewer |
+| Option         | Summary                                       | Decision                                                    |
+| -------------- | --------------------------------------------- | ----------------------------------------------------------- |
+| **A (chosen)** | mammoth → clean HTML; shared shell; text clip | Ship this                                                   |
+| B              | High-fidelity `docx-preview`-style layout     | Larger dep / more edge cases; not needed for notes workflow |
+| C              | Convert to stickies only (no viewer)          | Rejected; user wants read-only viewer                       |
 
 Pages strategy when revisited later: prefer embedded `Preview.pdf` → existing PDF pipeline; out of scope here.
 
@@ -56,11 +56,11 @@ Extend `ExternalImportKind` and batch partition:
 type ExternalImportKind = 'note-text' | 'json' | 'pdf' | 'docx' | 'unsupported';
 
 type ExternalImportBatch = {
-  noteTextFiles: File[];
-  jsonFiles: File[];
-  pdfFiles: File[];
-  docxFiles: File[];
-  unsupportedFiles: File[];
+	noteTextFiles: File[];
+	jsonFiles: File[];
+	pdfFiles: File[];
+	docxFiles: File[];
+	unsupportedFiles: File[];
 };
 ```
 
@@ -104,10 +104,10 @@ Extract **`DocumentReaderShell.svelte`** from current PDF chrome:
 
 **Consumers**
 
-| Consumer | Stage content | Extra toolbar | Clip payload |
-|----------|---------------|---------------|--------------|
-| `PdfReader` | canvas + text layer | page, zoom, region mode | `{ page, text? }` or region image |
-| `DocxReader` (thin) | scrollable HTML article | none (or simple font-size later) | `{ text }` |
+| Consumer            | Stage content           | Extra toolbar                    | Clip payload                      |
+| ------------------- | ----------------------- | -------------------------------- | --------------------------------- |
+| `PdfReader`         | canvas + text layer     | page, zoom, region mode          | `{ page, text? }` or region image |
+| `DocxReader` (thin) | scrollable HTML article | none (or simple font-size later) | `{ text }`                        |
 
 Implementation note: prefer extracting shared UI from `PdfReader.svelte` rather than duplicating CSS/markup. Code-splitting: PDF engine and mammoth remain behind separate lazy import boundaries; shell may be imported by both reader entry points.
 
@@ -190,14 +190,14 @@ Mixed drops (normative):
 
 ## Error handling
 
-| Case | User-visible result |
-|------|---------------------|
+| Case                                   | User-visible result                   |
+| -------------------------------------- | ------------------------------------- |
 | Unsupported extension (incl. `.pages`) | Skipped; summary toast counts skipped |
-| Corrupt / non-OOXML | “Couldn’t open this Word document” |
-| Empty conversion | “No readable text in this document” |
-| Oversize | Skip + toast |
-| Conversion throw | Log + open error state |
-| Clip with empty selection | No-op / disable Save |
+| Corrupt / non-OOXML                    | “Couldn’t open this Word document”    |
+| Empty conversion                       | “No readable text in this document”   |
+| Oversize                               | Skip + toast                          |
+| Conversion throw                       | Log + open error state                |
+| Clip with empty selection              | No-op / disable Save                  |
 
 ## Testing
 
