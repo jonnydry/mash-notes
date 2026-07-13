@@ -1,9 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { wipeIndexedDb } from './helpers';
 
-test('typing on the desk starts in the note body while New note starts in the title', async ({
-	page
-}) => {
+test('typing on the desk and New note both start in the note body', async ({ page }) => {
 	test.setTimeout(60_000);
 	await wipeIndexedDb(page);
 	await page.keyboard.press('Escape');
@@ -18,9 +16,15 @@ test('typing on the desk starts in the note body while New note starts in the ti
 	);
 
 	await page.getByRole('button', { name: 'Collapse sticky' }).click();
+	for (let i = 0; i < 6; i++) {
+		await page.getByRole('button', { name: 'Zoom in' }).click();
+	}
 	await page.getByRole('button', { name: 'New note' }).click();
 	const title = page.locator('[data-canvas-card] input[type="text"]').first();
-	await expect(title).toBeFocused();
-	await page.keyboard.type('Named note');
-	await expect(title).toHaveValue('Named note');
+	await expect(body).toBeFocused();
+	await page.keyboard.type('New note body');
+	await expect(body).toHaveValue('New note body');
+	await expect(title).toHaveValue('Untitled');
+	await page.getByRole('button', { name: 'View board tools' }).click();
+	await expect(page.getByText('100%', { exact: true })).toBeVisible();
 });

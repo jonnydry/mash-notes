@@ -21,8 +21,10 @@
 		ZoomIn,
 		ZoomOut
 	} from 'lucide-svelte';
+	import MarkdownPreview from '$lib/components/MarkdownPreview.svelte';
 	import { focusTrap } from '$lib/focus-trap';
-	import { composeEmbeddedNoteImage, parseEmbeddedNoteImage, renderMarkdown } from '$lib/markdown';
+	import { composeEmbeddedNoteImage, parseEmbeddedNoteImage } from '$lib/markdown';
+	import { markdownNodes } from '$lib/markdown-nodes';
 	import { isMashBlobRef, releaseDisplayUrl, resolveDisplayUrl } from '$lib/note-blobs';
 	import { portal } from '$lib/portal';
 	import type { TextAlign } from '$lib/types';
@@ -67,15 +69,15 @@
 
 	let embeddedImage = $derived(parseEmbeddedNoteImage(body));
 	let editableText = $derived(embeddedImage ? embeddedImage.caption : body);
-	let captionPreviewHtml = $derived(
-		embeddedImage?.caption ? renderMarkdown(embeddedImage.caption) : ''
+	let captionPreviewNodes = $derived(
+		embeddedImage?.caption ? markdownNodes(embeddedImage.caption) : []
 	);
-	let previewHtml = $derived(
+	let previewNodes = $derived(
 		mode === 'preview'
 			? embeddedImage
-				? renderMarkdown(embeddedImage.caption || '')
-				: renderMarkdown(body || '')
-			: ''
+				? markdownNodes(embeddedImage.caption || '')
+				: markdownNodes(body || '')
+			: []
 	);
 	let align = $derived(textAlign === 'center' || textAlign === 'right' ? textAlign : 'left');
 	let clipZoomLabel = $derived(`${Math.round(clipZoom * 100)}%`);
@@ -186,15 +188,6 @@
 		} finally {
 			rotating = false;
 		}
-	}
-
-	function onPreviewClick(e: MouseEvent) {
-		const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-wikilink]');
-		if (!btn) return;
-		e.preventDefault();
-		e.stopPropagation();
-		const target = btn.dataset.wikilink;
-		if (target) onWikilink?.(target);
 	}
 
 	function onInspectKeydown(event: KeyboardEvent) {
@@ -531,19 +524,15 @@
 					onwheel={(e) => e.stopPropagation()}
 				></textarea>
 			{:else if embeddedImage.caption.trim()}
-				<!-- svelte-ignore a11y_click_events_have_key_events -->
-				<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 				<div
 					data-card-scroll
 					class="mash-sticky-preview mash-sticky-clip-caption"
 					style="color: var(--mash-card-ink); text-align: {align};"
 					role="article"
-					onclick={onPreviewClick}
 					onpointerdown={(e) => e.stopPropagation()}
 					onwheel={(e) => e.stopPropagation()}
 				>
-					<!-- eslint-disable-next-line svelte/no-at-html-tags -- renderMarkdown escapes raw HTML. -->
-					{@html captionPreviewHtml}
+					<MarkdownPreview nodes={captionPreviewNodes} {onWikilink} />
 				</div>
 			{/if}
 		</div>
@@ -562,21 +551,16 @@
 			></textarea>
 		</div>
 	{:else}
-		<!-- Preview HTML is produced by renderMarkdown (escapes raw HTML). -->
-		<!-- svelte-ignore a11y_click_events_have_key_events -->
-		<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 		<div
 			data-card-scroll
 			class="mash-sticky-preview min-h-0 flex-1 overflow-y-auto overscroll-contain"
 			style="color: var(--mash-card-ink); text-align: {align};"
 			role="article"
-			onclick={onPreviewClick}
 			onpointerdown={(e) => e.stopPropagation()}
 			onwheel={(e) => e.stopPropagation()}
 		>
 			{#if body.trim()}
-				<!-- eslint-disable-next-line svelte/no-at-html-tags -- renderMarkdown escapes raw HTML before producing previewHtml. -->
-				{@html previewHtml}
+				<MarkdownPreview nodes={previewNodes} {onWikilink} />
 			{:else}
 				<p class="mash-sticky-preview-empty">Nothing to preview yet…</p>
 			{/if}

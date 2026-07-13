@@ -130,6 +130,7 @@ export type CanvasBoardApi = {
 		cascadeIndex?: number
 	) => { x: number; y: number };
 	ensureNoteVisible: (noteId: string) => void;
+	frameNoteForEditing?: (noteId: string, maxScale?: number) => void;
 	applyAlign: (mode: AlignMode) => void;
 	organizeToSnap?: () => void;
 	clientToWorld?: (clientX: number, clientY: number) => { x: number; y: number };

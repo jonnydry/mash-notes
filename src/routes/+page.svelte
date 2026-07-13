@@ -1310,7 +1310,9 @@
 			};
 			await canvas.handleDropNotes([note.id], spawn.x, spawn.y);
 			library.selectNote(note.id);
-			canvas.expandSticky(note.id, opts.focus ?? 'title');
+			canvas.expandSticky(note.id, opts.focus ?? 'body');
+			await tick();
+			canvas.canvasBoard?.frameNoteForEditing?.(note.id);
 			return;
 		}
 		library.selectNote(note.id);

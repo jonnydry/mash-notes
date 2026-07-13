@@ -95,7 +95,7 @@
 		/** Primary selected note — receives tabindex=0 for keyboard focus. */
 		primarySelectedId?: string | null;
 		expandedNoteId?: string | null;
-		/** When expanding, focus title (new notes) or body (existing). */
+		/** When expanding, focus either the title or body editor. */
 		expandFocus?: 'title' | 'body' | null;
 		settlingIds?: Set<string>;
 		canvasId?: string | null;
@@ -1432,6 +1432,27 @@
 		if (next.panX === panX && next.panY === panY) return;
 		panX = next.panX;
 		panY = next.panY;
+	}
+
+	/**
+	 * Put a note in a comfortable writing view without magnifying it beyond
+	 * its natural size. A zoomed-out overview is preserved; a zoomed-in desk
+	 * is gently recentered at `maxScale` for the newly opened editor.
+	 */
+	export function frameNoteForEditing(noteId: string, maxScale = 1): void {
+		if (!boardEl) return;
+		const item = items.find((i) => i.noteId === noteId);
+		if (!item) return;
+		if (scale <= maxScale) {
+			ensureNoteVisible(noteId);
+			return;
+		}
+		const s = cardSize(item, noteId);
+		const view = boardEl.getBoundingClientRect();
+		const nextScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, maxScale));
+		panX = (view.width - s.w * nextScale) / 2 - item.x * nextScale;
+		panY = (view.height - s.h * nextScale) / 2 - item.y * nextScale;
+		scale = nextScale;
 	}
 
 	/** Convert a client (screen) point to board world coordinates. */
