@@ -319,8 +319,7 @@ Create `src/lib/docx-import.ts`:
 export const MAX_DOCX_BYTES = 8_000_000;
 
 export type DocxConvertResult =
-	| { ok: true; html: string; title: string }
-	| { ok: false; error: string };
+	{ ok: true; html: string; title: string } | { ok: false; error: string };
 
 export function docxTitleFromFileName(name: string): string {
 	const base = name.replace(/\.docx$/i, '').trim();

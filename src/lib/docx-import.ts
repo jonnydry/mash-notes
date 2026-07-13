@@ -12,8 +12,7 @@ const MAX_DOCX_IMAGE_EDGE = 8192;
 const DOCX_RASTER_MIME = /^image\/(?:png|jpeg|gif|webp)$/i;
 
 export type DocxConvertResult =
-	| { ok: true; html: string; title: string }
-	| { ok: false; error: string };
+	{ ok: true; html: string; title: string } | { ok: false; error: string };
 
 export function docxTitleFromFileName(name: string): string {
 	const base = name.replace(/\.docx$/i, '').trim();

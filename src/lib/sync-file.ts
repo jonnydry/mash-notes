@@ -963,16 +963,14 @@ export async function persistMergedSync(
 				blobsUpserted = decodedBlobs.length;
 			}
 			await db.notes.bulkPut(plainNotes);
-			const mappedOperations = operations.map(
-				(operation): Operation => ({
-					...operation,
-					id: operationIdMap.get(operation.id) ?? operation.id,
-					sessionId: sessionId ?? operation.sessionId,
-					inputNoteIds: [...operation.inputNoteIds],
-					outputNoteIds: [...operation.outputNoteIds],
-					...(operation.payload ? { payload: { ...operation.payload } } : {})
-				})
-			);
+			const mappedOperations = operations.map((operation): Operation => ({
+				...operation,
+				id: operationIdMap.get(operation.id) ?? operation.id,
+				sessionId: sessionId ?? operation.sessionId,
+				inputNoteIds: [...operation.inputNoteIds],
+				outputNoteIds: [...operation.outputNoteIds],
+				...(operation.payload ? { payload: { ...operation.payload } } : {})
+			}));
 			if (mappedOperations.length > 0) {
 				await db.operations.bulkPut(mappedOperations);
 				operationsUpserted = mappedOperations.length;

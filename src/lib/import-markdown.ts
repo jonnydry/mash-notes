@@ -26,8 +26,7 @@ export type MarkdownImportFile = {
 };
 
 export type MarkdownImportResult =
-	| { ok: true; notes: Note[]; skipped: number }
-	| { ok: false; error: string };
+	{ ok: true; notes: Note[]; skipped: number } | { ok: false; error: string };
 
 export type ParsedFrontmatter = {
 	title?: string;

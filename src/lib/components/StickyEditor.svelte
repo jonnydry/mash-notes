@@ -528,8 +528,7 @@
 					style="color: var(--mash-card-ink); text-align: {align};"
 					oninput={(e) => commitEditable((e.currentTarget as HTMLTextAreaElement).value)}
 					onpointerdown={(e) => e.stopPropagation()}
-					onwheel={(e) => e.stopPropagation()}
-				></textarea>
+					onwheel={(e) => e.stopPropagation()}></textarea>
 			{:else if embeddedImage.caption.trim()}
 				<!-- svelte-ignore a11y_click_events_have_key_events -->
 				<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
@@ -558,8 +557,7 @@
 				style="color: var(--mash-card-ink); text-align: {align};"
 				oninput={(e) => commitEditable((e.currentTarget as HTMLTextAreaElement).value)}
 				onpointerdown={(e) => e.stopPropagation()}
-				onwheel={(e) => e.stopPropagation()}
-			></textarea>
+				onwheel={(e) => e.stopPropagation()}></textarea>
 		</div>
 	{:else}
 		<!-- Preview HTML is produced by renderMarkdown (escapes raw HTML). -->
