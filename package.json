@@ -73,7 +73,7 @@
 		"vitest": "^4.1.10"
 	},
 	"dependencies": {
-		"dexie": "^4.4.3",
+		"dexie": "^4.4.4",
 		"gifuct-js": "^2.1.2",
 		"lucide-svelte": "^1.0.1",
 		"mammoth": "^1.12.0",
