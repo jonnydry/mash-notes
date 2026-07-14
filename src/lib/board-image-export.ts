@@ -130,7 +130,8 @@ export function buildBoardImagePlan(input: BoardImageInput): BoardImagePlan | nu
 					: note.source?.kind === 'docx' ||
 						  note.source?.kind === 'image' ||
 						  note.source?.kind === 'url' ||
-						  note.source?.kind === 'html'
+						  note.source?.kind === 'html' ||
+						  note.source?.kind === 'table'
 						? note.source.title
 						: undefined,
 			provenanceCount: note.mashedFrom?.length ?? 0

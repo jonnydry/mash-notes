@@ -79,7 +79,7 @@ describe('sync-hygiene', () => {
 	});
 
 	it('builds quiet Settings hint copy', () => {
-		expect(syncBackupHint()).toMatch(/No sync export/);
+		expect(syncBackupHint()).toMatch(/No desk bundle/);
 		const now = Date.now();
 		recordSyncExport(now);
 		expect(syncBackupHint(readSyncHygiene(), now)).toBeNull();

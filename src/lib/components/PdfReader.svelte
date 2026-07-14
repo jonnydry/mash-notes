@@ -12,12 +12,13 @@
 		PDFJS_WASM_URL
 	} from '$lib/pdfjs-assets';
 	import { ensurePdfJsMapPolyfills } from '$lib/pdfjs-polyfills';
+	import { FILE_FORMAT_LIMITS } from '$lib/file-intake';
 	import DocumentReaderShell from './DocumentReaderShell.svelte';
 
 	/** Stay under common browser canvas limits (Safari is especially strict). */
 	const MAX_CANVAS_PIXELS = 16_777_216;
 	const MAX_CANVAS_EDGE = 8192;
-	const MAX_PDF_BYTES = 50 * 1024 * 1024;
+	const MAX_PDF_BYTES = FILE_FORMAT_LIMITS.pdfBytes;
 	const MAX_PDF_PAGES = 5000;
 	const MIN_REGION_PX = 12;
 

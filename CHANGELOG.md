@@ -17,6 +17,10 @@ Notable changes to Mash are documented here. The format follows [Keep a Changelo
 - Production security headers, stricter content sanitization, and bounded import/decode limits.
 - Performance budgets for initial JavaScript, CSS, and fonts.
 - Open-source security, contribution, architecture, privacy, format, and browser-support documentation.
+- CSV and TSV intake with a bounded preview-first choice between row cards and a Markdown table card.
+- Verified version 6 workspace backups with whole-workspace health, corruption checks, restore impact
+  previews, and transaction-first recovery.
+- Retained compatibility fixtures for every supported desk and workspace bundle version.
 
 ### Changed
 
@@ -24,6 +28,10 @@ Notable changes to Mash are documented here. The format follows [Keep a Changelo
 - Deferred document readers, export tooling, dialogs, and non-default fonts from the initial application graph.
 - Strengthened storage failure recovery and synchronization ordering.
 - Made the full repository lint and formatting gate enforceable in CI.
+- Clarified desk bundles versus complete workspace backups throughout Settings, Finish, the command
+  palette, and public documentation.
+- Centralized supported file extensions, MIME hints, entry points, preservation levels, and top-level
+  limits in a typed compatibility registry.
 
 ### Security
 
@@ -31,5 +39,7 @@ Notable changes to Mash are documented here. The format follows [Keep a Changelo
 - Added archive, file-size, decoded-pixel, page-count, frame-count, and bundle-complexity limits.
 - Added restrictive CSP and static-host security headers.
 - Hardened malformed JSON, Markdown, DOCX, HTML, PDF, image, GIF, and sync-bundle handling.
+- Kept CSV/TSV formulas and markup inert, bounded rows/columns/cells, and required complete workspace
+  validation before restore can write.
 
 [0.2.0]: https://github.com/jonnydry/mash-notes/releases/tag/v0.2.0

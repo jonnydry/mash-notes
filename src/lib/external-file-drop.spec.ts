@@ -10,7 +10,7 @@ function file(name: string, type = ''): File {
 }
 
 describe('external file drops', () => {
-	it('recognizes note text, JSON, PDF, docx, images, and unsupported files', () => {
+	it('recognizes note text, JSON, documents, images, tables, and unsupported files', () => {
 		expect(externalImportKind(file('idea.md'))).toBe('note-text');
 		expect(externalImportKind(file('idea.MARKDOWN'))).toBe('note-text');
 		expect(externalImportKind(file('scratch.txt', 'text/plain'))).toBe('note-text');
@@ -32,6 +32,8 @@ describe('external file drops', () => {
 		expect(externalImportKind(file('clip.webp', 'image/webp'))).toBe('image');
 		expect(externalImportKind(file('anim.gif'))).toBe('image');
 		expect(externalImportKind(file('pic', 'image/jpeg'))).toBe('image');
+		expect(externalImportKind(file('ideas.csv', 'text/csv'))).toBe('delimited');
+		expect(externalImportKind(file('ideas.TSV'))).toBe('delimited');
 		expect(externalImportKind(file('essay.pages'))).toBe('unsupported');
 		expect(externalImportKind(file('vector.svg', 'image/svg+xml'))).toBe('unsupported');
 	});
@@ -44,13 +46,15 @@ describe('external file drops', () => {
 		const e = file('e.docx');
 		const f = file('f.png', 'image/png');
 		const g = file('g.html');
-		expect(splitExternalImportFiles([a, b, c, d, e, f, g])).toEqual({
+		const h = file('h.csv');
+		expect(splitExternalImportFiles([a, b, c, d, e, f, g, h])).toEqual({
 			noteTextFiles: [a, d],
 			jsonFiles: [b],
 			pdfFiles: [c],
 			docxFiles: [e],
 			htmlFiles: [g],
 			imageFiles: [f],
+			delimitedFiles: [h],
 			unsupportedFiles: []
 		});
 	});
@@ -58,6 +62,9 @@ describe('external file drops', () => {
 	it('distinguishes note exports from sync bundles', () => {
 		expect(detectJsonImportKind('[{"id":"one"}]')).toBe('notes');
 		expect(detectJsonImportKind('{"version":3,"notes":[],"desk":{}}')).toBe('sync');
+		expect(
+			detectJsonImportKind('{"kind":"mash-backup","scope":"workspace","version":6,"notes":[]}')
+		).toBe('workspace-backup');
 		expect(detectJsonImportKind('{"notes":[]}')).toBe('invalid');
 		expect(detectJsonImportKind('not json')).toBe('invalid');
 	});

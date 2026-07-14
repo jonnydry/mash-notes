@@ -14,6 +14,8 @@ export type CommandPaletteDeps = {
 	clickDocxInput: () => void;
 	clickHtmlInput: () => void;
 	clickImageInput: () => void;
+	clickDelimitedInput: () => void;
+	clickWorkspaceRestoreInput: () => void;
 	clickImportInput: () => void;
 	clickMarkdownImportInput: () => void;
 	clickSyncInput: () => void;
@@ -28,6 +30,7 @@ export type CommandPaletteDeps = {
 	downloadSelectionMarkdown: () => void;
 	exportAllJson: () => void;
 	exportSyncBundle: () => void | Promise<void>;
+	exportWorkspaceBackup: () => void | Promise<void>;
 	getNotes: () => Note[];
 	getSelectionIds: () => string[];
 	getSelectedId: () => string | null;
@@ -86,6 +89,14 @@ export function buildBasePaletteActions(deps: CommandPaletteDeps): MashActionDef
 			action: () => {
 				close();
 				deps.clickImageInput();
+			},
+			shortcut: ''
+		},
+		{
+			label: 'Open CSV/TSV table…',
+			action: () => {
+				close();
+				deps.clickDelimitedInput();
 			},
 			shortcut: ''
 		},
@@ -202,7 +213,7 @@ export function buildBasePaletteActions(deps: CommandPaletteDeps): MashActionDef
 			shortcut: ''
 		},
 		{
-			label: 'Export sync bundle…',
+			label: 'Export desk bundle…',
 			action: () => {
 				void deps.exportSyncBundle();
 				close();
@@ -210,7 +221,23 @@ export function buildBasePaletteActions(deps: CommandPaletteDeps): MashActionDef
 			shortcut: ''
 		},
 		{
-			label: 'Import sync bundle…',
+			label: 'Back up workspace…',
+			action: () => {
+				void deps.exportWorkspaceBackup();
+				close();
+			},
+			shortcut: ''
+		},
+		{
+			label: 'Restore workspace backup…',
+			action: () => {
+				close();
+				deps.clickWorkspaceRestoreInput();
+			},
+			shortcut: ''
+		},
+		{
+			label: 'Import desk bundle…',
 			action: () => {
 				close();
 				deps.clickSyncInput();

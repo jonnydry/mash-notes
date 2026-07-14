@@ -3,7 +3,9 @@
  * No network loads; scripts and active content stripped.
  */
 
-export const HTML_IMPORT_MAX_BYTES = 5 * 1024 * 1024;
+import { FILE_FORMAT_LIMITS } from './file-intake';
+
+export const HTML_IMPORT_MAX_BYTES = FILE_FORMAT_LIMITS.htmlBytes;
 
 export type HtmlImportResult =
 	{ ok: true; html: string; title: string } | { ok: false; error: string };

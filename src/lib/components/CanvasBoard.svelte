@@ -3,6 +3,7 @@
 	import { SvelteSet } from 'svelte/reactivity';
 	import { notePreview } from '$lib/format';
 	import { parseEmbeddedNoteImage } from '$lib/markdown';
+	import { DROP_FORMAT_HINT } from '$lib/file-intake';
 	import {
 		loadCanvasViewport,
 		saveCanvasViewport,
@@ -42,6 +43,7 @@
 	import TagSuggestField from '$lib/components/TagSuggestField.svelte';
 	import { buildLinkSummaryMap } from '$lib/links';
 	import { isPermanentMashWelcomeNote, MASH_SPOON_LOGO } from '$lib/canvas-empty-state';
+	import { DEFAULT_EMPTY_CANVAS_MASCOT, type EmptyCanvasMascot } from '$lib/empty-canvas-mascot';
 	import {
 		flowEdgePath,
 		flowOutlineMarkdown,
@@ -118,14 +120,7 @@
 		/** Brief status toast (Snap overlap hint, Copy outline, etc.). */
 		onToast?: (msg: string) => void;
 		/** Empty-state mascot + copy for this board (desk vs pinned). */
-		emptyMascot?: {
-			src: string;
-			srcset?: string;
-			width?: number;
-			height?: number;
-			title: string;
-			copy: string;
-		};
+		emptyMascot?: EmptyCanvasMascot;
 		/** Override whether the board mascot/guidance is visible behind cards. */
 		showEmptyState?: boolean;
 		/** First-session empty-desk demo (Try a mash). */
@@ -210,14 +205,7 @@
 		onRelayoutFlow,
 		onClearSelection,
 		onToast,
-		emptyMascot = {
-			src: '/icons/mash-empty-mascot.png',
-			srcset: '/icons/mash-empty-mascot.png 1x, /icons/mash-empty-mascot@2x.png 2x',
-			width: 116,
-			height: 200,
-			title: 'Paste, drop, or type',
-			copy: 'Press ⌘/Ctrl+V for text, drop files, or use New note.'
-		},
+		emptyMascot = DEFAULT_EMPTY_CANVAS_MASCOT,
 		showEmptyState,
 		showTryAMash = false,
 		tryAMash,
@@ -2350,6 +2338,17 @@
 									<FileText class="h-2.5 w-2.5 shrink-0" />
 									<span class="truncate">{note.source.title}</span>
 								</div>
+							{:else if note.source?.kind === 'table'}
+								<div
+									class="mash-card-source mash-type-micro mt-2 flex items-center gap-1 border-t pt-1.5"
+									style="border-color: var(--mash-card-edge); color: var(--mash-accent);"
+									title="Imported from {note.source.title}"
+								>
+									<FileText class="h-2.5 w-2.5 shrink-0" />
+									<span class="truncate">
+										{note.source.title}{note.source.row ? ` · row ${note.source.row}` : ''}
+									</span>
+								</div>
 							{/if}
 							{#if note.mashedFrom?.length}
 								<div
@@ -2575,6 +2574,7 @@
 					{isExternalDragOver ? 'mash-empty-state-active scale-[1.03]' : ''}"
 			>
 				<img
+					data-testid="empty-canvas-mascot"
 					src={emptyMascot.src}
 					srcset={emptyMascot.srcset}
 					alt=""
@@ -2594,7 +2594,7 @@
 				</p>
 				{#if isFileDragOver}
 					<p class="mash-empty-copy mash-type-body mt-2 max-w-[18rem] leading-relaxed">
-						PDF, Markdown, text, note JSON, or a Mash sync bundle
+						PDF, Word, HTML, images, Markdown, text, CSV/TSV, or MASH JSON
 					</p>
 				{:else if !isExternalDragOver}
 					<p class="mash-empty-copy mash-type-body mt-2 max-w-[17rem] leading-relaxed">
@@ -2655,7 +2655,7 @@
 				>
 					<FileUp size={28} strokeWidth={1.8} aria-hidden="true" />
 					<p class="mash-display mt-2 text-lg font-medium">Drop files to import</p>
-					<p class="mash-type-caption mt-1">.pdf, .md, .markdown, .txt, or Mash .json</p>
+					<p class="mash-type-caption mt-1">{DROP_FORMAT_HINT}</p>
 				</div>
 			{/if}
 		</div>

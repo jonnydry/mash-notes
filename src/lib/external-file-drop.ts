@@ -1,5 +1,7 @@
+import { fileMatchesFormat } from './file-formats';
+
 export type ExternalImportKind =
-	'note-text' | 'json' | 'pdf' | 'docx' | 'html' | 'image' | 'unsupported';
+	'note-text' | 'json' | 'pdf' | 'docx' | 'html' | 'image' | 'delimited' | 'unsupported';
 
 export type ExternalImportBatch = {
 	noteTextFiles: File[];
@@ -8,24 +10,25 @@ export type ExternalImportBatch = {
 	docxFiles: File[];
 	htmlFiles: File[];
 	imageFiles: File[];
+	delimitedFiles: File[];
 	unsupportedFiles: File[];
 };
 
-const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-const IMAGE_MIME = /^image\/(png|jpeg|webp|gif)$/i;
-const IMAGE_EXT = /\.(png|jpe?g|webp|gif)$/i;
-const HTML_MIME = /^(text\/html|application\/xhtml\+xml)$/i;
-
 /** Formats Mash can safely turn into notes or an existing validated import. */
 export function externalImportKind(file: Pick<File, 'name' | 'type'>): ExternalImportKind {
-	const name = file.name.trim().toLowerCase();
-	const type = file.type.toLowerCase();
-	if (/\.(md|markdown|txt)$/.test(name)) return 'note-text';
-	if (/\.json$/.test(name) || type === 'application/json') return 'json';
-	if (/\.pdf$/.test(name) || type === 'application/pdf') return 'pdf';
-	if (/\.docx$/.test(name) || type === DOCX_MIME) return 'docx';
-	if (/\.html?$/.test(name) || HTML_MIME.test(type)) return 'html';
-	if (IMAGE_EXT.test(name) || IMAGE_MIME.test(type)) return 'image';
+	if (fileMatchesFormat(file, 'markdown') || fileMatchesFormat(file, 'text')) return 'note-text';
+	if (fileMatchesFormat(file, 'notes-json')) return 'json';
+	if (fileMatchesFormat(file, 'pdf')) return 'pdf';
+	if (fileMatchesFormat(file, 'docx')) return 'docx';
+	if (fileMatchesFormat(file, 'html')) return 'html';
+	if (
+		fileMatchesFormat(file, 'png') ||
+		fileMatchesFormat(file, 'jpeg') ||
+		fileMatchesFormat(file, 'webp') ||
+		fileMatchesFormat(file, 'gif')
+	)
+		return 'image';
+	if (fileMatchesFormat(file, 'csv') || fileMatchesFormat(file, 'tsv')) return 'delimited';
 	return 'unsupported';
 }
 
@@ -37,6 +40,7 @@ export function splitExternalImportFiles(files: File[]): ExternalImportBatch {
 		docxFiles: [],
 		htmlFiles: [],
 		imageFiles: [],
+		delimitedFiles: [],
 		unsupportedFiles: []
 	};
 	for (const file of files) {
@@ -47,16 +51,29 @@ export function splitExternalImportFiles(files: File[]): ExternalImportBatch {
 		else if (kind === 'docx') batch.docxFiles.push(file);
 		else if (kind === 'html') batch.htmlFiles.push(file);
 		else if (kind === 'image') batch.imageFiles.push(file);
+		else if (kind === 'delimited') batch.delimitedFiles.push(file);
 		else batch.unsupportedFiles.push(file);
 	}
 	return batch;
 }
 
-/** JSON arrays are note exports; versioned objects with notes are sync bundles. */
-export function detectJsonImportKind(text: string): 'notes' | 'sync' | 'invalid' {
+/** Distinguish content exports, active-desk bundles, and whole-workspace backups. */
+export function detectJsonImportKind(
+	text: string
+): 'notes' | 'sync' | 'workspace-backup' | 'invalid' {
 	try {
 		const value: unknown = JSON.parse(text);
 		if (Array.isArray(value)) return 'notes';
+		if (
+			typeof value === 'object' &&
+			value !== null &&
+			'kind' in value &&
+			(value as { kind?: unknown }).kind === 'mash-backup' &&
+			'scope' in value &&
+			(value as { scope?: unknown }).scope === 'workspace'
+		) {
+			return 'workspace-backup';
+		}
 		if (
 			typeof value === 'object' &&
 			value !== null &&

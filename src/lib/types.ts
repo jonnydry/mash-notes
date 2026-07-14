@@ -46,6 +46,12 @@ export type NoteSource =
 	| {
 			kind: 'html';
 			title: string;
+	  }
+	| {
+			kind: 'table';
+			title: string;
+			format: 'csv' | 'tsv';
+			row?: number;
 	  };
 
 export interface Note {

@@ -17,7 +17,7 @@ Reach for Mash when you need to:
 - pull useful excerpts from a PDF, Word document, or HTML file;
 - compare, combine, split, sort, or deduplicate fragments;
 - arrange research, screenshots, or links into a sequence;
-- produce Markdown, a PDF, or a board image and continue working elsewhere.
+- turn CSV/TSV rows into movable cards, or produce Markdown, a PDF, or a board image and continue working elsewhere.
 
 Mash is intentionally a step in a workflow, not another system you have to maintain.
 
@@ -25,20 +25,20 @@ Mash is intentionally a step in a workflow, not another system you have to maint
 
 1. **Bring things in** — Paste text, drop files, open documents, or import Markdown.
 2. **Shape the set** — Select cards and Mash, split, pack, sort, deduplicate, sequence, or group them.
-3. **Take the useful part** — Copy Markdown, download a file, print a PDF, export a board image, or save a MASH bundle.
+3. **Take the useful part** — Copy Markdown, download a file, print a PDF, export a board image, or save a desk bundle.
 4. **Decide what remains** — Keep the result, leave the desk as temporary scratch work, or clear it with recovery.
 
 ![Mash Finish panel](audit/product-utility-direction-2026-07-13/05-finish-panel.png)
 
 ## What goes in and what comes out
 
-| Bring in                          | Work with                              | Take away                     |
-| --------------------------------- | -------------------------------------- | ----------------------------- |
-| Plain text and Markdown           | Mash and Unmash                        | Copy Markdown                 |
-| PDF, Word (`.docx`), and HTML     | Split, pack, sort, and deduplicate     | Download Markdown             |
-| PNG, JPEG, WebP, and GIF          | Sequence, align, and group             | Print or save PDF             |
-| HTTP(S) URLs                      | Reversible operation receipts          | Export board image            |
-| Obsidian or Bear Markdown folders | Tags, folders, links, and kept results | Export a portable MASH bundle |
+| Bring in                           | Work with                              | Take away                       |
+| ---------------------------------- | -------------------------------------- | ------------------------------- |
+| Plain text, Markdown, CSV, and TSV | Mash and Unmash                        | Copy Markdown                   |
+| PDF, Word (`.docx`), and HTML      | Split, pack, sort, and deduplicate     | Download Markdown               |
+| PNG, JPEG, WebP, and GIF           | Sequence, align, and group             | Print or save PDF               |
+| HTTP(S) URLs                       | Reversible operation receipts          | Export board image              |
+| Obsidian or Bear Markdown folders  | Tags, folders, links, and kept results | Desk bundle or workspace backup |
 
 Animated GIFs can become a still or an evenly sampled set of frame cards. Pasted URLs become local source cards; Mash does not fetch the remote page.
 
@@ -53,7 +53,7 @@ See [Capabilities](docs/capabilities.md) for the detailed inventory and safety l
 - Cleared scratch desks remain recoverable for 7 days. Kept desks and kept results do not auto-clear.
 - Exports remain available when local persistence is unhealthy, so work can still leave Mash.
 
-Browser storage is not an off-device backup. Export a MASH bundle when you need a portable copy or want to move work between devices.
+Browser storage is not an off-device backup. Use **Back up workspace** for a complete portable copy, or export a desk bundle when you only need the active working session.
 
 Read [Privacy and storage](docs/privacy-and-storage.md) for the full trust boundary.
 
@@ -81,9 +81,9 @@ The deployable site is written to `build/`. It can be hosted on any static host 
 
 ## Move work between devices
 
-1. On the source device, open **Settings** or the command palette and choose **Export sync bundle…**.
-2. On the destination device, choose **Import sync bundle…** and select that file.
-3. Mash merges supported bundle versions locally and includes desk layouts, relationships, operation history, and referenced visual assets.
+1. For the complete workspace, open **Settings** or the command palette and choose **Back up workspace…**.
+2. On the destination device, choose **Restore workspace backup…**, inspect the preview, and confirm.
+3. For one active session instead, use **Export desk bundle…** and **Import desk bundle…**.
 
 This is deliberate file transfer, not background cloud synchronization. Read [File formats](docs/file-formats.md) for compatibility details.
 

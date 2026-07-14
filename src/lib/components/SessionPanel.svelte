@@ -26,6 +26,8 @@
 		finishSnapshot?: FinishSnapshot | null;
 		notesById?: ReadonlyMap<string, Note>;
 		storageHealth?: StorageHealth | null;
+		workspaceBackupStatus?: string;
+		workspaceBackupBusy?: boolean;
 		onClose: () => void;
 		onSwitch: (id: string) => void | Promise<void>;
 		onNewScratch: () => void | Promise<void>;
@@ -34,6 +36,7 @@
 		onRestore: (id: string) => void | Promise<void>;
 		onRetentionChange: (days: number) => void | Promise<void>;
 		onRefreshStorage?: () => void | Promise<void>;
+		onBackupWorkspace?: () => void | Promise<void>;
 	}
 
 	let {
@@ -46,6 +49,8 @@
 		finishSnapshot = null,
 		notesById = new Map(),
 		storageHealth = null,
+		workspaceBackupStatus = '',
+		workspaceBackupBusy = false,
 		onClose,
 		onSwitch,
 		onNewScratch,
@@ -53,7 +58,8 @@
 		onFinishCommit,
 		onRestore,
 		onRetentionChange,
-		onRefreshStorage
+		onRefreshStorage,
+		onBackupWorkspace
 	}: Props = $props();
 
 	let view = $state<'desks' | 'finish'>('desks');
@@ -227,6 +233,26 @@
 							{/each}
 						</select>
 					</div>
+				</div>
+			{/if}
+			{#if view === 'desks' && workspaceBackupStatus}
+				<div class="mash-session-storage" data-testid="workspace-backup-health">
+					<span class="min-w-0 flex-1">
+						<strong class="mash-type-caption block" style="color: var(--mash-ink);"
+							>Workspace backup</strong
+						>
+						{workspaceBackupStatus}
+					</span>
+					{#if onBackupWorkspace}
+						<button
+							type="button"
+							class="mash-btn-ghost mash-type-caption rounded-[9px] px-2.5 py-1.5"
+							disabled={workspaceBackupBusy}
+							onclick={() => void onBackupWorkspace()}
+						>
+							{workspaceBackupBusy ? 'Preparing…' : 'Back up'}
+						</button>
+					{/if}
 				</div>
 			{/if}
 			{#if storageHealth?.supported && view === 'desks'}

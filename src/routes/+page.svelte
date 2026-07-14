@@ -58,7 +58,7 @@
 	import { clearDismissedForCanvas } from '$lib/canvas-dismiss';
 	import { findBacklinks, findOutgoingNotes } from '$lib/links';
 	import { downloadSyncBundle } from '$lib/sync-file';
-	import { readSyncHygiene, recordSyncExport, shouldRemindSyncBackup } from '$lib/sync-hygiene';
+	import { readSyncHygiene, recordSyncExport } from '$lib/sync-hygiene';
 	import { loadSnapPref, saveSnapPref } from '$lib/canvas-geom';
 	import {
 		COLLAPSED_CARD,
@@ -108,7 +108,14 @@
 	import { createDeskPlacement } from '$lib/desk-placement';
 	import type { PeelConflictRow } from '$lib/components/PeelScanner.svelte';
 	import { shouldShowCanvasEmptyState } from '$lib/canvas-empty-state';
-	import { detectJsonImportKind, splitExternalImportFiles } from '$lib/external-file-drop';
+	import { chooseEmptyCanvasMascotForVisit } from '$lib/empty-canvas-mascot';
+	import {
+		DROP_FORMAT_ERROR_HINT,
+		DROP_FORMAT_HINT,
+		FILE_ACCEPT,
+		FILE_FORMAT_LIMITS
+	} from '$lib/file-intake';
+	import type { DelimitedAnalysis, DelimitedImportMode } from '$lib/delimited-import';
 	import { type PdfClipPayload } from '$lib/pdf-clipping';
 	import { type DocxClipPayload } from '$lib/docx-clipping';
 	import { type HtmlClipPayload } from '$lib/html-clipping';
@@ -122,6 +129,12 @@
 		requestPersistentStorage,
 		type StorageHealth
 	} from '$lib/storage-health';
+	import {
+		deriveBackupHealth,
+		readWorkspaceBackupRecord,
+		recordWorkspaceBackup
+	} from '$lib/backup-health';
+	import type { WorkspaceBackup, WorkspaceRestorePlan } from '$lib/workspace-backup';
 
 	let actionToast = $state('');
 	let srAnnouncement = $state('');
@@ -148,6 +161,10 @@
 	let finishSnapshot = $state<FinishSnapshot | null>(null);
 	let pasteAnalysis = $state<PasteAnalysis | null>(null);
 	let pasteDialogOpen = $state(false);
+	let delimitedPending = $state<{
+		analysis: DelimitedAnalysis;
+		origin?: { x: number; y: number };
+	} | null>(null);
 	let gifExplodePending = $state<{
 		blob: Blob;
 		fileName: string;
@@ -159,12 +176,30 @@
 	let spacesOverviewIgnoreUntil = 0;
 	/** Sync from localStorage at init (ssr=false) so CanvasBoard never paints Free first. */
 	let snapEnabled = $state(loadSnapPref());
+	const visitEmptyMascot = chooseEmptyCanvasMascotForVisit();
 	let searchDropdownOpen = $state(false);
 	let searchHighlight = $state(0);
 	let searchWrapEl = $state<HTMLDivElement | null>(null);
 	let syncHygiene = $state(readSyncHygiene());
 	let storageHealth = $state<StorageHealth | null>(null);
-	let syncBackupReminded = false;
+	let workspaceBackupReminded = false;
+	let workspaceBackupRecord = $state(readWorkspaceBackupRecord());
+	let workspaceChangedAt = $state(0);
+	let workspaceHasContent = $state(false);
+	let workspaceBackupBusy = $state(false);
+	let workspaceRestoreError = $state('');
+	let workspaceRestorePending = $state<{
+		backup: WorkspaceBackup;
+		plan: WorkspaceRestorePlan;
+	} | null>(null);
+	const workspaceBackupHealth = $derived(
+		deriveBackupHealth({
+			hasContent: workspaceHasContent,
+			workspaceChangedAt,
+			record: workspaceBackupRecord,
+			storagePressure: storageHealth?.pressure
+		})
+	);
 
 	function refreshSyncHygiene() {
 		syncHygiene = readSyncHygiene();
@@ -178,7 +213,7 @@
 		);
 		recordSyncExport();
 		refreshSyncHygiene();
-		flashToast('Exported sync bundle (notes + desk + result history)');
+		flashToast('Exported desk bundle (active desk + result history)');
 	}
 
 	$effect(() => {
@@ -200,6 +235,8 @@
 	let docxInputEl: HTMLInputElement | undefined = $state();
 	let htmlInputEl: HTMLInputElement | undefined = $state();
 	let imageInputEl: HTMLInputElement | undefined = $state();
+	let delimitedInputEl: HTMLInputElement | undefined = $state();
+	let workspaceRestoreInputEl: HTMLInputElement | undefined = $state();
 	// documentReaders + selectionOps initialized after canvas (below)
 
 	function flashToast(msg: string, ms = 1600) {
@@ -232,6 +269,117 @@
 		queueMicrotask(() => {
 			srAnnouncement = message;
 		});
+	}
+
+	async function refreshWorkspaceBackupHealth() {
+		try {
+			const { inspectWorkspaceChangedAt } = await import('$lib/workspace-backup');
+			const state = await inspectWorkspaceChangedAt();
+			workspaceChangedAt = state.changedAt;
+			workspaceHasContent = state.hasContent;
+			workspaceBackupRecord = readWorkspaceBackupRecord();
+		} catch (error) {
+			console.error('Could not inspect workspace backup health', error);
+		}
+	}
+
+	async function exportWorkspaceBackup() {
+		if (workspaceBackupBusy) return;
+		workspaceBackupBusy = true;
+		try {
+			await library.flushPendingSaveAsync();
+			const { downloadWorkspaceBackup } = await import('$lib/workspace-backup');
+			const record = await downloadWorkspaceBackup();
+			recordWorkspaceBackup(record);
+			workspaceBackupRecord = record;
+			workspaceChangedAt = record.workspaceChangedAt;
+			workspaceHasContent = record.counts.notes > 0 || record.counts.sessions > 1;
+			flashToast(
+				`Workspace backup created · ${record.counts.sessions} desk${record.counts.sessions === 1 ? '' : 's'} · ${record.counts.notes} card${record.counts.notes === 1 ? '' : 's'}`,
+				4600
+			);
+		} catch (error) {
+			console.error('Workspace backup failed', error);
+			flashToast('Workspace backup could not be created. Your local work is unchanged.', 4600);
+		} finally {
+			workspaceBackupBusy = false;
+		}
+	}
+
+	async function handleWorkspaceRestoreFile(event: Event) {
+		const input = event.currentTarget as HTMLInputElement;
+		const file = input.files?.[0];
+		input.value = '';
+		if (!file) return;
+		try {
+			const { WORKSPACE_BACKUP_MAX_CHARS } = await import('$lib/workspace-backup');
+			if (file.size > WORKSPACE_BACKUP_MAX_CHARS) {
+				flashToast('Workspace backup is too large to open safely.', 4200);
+				return;
+			}
+			await previewWorkspaceRestoreText(await file.text());
+		} catch (error) {
+			console.error('Workspace backup inspection failed', error);
+			flashToast('Couldn’t inspect this workspace backup.', 4200);
+		}
+	}
+
+	async function previewWorkspaceRestoreText(text: string): Promise<boolean> {
+		workspaceRestoreError = '';
+		workspaceBackupBusy = true;
+		try {
+			const { inspectAndPlanWorkspaceRestore } = await import('$lib/workspace-backup');
+			const inspected = await inspectAndPlanWorkspaceRestore(text);
+			if (!inspected.ok || !inspected.plan) {
+				flashToast(
+					inspected.ok ? 'Couldn’t preview this workspace backup.' : inspected.error,
+					4600
+				);
+				return false;
+			}
+			workspaceRestorePending = { backup: inspected.backup, plan: inspected.plan };
+			settingsOpen = false;
+			sessionPanelOpen = false;
+			return true;
+		} finally {
+			workspaceBackupBusy = false;
+		}
+	}
+
+	async function confirmWorkspaceRestore() {
+		const pending = workspaceRestorePending;
+		if (!pending || workspaceBackupBusy) return;
+		workspaceBackupBusy = true;
+		workspaceRestoreError = '';
+		try {
+			await library.flushPendingSaveAsync();
+			const { applyWorkspaceRestore } = await import('$lib/workspace-backup');
+			const receipt = await applyWorkspaceRestore(pending.backup);
+			await sessionManager.bootstrap();
+			const preferred = [...pending.backup.sessions]
+				.filter((session) => session.status === 'active')
+				.sort((a, b) => b.modified - a.modified)[0];
+			if (preferred) await sessionManager.switchTo(preferred.id);
+			await library.loadNotes();
+			await canvas.loadContextCanvas('', preferred?.id);
+			await refreshOperationHistory();
+			workspaceRestorePending = null;
+			await refreshWorkspaceBackupHealth();
+			if (receipt.conflictsForReview.length > 0) {
+				syncConflicts.setFromImport(receipt.conflictsForReview);
+				peel.openPeel('conflicts');
+			}
+			flashToast(
+				`Restored workspace · ${receipt.added} added · ${receipt.updated} updated${receipt.conflicts ? ` · ${receipt.conflicts} conflicts` : ''}`,
+				5200
+			);
+		} catch (error) {
+			console.error('Workspace restore failed', error);
+			workspaceRestoreError =
+				'Restore did not commit. Your previous durable workspace is still available.';
+		} finally {
+			workspaceBackupBusy = false;
+		}
 	}
 
 	function askConfirm(opts: {
@@ -474,6 +622,7 @@
 	}
 
 	function openSessionPanel(view: 'desks' | 'finish' = 'desks') {
+		if (view === 'desks') void refreshWorkspaceBackupHealth();
 		if (view === 'finish' && sessionManager.activeSession) {
 			finishSnapshot = createFinishSnapshot({
 				sessionId: sessionManager.activeSession.id,
@@ -490,6 +639,10 @@
 		settingsOpen = false;
 		peel.closePeel(true);
 	}
+
+	$effect(() => {
+		if (settingsOpen) void refreshWorkspaceBackupHealth();
+	});
 
 	async function changeRetentionDays(days: number) {
 		await sessionManager.setRetentionDays(days);
@@ -751,6 +904,52 @@
 		handleOpenImageFiles
 	} = deskPlacement;
 
+	async function queueDelimitedFile(
+		file: File,
+		origin?: { x: number; y: number }
+	): Promise<boolean> {
+		if (file.size > FILE_FORMAT_LIMITS.delimitedBytes) {
+			flashToast('This table is too large to import safely (max 2 MB).', 3600);
+			return false;
+		}
+		try {
+			const text = await file.text();
+			const { parseDelimitedText } = await import('$lib/delimited-import');
+			const result = parseDelimitedText(text, file.name);
+			if (!result.ok) {
+				flashToast(result.error, 3600);
+				return false;
+			}
+			delimitedPending = { analysis: result.analysis, origin };
+			return true;
+		} catch (error) {
+			console.error(error);
+			flashToast('Couldn’t open this CSV/TSV table.', 3600);
+			return false;
+		}
+	}
+
+	async function importDelimitedChoice(mode: DelimitedImportMode, titleColumn: number) {
+		const pending = delimitedPending;
+		if (!pending) return;
+		const { draftsFromDelimited } = await import('$lib/delimited-import');
+		const result = draftsFromDelimited(pending.analysis, mode, titleColumn);
+		if (typeof result === 'string') {
+			flashToast(result, 4200);
+			return;
+		}
+		delimitedPending = null;
+		const notes = await placeNoteDraftsOnDesk(result, pending.origin);
+		if (notes.length > 0) {
+			flashToast(
+				mode === 'table'
+					? `Imported ${pending.analysis.rows.length} rows as one table card`
+					: `Imported ${notes.length} table row${notes.length === 1 ? '' : 's'} as cards`,
+				3600
+			);
+		}
+	}
+
 	async function handleGifExplodeChoice(mode: GifExplodeMode) {
 		const pending = gifExplodePending;
 		gifExplodePending = null;
@@ -772,6 +971,8 @@
 				spacesOverviewOpen ||
 				sessionPanelOpen ||
 				pasteDialogOpen ||
+				Boolean(delimitedPending) ||
+				Boolean(workspaceRestorePending) ||
 				gifExplodeDialogOpen ||
 				documentReaders.documentReaderOpen ||
 				editorStage.open
@@ -974,6 +1175,8 @@
 	}
 
 	async function handleDroppedFiles(files: File[], x: number, y: number) {
+		const { detectJsonImportKind, splitExternalImportFiles } =
+			await import('$lib/external-file-drop');
 		const batch = splitExternalImportFiles(files);
 		const supportedCount =
 			batch.noteTextFiles.length +
@@ -981,16 +1184,14 @@
 			batch.pdfFiles.length +
 			batch.docxFiles.length +
 			batch.htmlFiles.length +
-			batch.imageFiles.length;
+			batch.imageFiles.length +
+			batch.delimitedFiles.length;
 		if (supportedCount === 0) {
 			const names = batch.unsupportedFiles.map((f) => f.name).filter(Boolean);
 			if (names.length === 1) {
-				flashToast(
-					`Can't import ${names[0]} — try PNG, JPEG, WebP, GIF, PDF, Word, HTML, or text`,
-					3600
-				);
+				flashToast(`Can't import ${names[0]} — ${DROP_FORMAT_ERROR_HINT}`, 3600);
 			} else {
-				flashToast('Drop a PDF, Word, HTML, image, text note, or Mash JSON file', 3000);
+				flashToast(`Drop ${DROP_FORMAT_HINT}`, 3000);
 			}
 			return;
 		}
@@ -1004,6 +1205,7 @@
 		let openedDocName = '';
 		let imageCreated = 0;
 		let imageCompacted = 0;
+		let queuedTableName = '';
 
 		if (batch.pdfFiles.length > 0) {
 			if (openPdfReader(batch.pdfFiles[0]!)) openedDocName = batch.pdfFiles[0]!.name;
@@ -1035,6 +1237,17 @@
 			}
 		}
 
+		if (batch.delimitedFiles.length > 0) {
+			if (openedDocName) {
+				failedCount += batch.delimitedFiles.length;
+			} else {
+				const tableFile = batch.delimitedFiles[0]!;
+				if (await queueDelimitedFile(tableFile, { x, y })) queuedTableName = tableFile.name;
+				else failedCount++;
+				if (batch.delimitedFiles.length > 1) failedCount += batch.delimitedFiles.length - 1;
+			}
+		}
+
 		if (batch.noteTextFiles.length > 0) {
 			const result = await library.importMarkdownFiles(batch.noteTextFiles, {
 				allowPlainText: true,
@@ -1050,13 +1263,18 @@
 
 		for (const file of batch.jsonFiles) {
 			try {
-				if (file.size > 8_000_000) {
+				if (file.size > FILE_FORMAT_LIMITS.workspaceBackupBytes) {
 					failedCount++;
 					continue;
 				}
 				const text = await file.text();
 				const kind = detectJsonImportKind(text);
-				if (kind === 'notes') {
+				if (kind !== 'workspace-backup' && file.size > FILE_FORMAT_LIMITS.deskBundleBytes) {
+					failedCount++;
+				} else if (kind === 'workspace-backup') {
+					if (await previewWorkspaceRestoreText(text)) importedFileCount++;
+					else failedCount++;
+				} else if (kind === 'notes') {
 					const result = await library.importNotesText(text, { silent: true });
 					if (result.ok && result.notes) {
 						importedNoteIds.push(...result.notes.map((note) => note.id));
@@ -1091,6 +1309,7 @@
 		const skippedCount = batch.unsupportedFiles.length + failedCount;
 		const parts: string[] = [];
 		if (openedDocName) parts.push(`Opened ${openedDocName}`);
+		if (queuedTableName) parts.push(`Previewing ${queuedTableName}`);
 		if (imageCreated > 0) {
 			parts.push(imageCreated === 1 ? 'Added 1 image card' : `Added ${imageCreated} image cards`);
 		}
@@ -1107,7 +1326,7 @@
 			);
 		}
 		if (importedSyncCount > 0) {
-			parts.push(`Imported ${importedSyncCount} sync bundle${importedSyncCount === 1 ? '' : 's'}`);
+			parts.push(`Imported ${importedSyncCount} desk bundle${importedSyncCount === 1 ? '' : 's'}`);
 		}
 		if (skippedCount > 0) {
 			parts.push(`Skipped ${skippedCount} unsupported or invalid`);
@@ -1434,6 +1653,8 @@
 		clickDocxInput: () => docxInputEl?.click(),
 		clickHtmlInput: () => htmlInputEl?.click(),
 		clickImageInput: () => imageInputEl?.click(),
+		clickDelimitedInput: () => delimitedInputEl?.click(),
+		clickWorkspaceRestoreInput: () => workspaceRestoreInputEl?.click(),
 		clickImportInput: () => importInputEl?.click(),
 		clickMarkdownImportInput: () => markdownImportInputEl?.click(),
 		clickSyncInput: () => syncInputEl?.click(),
@@ -1455,6 +1676,7 @@
 			exportNotesJson(library.notes, 'mash-notes-export.json');
 		},
 		exportSyncBundle: () => exportSyncBundle(),
+		exportWorkspaceBackup: () => exportWorkspaceBackup(),
 		getNotes: () => library.notes,
 		getSelectionIds: () => library.selectionIds,
 		getSelectedId: () => library.selectedId,
@@ -1650,11 +1872,10 @@
 		void (async () => {
 			await sessionManager.bootstrap();
 			await library.loadNotes();
-			if (sessionManager.activeSession?.mode === 'scratch') return;
-			if (syncBackupReminded) return;
-			if (!shouldRemindSyncBackup(library.notes.length)) return;
-			syncBackupReminded = true;
-			flashToast('Tip: export a sync bundle to back up this browser', 4200);
+			await refreshWorkspaceBackupHealth();
+			if (workspaceBackupReminded || !workspaceBackupHealth.needsBackup) return;
+			workspaceBackupReminded = true;
+			flashToast('Tip: back up your Mash workspace from Desks or Settings', 4200);
 		})();
 		window.addEventListener('keydown', handleKeydown);
 		window.addEventListener('paste', handleGlobalPaste);
@@ -1964,7 +2185,7 @@
 								title: 'Pin notes here',
 								copy: 'Drop favorites onto this board — or pin from any sticky.'
 							}
-						: undefined}
+						: visitEmptyMascot}
 					showEmptyState={showCanvasEmptyState}
 					{showTryAMash}
 					tryAMash={runTryAMash}
@@ -2123,6 +2344,8 @@
 						{snapEnabled}
 						lastExportAt={syncHygiene.lastExportAt}
 						lastImportAt={syncHygiene.lastImportAt}
+						workspaceBackupStatus={workspaceBackupHealth.label}
+						{workspaceBackupBusy}
 						onClose={() => (settingsOpen = false)}
 						onSnapChange={setSnapEnabled}
 						onOrganize={() => canvas.canvasBoard?.organizeToSnap?.()}
@@ -2149,6 +2372,12 @@
 							settingsOpen = false;
 							imageInputEl?.click();
 						}}
+						onOpenDelimited={() => {
+							settingsOpen = false;
+							delimitedInputEl?.click();
+						}}
+						onBackupWorkspace={() => exportWorkspaceBackup()}
+						onRestoreWorkspace={() => workspaceRestoreInputEl?.click()}
 						conflictCount={syncConflicts.count}
 						onOpenConflicts={() => {
 							settingsOpen = false;
@@ -2836,7 +3065,7 @@
 		bind:this={importInputEl}
 		data-testid="notes-import"
 		type="file"
-		accept="application/json,.json"
+		accept={FILE_ACCEPT.json}
 		class="hidden"
 		onchange={(e) => void library.handleImportFile(e)}
 	/>
@@ -2844,7 +3073,7 @@
 		bind:this={pdfInputEl}
 		data-testid="pdf-reader-input"
 		type="file"
-		accept="application/pdf,.pdf"
+		accept={FILE_ACCEPT.pdf}
 		class="hidden"
 		onchange={(e) => {
 			const input = e.currentTarget as HTMLInputElement;
@@ -2857,7 +3086,7 @@
 		bind:this={docxInputEl}
 		data-testid="docx-reader-input"
 		type="file"
-		accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+		accept={FILE_ACCEPT.docx}
 		class="hidden"
 		onchange={(e) => {
 			const input = e.currentTarget as HTMLInputElement;
@@ -2870,7 +3099,7 @@
 		bind:this={htmlInputEl}
 		data-testid="html-reader-input"
 		type="file"
-		accept=".html,.htm,text/html,application/xhtml+xml"
+		accept={FILE_ACCEPT.html}
 		class="hidden"
 		onchange={(e) => {
 			const input = e.currentTarget as HTMLInputElement;
@@ -2883,7 +3112,7 @@
 		bind:this={imageInputEl}
 		data-testid="image-sticky-input"
 		type="file"
-		accept="image/png,image/jpeg,image/webp,image/gif,.png,.jpg,.jpeg,.webp,.gif"
+		accept={FILE_ACCEPT.images}
 		multiple
 		class="hidden"
 		onchange={(e) => {
@@ -2895,10 +3124,23 @@
 		}}
 	/>
 	<input
+		bind:this={delimitedInputEl}
+		data-testid="delimited-import-input"
+		type="file"
+		accept={FILE_ACCEPT.delimited}
+		class="hidden"
+		onchange={(e) => {
+			const input = e.currentTarget as HTMLInputElement;
+			const file = input.files?.[0];
+			input.value = '';
+			if (file) void queueDelimitedFile(file);
+		}}
+	/>
+	<input
 		bind:this={markdownImportInputEl}
 		data-testid="markdown-import"
 		type="file"
-		accept=".md,text/markdown"
+		accept={FILE_ACCEPT.markdownVault}
 		multiple
 		webkitdirectory
 		class="hidden"
@@ -2908,12 +3150,20 @@
 		bind:this={syncInputEl}
 		data-testid="sync-import"
 		type="file"
-		accept="application/json,.json"
+		accept={FILE_ACCEPT.json}
 		class="hidden"
 		onchange={async (e) => {
 			await library.handleSyncFile(e);
 			refreshSyncHygiene();
 		}}
+	/>
+	<input
+		bind:this={workspaceRestoreInputEl}
+		data-testid="workspace-restore-input"
+		type="file"
+		accept={FILE_ACCEPT.json}
+		class="hidden"
+		onchange={handleWorkspaceRestoreFile}
 	/>
 
 	{#if actionToast}
@@ -2981,6 +3231,8 @@
 				{finishSnapshot}
 				notesById={library.notesById}
 				{storageHealth}
+				workspaceBackupStatus={workspaceBackupHealth.label}
+				{workspaceBackupBusy}
 				onClose={() => (sessionPanelOpen = false)}
 				onSwitch={activateSession}
 				onNewScratch={createScratchSession}
@@ -2991,6 +3243,7 @@
 				onRefreshStorage={async () => {
 					await refreshStorageHealth();
 				}}
+				onBackupWorkspace={() => exportWorkspaceBackup()}
 			/>
 		{/await}
 	{/if}
@@ -3018,6 +3271,35 @@
 				onChoose={(mode) => void handleGifExplodeChoice(mode)}
 				onClose={() => {
 					gifExplodePending = null;
+				}}
+			/>
+		{/await}
+	{/if}
+	{#if delimitedPending}
+		{#await import('$lib/components/DelimitedImportDialog.svelte') then mod}
+			<mod.default
+				open={Boolean(delimitedPending)}
+				analysis={delimitedPending.analysis}
+				onChoose={(mode, titleColumn) => void importDelimitedChoice(mode, titleColumn)}
+				onClose={() => {
+					delimitedPending = null;
+				}}
+			/>
+		{/await}
+	{/if}
+	{#if workspaceRestorePending}
+		{#await import('$lib/components/WorkspaceRestoreDialog.svelte') then mod}
+			<mod.default
+				open={Boolean(workspaceRestorePending)}
+				backup={workspaceRestorePending.backup}
+				plan={workspaceRestorePending.plan}
+				busy={workspaceBackupBusy}
+				error={workspaceRestoreError}
+				onConfirm={() => void confirmWorkspaceRestore()}
+				onClose={() => {
+					if (workspaceBackupBusy) return;
+					workspaceRestorePending = null;
+					workspaceRestoreError = '';
 				}}
 			/>
 		{/await}

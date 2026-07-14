@@ -20,7 +20,9 @@ const deferredFeatureEntries = new Set([
 	'SessionPanel',
 	'FinishPanel',
 	'PasteChoiceDialog',
-	'GifExplodeDialog'
+	'GifExplodeDialog',
+	'DelimitedImportDialog',
+	'WorkspaceRestoreDialog'
 ]);
 
 async function excludeDeferredFeaturesFromPrecache(

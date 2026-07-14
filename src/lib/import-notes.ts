@@ -106,6 +106,19 @@ export function normalizeImportedNote(raw: unknown, index: number): Note | strin
 			kind: 'html',
 			title: sourceRaw.title.trim().slice(0, 300) || 'HTML document'
 		};
+	} else if (
+		sourceRaw?.kind === 'table' &&
+		typeof sourceRaw.title === 'string' &&
+		(sourceRaw.format === 'csv' || sourceRaw.format === 'tsv')
+	) {
+		source = {
+			kind: 'table',
+			title: sourceRaw.title.trim().slice(0, 300) || 'Table',
+			format: sourceRaw.format,
+			...(typeof sourceRaw.row === 'number' && Number.isFinite(sourceRaw.row)
+				? { row: Math.min(1_000_000, Math.max(1, Math.floor(sourceRaw.row))) }
+				: {})
+		};
 	}
 	return {
 		id,

@@ -1,0 +1,30 @@
+{
+	"kind": "mash-backup",
+	"version": 6,
+	"scope": "workspace",
+	"exportedAt": 1,
+	"appVersion": "0.3.0-fixture",
+	"sessions": [
+		{
+			"id": "fixture-session",
+			"title": "Fixture desk",
+			"mode": "kept",
+			"status": "active",
+			"created": 1,
+			"modified": 1,
+			"lastMeaningfulActivityAt": 1
+		}
+	],
+	"notes": [],
+	"canvases": [],
+	"canvasItems": [],
+	"canvasEdges": [],
+	"operations": [],
+	"blobs": [],
+	"tombstones": [],
+	"dismissed": {},
+	"integrity": {
+		"algorithm": "SHA-256",
+		"digest": "ef6ae659db9238cbad453f8f3c1fb064e59c21656fbf975e0513ce4af03b411d"
+	}
+}

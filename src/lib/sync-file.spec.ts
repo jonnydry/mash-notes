@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, it, expect, beforeEach } from 'vitest';
 import 'fake-indexeddb/auto';
 import {
@@ -58,6 +59,17 @@ describe('sync-file', () => {
 		await db.delete();
 		await db.open();
 		localStorage.clear();
+	});
+
+	it.each([1, 2, 3, 4, 5])('keeps the retained v%s desk-bundle fixture readable', (version) => {
+		const raw = readFileSync(
+			new URL(`../../fixtures/formats/mash-bundles/v${version}/minimal.json`, import.meta.url),
+			'utf8'
+		);
+		const parsed = parseSyncBundle(raw);
+		expect(parsed.ok).toBe(true);
+		if (!parsed.ok) return;
+		expect(parsed.bundle.version).toBe(version);
 	});
 
 	it('round-trips a v4 sync bundle with desk and operation provenance', async () => {

@@ -38,7 +38,7 @@ Made in-house with care by the Mash team — Jonathan + Codex. 🥔`,
 ## Good to know
 
 - Scratch desks are temporary; kept desks stick around.
-- Everything lives in this browser — Settings has sync-bundle backup and import.
+- Everything lives in this browser — Settings has workspace backup and restore.
 - Trash is recoverable. Pin what matters; folders and tags are optional.
 
 Made in-house with care by the Mash team — Jonathan + Codex. 🥔`,
@@ -57,7 +57,7 @@ This is a desk for the half-formed stuff: scraps, PDFs, rambles, and the good id
 ## House rules
 
 - Scratch desks are for trying things; kept desks are for what you want to keep.
-- It all lives in this browser — Settings has sync-bundle backup when you want a spare copy.
+- It all lives in this browser — Settings has workspace backup when you want a spare copy.
 - Trash is recoverable. Pin the keepers. Folders and tags are seasoning, not the meal.
 
 Have fun — and if it gets messy, that is kind of the point.`,
@@ -76,7 +76,7 @@ Think of this as a kitchen counter for half-baked thoughts: scraps, PDFs, ramble
 ## House rules
 
 - Scratch desks are for experiments. Kept desks are for the keepers.
-- Everything lives in this browser — Settings has a sync-bundle backup when you want a spare serving.
+- Everything lives in this browser — Settings has workspace backup when you want a spare serving.
 - Trash is recoverable. Pin the good stuff. Folders and tags are optional seasoning.
 
 Go make a beautiful mess. Scoop believes in you.`,
@@ -95,7 +95,7 @@ This desk is my favorite counter for half-baked thoughts: scraps, PDFs, rambles,
 ## House rules
 
 - Scratch desks are for experiments. Kept desks are for the keepers.
-- Everything lives in this browser — Settings has a sync-bundle backup when you want a spare serving.
+- Everything lives in this browser — Settings has workspace backup when you want a spare serving.
 - Trash is recoverable. Pin the good stuff. Folders and tags are optional seasoning.
 
 Go make a beautiful mess. I believe in you.`
@@ -115,7 +115,7 @@ When a few notes feel related, **Mash** them into one draft. Unmash if you get a
 
 **House rules (from me)**
 
-Scratch desks are for experiments. Kept desks stick around. Everything lives in this browser — Settings has a sync-bundle backup if you want a spare serving. Trash is recoverable. Pin the keepers. Folders and tags are optional seasoning.
+Scratch desks are for experiments. Kept desks stick around. Everything lives in this browser — Settings has workspace backup if you want a spare serving. Trash is recoverable. Pin the keepers. Folders and tags are optional seasoning.
 
 Anyway — make a beautiful mess. I'll be right here.`;
 
