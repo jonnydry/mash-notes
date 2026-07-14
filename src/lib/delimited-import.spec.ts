@@ -40,6 +40,14 @@ describe('delimited intake', () => {
 		});
 	});
 
+	it('escapes backslashes before markdown syntax in row-card labels', () => {
+		const result = parseDelimitedText('Name,Pa\\*th\nAlpha,x', 'ideas.csv');
+		if (!result.ok) throw new Error(result.error);
+		const drafts = draftsFromDelimited(result.analysis, 'rows', 0);
+		if (typeof drafts === 'string') throw new Error(drafts);
+		expect(drafts[0]?.body).toBe(String.raw`**Pa\\\*th:** x`);
+	});
+
 	it('escapes markdown table separators', () => {
 		const result = parseDelimitedText('Name,Value\nA,"x|y"', 'ideas.csv');
 		if (!result.ok) throw new Error(result.error);

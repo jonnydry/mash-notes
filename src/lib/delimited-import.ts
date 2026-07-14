@@ -175,6 +175,10 @@ function markdownCell(value: string): string {
 	return value.trim().replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\n+/g, ' / ');
 }
 
+function markdownLabel(value: string): string {
+	return value.replace(/\\/g, '\\\\').replace(/\*/g, '\\*');
+}
+
 export function delimitedTableBody(analysis: DelimitedAnalysis): string | null {
 	const header = `| ${analysis.headers.map(markdownCell).join(' | ')} |`;
 	const divider = `| ${analysis.headers.map(() => '---').join(' | ')} |`;
@@ -213,7 +217,7 @@ export function draftsFromDelimited(
 		const lines = analysis.headers.flatMap((header, columnIndex) => {
 			if (columnIndex === safeTitleColumn) return [];
 			const value = fieldValue(row[columnIndex] ?? '');
-			return value ? [`**${header.replace(/\*/g, '\\*')}:** ${value}`] : [];
+			return value ? [`**${markdownLabel(header)}:** ${value}`] : [];
 		});
 		return {
 			title,
