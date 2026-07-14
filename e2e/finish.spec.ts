@@ -108,7 +108,7 @@ test.describe('Consolidated Finish takeaway', () => {
 		await expect(finish.getByRole('status')).toContainText('for printing or PDF');
 
 		const bundleDownload = page.waitForEvent('download');
-		await finish.getByRole('button', { name: /MASH bundle/ }).click();
+		await finish.getByRole('button', { name: /Desk bundle/ }).click();
 		const bundle = await bundleDownload;
 		const bundlePath = path.join(os.tmpdir(), `mash-finish-${Date.now()}.json`);
 		await bundle.saveAs(bundlePath);

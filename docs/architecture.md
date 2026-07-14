@@ -27,7 +27,11 @@ Set operators record input IDs, output IDs, timestamps, and bounded payload meta
 
 ### Portability
 
-Content exports produce Markdown, PDF, or PNG. Versioned MASH bundles preserve the broader local model, including sessions, canvases, relationships, operation history, and visual assets.
+Content exports produce Markdown, PDF, or PNG. A versioned desk bundle preserves one active working
+session. A workspace backup preserves every local session covered by the v6 contract, including
+session lifecycle, canvases, relationships, operation history, tombstones, and referenced visual
+assets. Workspace backups are serialized, reparsed, count-checked, and protected by a SHA-256
+corruption digest before download.
 
 ## Data flow
 
@@ -38,6 +42,8 @@ Content exports produce Markdown, PDF, or PNG. Versioned MASH bundles preserve t
 5. UI stores refresh the active desk and local search index.
 6. Finish/export adapters serialize a selected scope without mutating lifecycle state.
 7. A separate Finish commit applies keep, leave, or clear decisions transactionally where possible.
+8. Workspace restore validates the complete file, builds a read-only impact plan, and only writes
+   after explicit confirmation.
 
 ## Safety design
 
@@ -47,6 +53,8 @@ Content exports produce Markdown, PDF, or PNG. Versioned MASH bundles preserve t
 - File parsing is lazy-loaded to keep initial startup small and reduce exposure before a feature is invoked.
 - Synchronization and session writes are serialized to avoid lost updates.
 - Storage failures preserve an export path instead of trapping work in a broken local state.
+- Workspace backup digests detect accidental corruption; they are not signatures and do not make an
+  untrusted backup authoritative.
 
 ## Performance design
 
@@ -57,5 +65,6 @@ Heavy readers, PDF tooling, board-image export, dialogs, and non-default fonts a
 - Vitest covers parsers, sanitizers, stores, lifecycle logic, geometry, operators, export planning, and failure paths.
 - Svelte Check and TypeScript validate component and application contracts.
 - ESLint and Prettier enforce repository hygiene.
-- Playwright covers the main user workflow, accessibility behaviors, readers, file intake, session lifecycle, export, mobile layout, and sync.
+- Playwright covers the main user workflow, accessibility behaviors, readers, file intake, session
+  lifecycle, CSV/TSV intake, verified backup/restore, export, mobile layout, and desk-bundle import.
 - Production builds and bundle budgets guard deployability and startup weight.

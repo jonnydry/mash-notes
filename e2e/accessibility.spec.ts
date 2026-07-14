@@ -20,7 +20,11 @@ test.describe('Modal focus and announcements', () => {
 		await page.keyboard.press('Shift+Tab');
 		await expect(desks.getByRole('button', { name: 'Refresh' })).toBeFocused();
 		await page.keyboard.press('Shift+Tab');
+		await expect(desks.getByRole('button', { name: 'Back up' })).toBeFocused();
+		await page.keyboard.press('Shift+Tab');
 		await expect(desks.locator('select')).toBeFocused();
+		await page.keyboard.press('Tab');
+		await expect(desks.getByRole('button', { name: 'Back up' })).toBeFocused();
 		await page.keyboard.press('Tab');
 		await expect(desks.getByRole('button', { name: 'Refresh' })).toBeFocused();
 		await page.keyboard.press('Tab');

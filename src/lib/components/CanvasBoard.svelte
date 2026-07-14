@@ -3,6 +3,7 @@
 	import { SvelteSet } from 'svelte/reactivity';
 	import { notePreview } from '$lib/format';
 	import { parseEmbeddedNoteImage } from '$lib/markdown';
+	import { DROP_FORMAT_HINT } from '$lib/file-intake';
 	import {
 		loadCanvasViewport,
 		saveCanvasViewport,
@@ -2350,6 +2351,17 @@
 									<FileText class="h-2.5 w-2.5 shrink-0" />
 									<span class="truncate">{note.source.title}</span>
 								</div>
+							{:else if note.source?.kind === 'table'}
+								<div
+									class="mash-card-source mash-type-micro mt-2 flex items-center gap-1 border-t pt-1.5"
+									style="border-color: var(--mash-card-edge); color: var(--mash-accent);"
+									title="Imported from {note.source.title}"
+								>
+									<FileText class="h-2.5 w-2.5 shrink-0" />
+									<span class="truncate">
+										{note.source.title}{note.source.row ? ` · row ${note.source.row}` : ''}
+									</span>
+								</div>
 							{/if}
 							{#if note.mashedFrom?.length}
 								<div
@@ -2594,7 +2606,7 @@
 				</p>
 				{#if isFileDragOver}
 					<p class="mash-empty-copy mash-type-body mt-2 max-w-[18rem] leading-relaxed">
-						PDF, Markdown, text, note JSON, or a Mash sync bundle
+						PDF, Word, HTML, images, Markdown, text, CSV/TSV, or MASH JSON
 					</p>
 				{:else if !isExternalDragOver}
 					<p class="mash-empty-copy mash-type-body mt-2 max-w-[17rem] leading-relaxed">
@@ -2655,7 +2667,7 @@
 				>
 					<FileUp size={28} strokeWidth={1.8} aria-hidden="true" />
 					<p class="mash-display mt-2 text-lg font-medium">Drop files to import</p>
-					<p class="mash-type-caption mt-1">.pdf, .md, .markdown, .txt, or Mash .json</p>
+					<p class="mash-type-caption mt-1">{DROP_FORMAT_HINT}</p>
 				</div>
 			{/if}
 		</div>

@@ -44,11 +44,15 @@ Browser storage can fail because of quota pressure, private-mode restrictions, d
 - avoid reporting an export or lifecycle change as successful when it failed;
 - keep destructive actions explicit.
 
-These safeguards are not a substitute for an off-device backup. Export a MASH bundle for portable recovery.
+These safeguards are not a substitute for an off-device backup. Create a workspace backup for complete portable recovery; a desk bundle only covers the active working session.
 
 ## Portable copies
 
 Mash exports data only after a user action. Downloads and clipboard writes remain subject to browser permissions and policies. Portable files may contain private note text, filenames, source URLs, visual assets, relationships, and operation history. Treat them with the same care as the original material.
+
+Workspace backups are validated and given a SHA-256 digest before download. That digest detects
+accidental corruption; it is not encryption, authentication, or proof of who created a file. Restore
+still treats every selected backup as untrusted input and previews its impact before writing.
 
 ## Self-hosting
 

@@ -1,7 +1,7 @@
 /**
  * File-based sync transport on top of LWW merge.
- * Bundle v4 includes notes + desk + tombstones + operation provenance.
- * v3, v2, and v1 still import.
+ * Desk bundle v5 includes notes, layout, tombstones, operation provenance,
+ * and referenced visual assets. Versions 1 through 4 still import.
  */
 import type {
 	Canvas,
@@ -389,7 +389,7 @@ function normalizeSyncBlobs(raw: unknown): SyncBlob[] | string {
 	return out;
 }
 
-function decodeSyncBlobs(blobs: SyncBlob[] | undefined): NoteBlob[] {
+export function decodeSyncBlobs(blobs: SyncBlob[] | undefined): NoteBlob[] {
 	if (!blobs?.length) return [];
 	const decoded: NoteBlob[] = [];
 	const created = Date.now();
@@ -487,9 +487,10 @@ function normalizeOperations(raw: unknown): Operation[] | string {
 }
 
 export function parseSyncBundle(
-	raw: string
+	raw: string,
+	options?: { maxChars?: number }
 ): { ok: true; bundle: SyncBundle } | { ok: false; error: string } {
-	if (raw.length > SYNC_BUNDLE_MAX_CHARS) {
+	if (raw.length > (options?.maxChars ?? SYNC_BUNDLE_MAX_CHARS)) {
 		return { ok: false, error: 'Sync file too large' };
 	}
 	let data: unknown;

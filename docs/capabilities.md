@@ -22,6 +22,7 @@ Mash is a temporary local workbench. Its feature set is organized around getting
 - Import up to 50 images in one action.
 - Extract a still or up to 36 evenly sampled frames from an animated GIF.
 - Import up to 5,000 Markdown files from an Obsidian vault or Bear export, subject to per-file and total-size limits.
+- Preview CSV/TSV files up to 2 MiB, then create up to 200 row cards or one bounded Markdown table card.
 
 ## Workbench
 
@@ -44,7 +45,8 @@ Choose selected cards, active operation results, or the whole desk, then:
 - download a Markdown file;
 - print or save as PDF;
 - export a bounded PNG board image;
-- export a MASH bundle containing the desk and result history.
+- export a desk bundle containing the active desk and result history;
+- create a verified whole-workspace backup and preview its impact before restore.
 
 Finish separately controls what remains on the device:
 

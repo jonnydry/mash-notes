@@ -14,6 +14,8 @@
 		snapEnabled: boolean;
 		lastExportAt?: number | null;
 		lastImportAt?: number | null;
+		workspaceBackupStatus?: string;
+		workspaceBackupBusy?: boolean;
 		onClose: () => void;
 		onSnapChange: (on: boolean) => void;
 		onOrganize: () => void;
@@ -26,6 +28,9 @@
 		onOpenDocx?: () => void;
 		onOpenHtml?: () => void;
 		onOpenImage?: () => void;
+		onOpenDelimited?: () => void;
+		onBackupWorkspace?: () => void | Promise<void>;
+		onRestoreWorkspace?: () => void;
 		conflictCount?: number;
 		onOpenConflicts?: () => void;
 	}
@@ -34,6 +39,8 @@
 		snapEnabled,
 		lastExportAt = null,
 		lastImportAt = null,
+		workspaceBackupStatus = 'Backup status unavailable',
+		workspaceBackupBusy = false,
 		onClose,
 		onSnapChange,
 		onOrganize,
@@ -46,6 +53,9 @@
 		onOpenDocx,
 		onOpenHtml,
 		onOpenImage,
+		onOpenDelimited,
+		onBackupWorkspace,
+		onRestoreWorkspace,
 		conflictCount = 0,
 		onOpenConflicts
 	}: Props = $props();
@@ -221,17 +231,50 @@
 		<section class="mash-settings-section">
 			<h2 class="mash-settings-heading">Data</h2>
 			<p class="mash-settings-hint mash-settings-hint--lead">
-				Everything stays in this browser. Sync is a file you move yourself — no cloud, no accounts.
+				Everything stays in this browser. Backups are files you move yourself — no cloud, no
+				accounts.
 			</p>
 			<div class="mash-settings-sync-meta" data-testid="sync-hygiene">
 				<div class="mash-settings-row">
-					<span class="mash-settings-label">Last export</span>
+					<span class="mash-settings-label">Workspace backup</span>
+					<span class="mash-settings-value" data-testid="workspace-backup-status">
+						{workspaceBackupStatus}
+					</span>
+				</div>
+				{#if onBackupWorkspace || onRestoreWorkspace}
+					<div class="mash-settings-actions">
+						{#if onBackupWorkspace}
+							<button
+								type="button"
+								class="mash-settings-action"
+								data-testid="backup-workspace"
+								disabled={workspaceBackupBusy}
+								onclick={onBackupWorkspace}
+							>
+								{workspaceBackupBusy ? 'Preparing backup…' : 'Back up workspace…'}
+							</button>
+						{/if}
+						{#if onRestoreWorkspace}
+							<button
+								type="button"
+								class="mash-settings-action"
+								data-testid="restore-workspace"
+								disabled={workspaceBackupBusy}
+								onclick={onRestoreWorkspace}
+							>
+								Restore workspace backup…
+							</button>
+						{/if}
+					</div>
+				{/if}
+				<div class="mash-settings-row">
+					<span class="mash-settings-label">Last desk bundle</span>
 					<span class="mash-settings-value" data-testid="sync-last-export">
 						{lastExportAt != null ? formatNoteTimestamp(lastExportAt) : 'Never'}
 					</span>
 				</div>
 				<div class="mash-settings-row">
-					<span class="mash-settings-label">Last import</span>
+					<span class="mash-settings-label">Last desk import</span>
 					<span class="mash-settings-value" data-testid="sync-last-import">
 						{lastImportAt != null ? formatNoteTimestamp(lastImportAt) : 'Never'}
 					</span>
@@ -284,6 +327,16 @@
 						Open image…
 					</button>
 				{/if}
+				{#if onOpenDelimited}
+					<button
+						type="button"
+						class="mash-settings-action"
+						data-testid="settings-open-delimited"
+						onclick={onOpenDelimited}
+					>
+						Open CSV/TSV table…
+					</button>
+				{/if}
 				<button type="button" class="mash-settings-action" onclick={onImportJson}>
 					Import notes from JSON…
 				</button>
@@ -291,10 +344,10 @@
 					Export all as JSON
 				</button>
 				<button type="button" class="mash-settings-action" onclick={onImportSync}>
-					Import sync bundle…
+					Import desk bundle…
 				</button>
 				<button type="button" class="mash-settings-action" onclick={onExportSync}>
-					Export sync bundle…
+					Export desk bundle…
 				</button>
 			</div>
 		</section>

@@ -130,7 +130,7 @@
 		},
 		{
 			kind: 'bundle',
-			label: 'MASH bundle',
+			label: 'Desk bundle',
 			detail: 'Whole desk + result history',
 			icon: Package
 		}

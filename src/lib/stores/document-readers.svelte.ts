@@ -6,10 +6,11 @@ import type { Component } from 'svelte';
 import type { DocxClipping } from '$lib/docx-clipping';
 import type { HtmlClipping } from '$lib/html-clipping';
 import type { PdfClipping } from '$lib/pdf-clipping';
+import { FILE_FORMAT_LIMITS } from '$lib/file-intake';
 
-const MAX_PDF_BYTES = 50 * 1024 * 1024;
-const MAX_DOCX_BYTES = 8_000_000;
-const MAX_HTML_BYTES = 5 * 1024 * 1024;
+const MAX_PDF_BYTES = FILE_FORMAT_LIMITS.pdfBytes;
+const MAX_DOCX_BYTES = FILE_FORMAT_LIMITS.docxBytes;
+const MAX_HTML_BYTES = FILE_FORMAT_LIMITS.htmlBytes;
 
 export type DocumentReadersOpts = {
 	flashToast: (msg: string, ms?: number) => void;

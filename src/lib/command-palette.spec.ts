@@ -30,6 +30,8 @@ function makeDeps(overrides: Partial<CommandPaletteDeps> = {}): CommandPaletteDe
 		clickDocxInput: vi.fn(),
 		clickHtmlInput: vi.fn(),
 		clickImageInput: vi.fn(),
+		clickDelimitedInput: vi.fn(),
+		clickWorkspaceRestoreInput: vi.fn(),
 		clickImportInput: vi.fn(),
 		clickMarkdownImportInput: vi.fn(),
 		clickSyncInput: vi.fn(),
@@ -44,6 +46,7 @@ function makeDeps(overrides: Partial<CommandPaletteDeps> = {}): CommandPaletteDe
 		downloadSelectionMarkdown: vi.fn(),
 		exportAllJson: vi.fn(),
 		exportSyncBundle: vi.fn(),
+		exportWorkspaceBackup: vi.fn(),
 		getNotes: () => notes,
 		getSelectionIds: () => [],
 		getSelectedId: () => null,
@@ -87,7 +90,10 @@ describe('buildBasePaletteActions', () => {
 		expect(byId['open-pdf-reader']).toBeTruthy();
 		expect(byId['open-word-document']).toBeTruthy();
 		expect(byId['open-html-document']).toBeTruthy();
-		expect(byId['import-sync-bundle']).toBeTruthy();
+		expect(byId['open-csv-tsv-table']).toBeTruthy();
+		expect(byId['import-desk-bundle']).toBeTruthy();
+		expect(byId['back-up-workspace']).toBeTruthy();
+		expect(byId['restore-workspace-backup']).toBeTruthy();
 	});
 
 	it('closes the palette before opening external pickers', () => {

@@ -27,6 +27,7 @@ export async function wipeIndexedDb(page: Page) {
 		try {
 			localStorage.removeItem('mash.openSpaces');
 			localStorage.removeItem('mash.syncHygiene');
+			localStorage.removeItem('mash.workspaceBackupRecord');
 			// Suppress the post-Keep persistence confirm so Finish/desks e2e aren't blocked
 			localStorage.setItem('mash.storagePersistencePrompted', '1');
 		} catch {

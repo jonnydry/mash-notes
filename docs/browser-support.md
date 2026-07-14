@@ -33,7 +33,7 @@ Before a tagged release, verify at minimum:
 3. Drop or pick one supported document and one supported image.
 4. Select, transform, undo, and redo or Unmash.
 5. Copy and download Markdown.
-6. Export and re-import a MASH bundle.
+6. Export and re-import a desk bundle, then create and preview a workspace backup.
 7. Reload after the application has been cached and confirm the desk remains available.
 8. Exercise storage and export failure fallbacks where the browser permits simulation.
 

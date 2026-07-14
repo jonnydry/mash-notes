@@ -41,4 +41,9 @@ Mash's application-level security goals are:
 - preserve an export path when browser persistence fails;
 - ship restrictive production security headers and a Content Security Policy.
 
+Workspace backup files are bounded, structurally validated, reference-checked, and checked against
+their SHA-256 corruption digest before the restore preview appears. The digest is not a signature:
+users should only restore files whose origin they trust, and portable files should be protected like
+the source material they contain.
+
 See [Privacy and storage](docs/privacy-and-storage.md) for the data model and trust assumptions.

@@ -95,10 +95,10 @@ export function syncBackupHint(
 	now = Date.now()
 ): string | null {
 	if (prefs.lastExportAt == null) {
-		return 'No sync export yet — export a bundle to back up this browser.';
+		return 'No desk bundle exported yet.';
 	}
 	if (now - prefs.lastExportAt > SYNC_BACKUP_REMINDER_MS) {
-		return 'Last sync export was over a week ago — consider exporting again.';
+		return 'Last desk bundle export was over a week ago.';
 	}
 	return null;
 }

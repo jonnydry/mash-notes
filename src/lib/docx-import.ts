@@ -1,4 +1,6 @@
-export const MAX_DOCX_BYTES = 8_000_000;
+import { FILE_FORMAT_LIMITS } from './file-intake';
+
+export const MAX_DOCX_BYTES = FILE_FORMAT_LIMITS.docxBytes;
 const MAX_DOCX_ENTRIES = 5000;
 const MAX_DOCX_ENTRY_BYTES = 32 * 1024 * 1024;
 const MAX_DOCX_UNCOMPRESSED_BYTES = 64 * 1024 * 1024;

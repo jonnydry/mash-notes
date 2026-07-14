@@ -622,7 +622,7 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 
 			if (!importOpts?.force && isStaleSyncBundle(parsed.bundle.exportedAt)) {
 				opts.askConfirm({
-					title: 'Older sync bundle?',
+					title: 'Older desk bundle?',
 					message:
 						'This file is older than your last export on this device. Importing may overwrite newer notes with older ones.\n\nImport anyway?',
 					confirmLabel: 'Import anyway',
@@ -849,7 +849,8 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 				(localValue as { kind?: unknown }).kind === 'docx' ||
 				(localValue as { kind?: unknown }).kind === 'image' ||
 				(localValue as { kind?: unknown }).kind === 'url' ||
-				(localValue as { kind?: unknown }).kind === 'html')
+				(localValue as { kind?: unknown }).kind === 'html' ||
+				(localValue as { kind?: unknown }).kind === 'table')
 		) {
 			updated = { ...target, source: localValue as Note['source'], modified: Date.now() };
 		} else {
