@@ -43,6 +43,7 @@
 	import TagSuggestField from '$lib/components/TagSuggestField.svelte';
 	import { buildLinkSummaryMap } from '$lib/links';
 	import { isPermanentMashWelcomeNote, MASH_SPOON_LOGO } from '$lib/canvas-empty-state';
+	import { DEFAULT_EMPTY_CANVAS_MASCOT, type EmptyCanvasMascot } from '$lib/empty-canvas-mascot';
 	import {
 		flowEdgePath,
 		flowOutlineMarkdown,
@@ -119,14 +120,7 @@
 		/** Brief status toast (Snap overlap hint, Copy outline, etc.). */
 		onToast?: (msg: string) => void;
 		/** Empty-state mascot + copy for this board (desk vs pinned). */
-		emptyMascot?: {
-			src: string;
-			srcset?: string;
-			width?: number;
-			height?: number;
-			title: string;
-			copy: string;
-		};
+		emptyMascot?: EmptyCanvasMascot;
 		/** Override whether the board mascot/guidance is visible behind cards. */
 		showEmptyState?: boolean;
 		/** First-session empty-desk demo (Try a mash). */
@@ -211,14 +205,7 @@
 		onRelayoutFlow,
 		onClearSelection,
 		onToast,
-		emptyMascot = {
-			src: '/icons/mash-empty-mascot.png',
-			srcset: '/icons/mash-empty-mascot.png 1x, /icons/mash-empty-mascot@2x.png 2x',
-			width: 116,
-			height: 200,
-			title: 'Paste, drop, or type',
-			copy: 'Press ⌘/Ctrl+V for text, drop files, or use New note.'
-		},
+		emptyMascot = DEFAULT_EMPTY_CANVAS_MASCOT,
 		showEmptyState,
 		showTryAMash = false,
 		tryAMash,
@@ -2587,6 +2574,7 @@
 					{isExternalDragOver ? 'mash-empty-state-active scale-[1.03]' : ''}"
 			>
 				<img
+					data-testid="empty-canvas-mascot"
 					src={emptyMascot.src}
 					srcset={emptyMascot.srcset}
 					alt=""

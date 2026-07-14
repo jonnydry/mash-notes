@@ -108,6 +108,7 @@
 	import { createDeskPlacement } from '$lib/desk-placement';
 	import type { PeelConflictRow } from '$lib/components/PeelScanner.svelte';
 	import { shouldShowCanvasEmptyState } from '$lib/canvas-empty-state';
+	import { chooseEmptyCanvasMascotForVisit } from '$lib/empty-canvas-mascot';
 	import {
 		DROP_FORMAT_ERROR_HINT,
 		DROP_FORMAT_HINT,
@@ -175,6 +176,7 @@
 	let spacesOverviewIgnoreUntil = 0;
 	/** Sync from localStorage at init (ssr=false) so CanvasBoard never paints Free first. */
 	let snapEnabled = $state(loadSnapPref());
+	const visitEmptyMascot = chooseEmptyCanvasMascotForVisit();
 	let searchDropdownOpen = $state(false);
 	let searchHighlight = $state(0);
 	let searchWrapEl = $state<HTMLDivElement | null>(null);
@@ -2183,7 +2185,7 @@
 								title: 'Pin notes here',
 								copy: 'Drop favorites onto this board — or pin from any sticky.'
 							}
-						: undefined}
+						: visitEmptyMascot}
 					showEmptyState={showCanvasEmptyState}
 					{showTryAMash}
 					tryAMash={runTryAMash}
