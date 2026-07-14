@@ -63,6 +63,15 @@ export async function initSearchIndex(): Promise<void> {
 	isInitialized = true;
 }
 
+/** Rehydrate after an atomic whole-workspace replacement or restore. */
+export async function rebuildSearchIndex(): Promise<void> {
+	const notes = await getAllNotesForSearchIndex();
+	const docs = notes.map(prepareDocForIndex);
+	miniSearch.removeAll();
+	miniSearch.addAll(docs);
+	isInitialized = true;
+}
+
 // =============================================================================
 // INCREMENTAL UPDATES — called by the UI layer after DB mutations
 // =============================================================================

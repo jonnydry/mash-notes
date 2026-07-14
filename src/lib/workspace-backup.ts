@@ -353,7 +353,10 @@ function parseWorkspaceBackupValue(data: unknown): WorkspaceBackupInspection {
 		blobs: data.blobs
 	};
 	const parsed = parseSyncBundle(JSON.stringify(synthetic), {
-		maxChars: WORKSPACE_BACKUP_MAX_CHARS
+		maxChars: WORKSPACE_BACKUP_MAX_CHARS,
+		// Whole-workspace backups can contain many individually bounded desk images.
+		// Their serialized file limit remains the aggregate safety boundary.
+		maxTotalBlobBase64Chars: WORKSPACE_BACKUP_MAX_CHARS
 	});
 	if (!parsed.ok) return { ok: false, error: parsed.error };
 

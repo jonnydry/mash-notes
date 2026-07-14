@@ -1359,11 +1359,13 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 
 /* Vertical side dock — fixed glass; icons grow out like macOS */
 .mash-side-dock {
+	--dock-active-x: 8px;
+	--dock-active-y: 10px;
 	position: relative;
 	display: flex;
 	flex-direction: column;
 	align-items: center;
-	width: 58px;
+	width: 60px;
 	gap: 4px;
 	padding: 10px 8px;
 	border-radius: 999px;
@@ -1395,51 +1397,74 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	background: var(--mash-divider);
 	flex-shrink: 0;
 }
+.mash-side-dock-active-plate {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 44px;
+	height: 44px;
+	border-radius: 12px;
+	background: var(--mash-accent-wash);
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mash-accent) 28%, transparent);
+	opacity: 0;
+	pointer-events: none;
+	transform: translate3d(var(--dock-active-x), var(--dock-active-y), 0);
+	transform-origin: center;
+	z-index: 0;
+	transition:
+		transform 220ms cubic-bezier(0.2, 0.9, 0.24, 1.18),
+		opacity 120ms ease,
+		background 180ms ease;
+}
+.mash-side-dock.has-active-item .mash-side-dock-active-plate {
+	opacity: 1;
+}
+.mash-side-dock:has(.mash-side-dock-item.is-active:hover) .mash-side-dock-active-plate,
+.mash-side-dock:has(.mash-side-dock-item.is-active.is-hot) .mash-side-dock-active-plate {
+	background: color-mix(in srgb, var(--mash-accent) 20%, transparent);
+}
 .mash-side-dock-item {
 	--dock-scale: 1;
 	position: relative;
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	width: 42px;
-	height: 42px;
+	width: 44px;
+	height: 44px;
 	flex-shrink: 0;
 	border-radius: 12px;
-	/* Steady icon tone — scale + soft wash, never neon flash. */
 	color: var(--mash-dock-ink);
 	background: transparent;
 	border: none;
 	cursor: pointer;
-	transform: scale(var(--dock-scale));
-	transform-origin: left center;
-	will-change: transform;
 	z-index: 1;
 	transition:
-		color 160ms ease,
-		background 160ms ease,
-		box-shadow 160ms ease;
+		color 180ms ease,
+		background 180ms ease;
 }
-.mash-side-dock.is-magnifying .mash-side-dock-item.is-hot {
-	z-index: 3;
-}
-.mash-side-dock.is-settling .mash-side-dock-item {
+.mash-side-dock-item::before {
+	content: '';
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	background: transparent;
+	box-shadow: none;
+	pointer-events: none;
+	transform: scale(1);
+	transform-origin: center;
+	z-index: 0;
 	transition:
-		transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
-		color 160ms ease,
-		background 160ms ease,
-		box-shadow 160ms ease;
+		transform 120ms cubic-bezier(0.22, 1, 0.36, 1),
+		background 180ms ease,
+		box-shadow 180ms ease;
 }
 .mash-side-dock-item .mash-side-dock-icon {
 	display: flex;
-	/* Soft silhouette when icons swell past the glass onto cream. */
-	filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35));
-	transition:
-		filter 160ms ease,
-		opacity 160ms ease,
-		transform 150ms ease;
-}
-[data-theme='light'] .mash-side-dock-item .mash-side-dock-icon {
-	filter: drop-shadow(0 1px 1px rgba(40, 28, 12, 0.12));
+	position: relative;
+	z-index: 1;
+	transform: translateY(0) scale(var(--dock-scale));
+	transform-origin: center;
+	transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .mash-side-dock-item.is-hot:not(.is-accent),
 .mash-side-dock-item:hover:not(.is-accent) {
@@ -1449,56 +1474,47 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 .mash-side-dock-item.is-hot:not(.is-accent) {
 	background: var(--mash-hover-fill);
 }
-.mash-side-dock-item.is-hot:not(.is-accent) .mash-side-dock-icon,
-.mash-side-dock-item:hover:not(.is-accent) .mash-side-dock-icon {
-	opacity: 1;
-	filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.45));
-}
-[data-theme='light'] .mash-side-dock-item.is-hot:not(.is-accent) .mash-side-dock-icon,
-[data-theme='light'] .mash-side-dock-item:hover:not(.is-accent) .mash-side-dock-icon {
-	filter: drop-shadow(0 2px 3px rgba(40, 28, 12, 0.18));
+.mash-side-dock-item.is-hot .mash-side-dock-icon {
+	transform: translateY(-1px) scale(var(--dock-scale));
 }
 .mash-side-dock-item.is-active:not(.is-accent) {
 	color: var(--mash-dock-ink-active);
-	background: var(--mash-accent-wash);
-	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mash-accent) 28%, transparent);
-}
-.mash-side-dock-item.is-active:not(.is-accent):hover,
-.mash-side-dock-item.is-active.is-hot:not(.is-accent) {
-	background: color-mix(in srgb, var(--mash-accent) 20%, transparent);
+	background: transparent;
 }
 .mash-side-dock-item.is-accent {
 	color: var(--mash-accent-ink);
+}
+.mash-side-dock-item.is-accent::before {
 	background: var(--mash-accent);
 	box-shadow:
 		0 3px 12px var(--mash-accent-glow),
 		inset 0 1px 0 rgba(255, 255, 255, 0.16);
 }
-.mash-side-dock-item.is-accent:hover {
+.mash-side-dock-item.is-accent:hover::before {
 	background: var(--mash-accent-bright);
 	box-shadow:
 		0 4px 14px var(--mash-accent-glow),
 		inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
-.mash-side-dock-item.is-accent .mash-side-dock-icon {
-	filter: none;
+.mash-side-dock-item.is-accent:active::before {
+	transform: scale(0.94);
 }
-.mash-side-dock-item.is-accent:active {
-	transform: scale(calc(var(--dock-scale) * 0.94));
+.mash-side-dock-item.is-accent:active .mash-side-dock-icon {
+	transform: translateY(0) scale(calc(var(--dock-scale) * 0.94));
 }
 .mash-side-dock-item:active:not(.is-accent) .mash-side-dock-icon {
-	transform: scale(0.92);
+	transform: translateY(0) scale(calc(var(--dock-scale) * 0.94));
+}
+.mash-side-dock-item.is-confirming::before {
+	animation: mash-dock-confirm 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.mash-side-dock-item.is-confirming .mash-side-dock-icon {
+	animation: mash-dock-confirm 220ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .mash-side-dock-item:focus-visible {
 	outline: none;
 	z-index: 4;
 	box-shadow:
-		0 0 0 2px var(--mash-bg),
-		0 0 0 4px var(--mash-accent-ring);
-}
-.mash-side-dock-item.is-active:not(.is-accent):focus-visible {
-	box-shadow:
-		inset 0 0 0 1px color-mix(in srgb, var(--mash-accent) 28%, transparent),
 		0 0 0 2px var(--mash-bg),
 		0 0 0 4px var(--mash-accent-ring);
 }
@@ -1526,49 +1542,50 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	box-shadow: 0 6px 16px color-mix(in srgb, var(--mash-bg) 55%, transparent);
 	opacity: 0;
 	pointer-events: none;
-	transform: translateX(-4px) scale(calc(1 / var(--dock-scale)));
+	transform: translateX(-4px);
 	transform-origin: left center;
 	transition:
-		opacity 150ms ease,
-		transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+		opacity 120ms ease,
+		transform 120ms cubic-bezier(0.22, 1, 0.36, 1);
 }
-.mash-side-dock-item.is-hot .mash-side-dock-label,
+.mash-side-dock-item.is-hot .mash-side-dock-label {
+	opacity: 1;
+	transform: translateX(0);
+	transition-delay: 220ms;
+}
 .mash-side-dock-item:focus-visible .mash-side-dock-label {
 	opacity: 1;
-	transform: translateX(0) scale(calc(1 / var(--dock-scale)));
-}
-.mash-side-dock-pip {
-	position: absolute;
-	left: 5px;
-	bottom: 5px;
-	width: 5px;
-	height: 5px;
-	border-radius: 999px;
-	background: var(--mash-accent-bright);
-	box-shadow: 0 0 0 2px var(--mash-pip-ring);
-	animation: mash-dock-pip 280ms ease-out;
+	transform: translateX(0);
+	transition-delay: 0ms;
 }
 .mash-dock-more,
 .mash-dock-more-menu {
 	display: none;
 }
-@keyframes mash-dock-pip {
+@keyframes mash-dock-confirm {
+	0% {
+		transform: scale(0.94);
+	}
+	55% {
+		transform: scale(1.035);
+	}
+	100% {
+		transform: scale(1);
+	}
+}
+@keyframes mash-dock-more-in {
 	from {
-		transform: scale(0);
 		opacity: 0;
+		transform: translateY(6px) scale(0.98);
 	}
 	to {
-		transform: scale(1);
 		opacity: 1;
+		transform: translateY(0) scale(1);
 	}
 }
 
 @media (prefers-reduced-motion: reduce) {
-	.mash-side-dock,
-	.mash-side-dock-item,
-	.mash-side-dock-item .mash-side-dock-icon,
-	.mash-side-dock-label,
-	.mash-side-dock-pip {
+	.mash-side-dock {
 		animation: none !important;
 		transition: none !important;
 	}
@@ -1588,7 +1605,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	box-shadow:
 		var(--mash-panel-shadow),
 		inset 0 1px 0 var(--mash-glass-highlight);
-	animation: mash-peel-in 160ms ease-out;
+	animation: mash-peel-in 180ms cubic-bezier(0.22, 1, 0.36, 1);
 	overflow: hidden;
 }
 @keyframes mash-peel-in {
@@ -3130,11 +3147,10 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 		gap: 3px;
 	}
 	.mash-dock-slot .mash-side-dock-item {
-		/* Usable tap targets ≥ 40px */
-		width: 42px;
-		height: 42px;
-		min-width: 42px;
-		min-height: 42px;
+		width: 44px;
+		height: 44px;
+		min-width: 44px;
+		min-height: 44px;
 	}
 	.mash-dock-slot .mash-dock-secondary,
 	.mash-dock-slot .mash-side-dock-spacer {
@@ -3160,6 +3176,8 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 			inset 0 1px 0 var(--mash-glass-highlight);
 		backdrop-filter: blur(18px) saturate(1.1);
 		-webkit-backdrop-filter: blur(18px) saturate(1.1);
+		transform-origin: bottom right;
+		animation: mash-dock-more-in 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
 	}
 	.mash-dock-more-menu button {
 		display: flex;
@@ -3201,14 +3219,6 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 		width: 8px;
 		height: 22px;
 		margin: 0 2px;
-	}
-	.mash-dock-slot .mash-side-dock-item {
-		transform-origin: center bottom;
-	}
-	.mash-dock-slot .mash-side-dock-pip {
-		left: 50%;
-		bottom: 4px;
-		transform: translateX(-50%);
 	}
 	.mash-dock-slot .mash-side-dock-label {
 		display: none;

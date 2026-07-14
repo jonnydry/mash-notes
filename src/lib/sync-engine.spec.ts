@@ -20,6 +20,7 @@ import {
 	removeNoteFromSearch,
 	searchNotes,
 	getSearchIndexSize,
+	rebuildSearchIndex,
 	resetSearchIndexForTests
 } from './search';
 
@@ -123,6 +124,18 @@ describe('MASH sync engine — DB ↔ search lifecycle', () => {
 		const results = searchNotes('persisted');
 		expect(results).toHaveLength(1);
 		expect(results[0].id).toBe(n1.id);
+	});
+
+	it('rebuilds after an atomic workspace replacement', async () => {
+		const stale = await createNote({ title: 'Before restore', body: 'stale workspace' });
+		addNoteToSearch(stale);
+		await db.notes.clear();
+		const restored = await createNote({ title: 'After restore', body: 'restored workspace' });
+
+		await rebuildSearchIndex();
+
+		expect(searchNotes('stale')).toHaveLength(0);
+		expect(searchNotes('restored').map((result) => result.id)).toEqual([restored.id]);
 	});
 
 	// =========================================================================

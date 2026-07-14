@@ -1,7 +1,12 @@
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
 	import { createNote, db, deleteNote, listOperationRecords } from '$lib/db';
-	import { addNoteToSearch, removeNoteFromSearch, searchNotes } from '$lib/search';
+	import {
+		addNoteToSearch,
+		rebuildSearchIndex,
+		removeNoteFromSearch,
+		searchNotes
+	} from '$lib/search';
 	import type { Note, Operation } from '$lib/types';
 	import {
 		Search,
@@ -364,6 +369,7 @@
 				.filter((session) => session.status === 'active')
 				.sort((a, b) => b.modified - a.modified)[0];
 			if (preferred) await sessionManager.switchTo(preferred.id);
+			await rebuildSearchIndex();
 			await library.loadNotes();
 			await canvas.loadContextCanvas('', preferred?.id);
 			await refreshOperationHistory();
@@ -670,6 +676,7 @@
 		getNotesById: () => library.notesById,
 		getCanvasKey: () => peel.canvasKey,
 		getSessionId: () => sessionManager.activeSession?.id ?? null,
+		getLoadedNotesSessionId: () => library.loadedSessionId,
 		onMeaningfulActivity: () => void sessionManager.recordMeaningfulActivity(),
 		onOperationChanged: () => refreshOperationHistory(),
 		ensureNotePinned: async (noteId) => {

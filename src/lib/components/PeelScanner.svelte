@@ -238,7 +238,7 @@
 			</div>
 			{#if onScopeFilter && scopeCounts}
 				<div
-					class="mash-peel-scope flex items-center gap-1 px-3 pb-2"
+					class="mash-peel-scope flex items-center gap-1 px-3 pt-1.5 pb-2"
 					role="group"
 					aria-label="Ingredient scope"
 					data-testid="peel-scope-filter"

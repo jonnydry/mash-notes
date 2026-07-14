@@ -145,6 +145,8 @@ export type CreateCanvasSessionOpts = {
 	getCanvasKey: () => string;
 	/** Owning lifecycle session. Canvas loading waits until this is available. */
 	getSessionId?: () => string | null;
+	/** Session whose note library has finished loading. Prevents startup/session-switch races. */
+	getLoadedNotesSessionId?: () => string | null;
 	onMeaningfulActivity?: () => void;
 	onOperationChanged?: () => void | Promise<void>;
 	/** Pin a note when dropped onto the Pinned canvas. */
@@ -226,9 +228,11 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		const context = {
 			key: opts.getCanvasKey(),
 			sessionId: opts.getSessionId?.() ?? null,
+			loadedNotesSessionId: opts.getLoadedNotesSessionId?.() ?? null,
 			membershipKey
 		};
 		if (opts.getSessionId && !context.sessionId) return;
+		if (opts.getLoadedNotesSessionId && context.loadedNotesSessionId !== context.sessionId) return;
 		const nextUndoContextKey = `${context.sessionId ?? ''}:${context.key}`;
 		if (nextUndoContextKey !== undoContextKey) {
 			undoContextKey = nextUndoContextKey;

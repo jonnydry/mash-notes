@@ -175,6 +175,7 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 	let bulkTagDraft = $state('');
 	let bulkFolderDraft = $state('');
 	let isLoading = $state(true);
+	let loadedSessionId = $state<string | null>(null);
 	let loadError = $state('');
 	let saveStatus = $state<'saved' | 'saving' | ''>('');
 	let writeError = $state('');
@@ -522,6 +523,7 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 		const seq = ++notesLoadSeq;
 		const expectedSessionId = opts.getActiveSessionId?.() ?? undefined;
 		isLoading = true;
+		loadedSessionId = null;
 		loadError = '';
 		try {
 			// One-shot: move legacy data-URL image bodies into noteBlobs, then
@@ -593,6 +595,7 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 							: extractWikilinks(n.body)
 				}))
 			);
+			loadedSessionId = expectedSessionId ?? null;
 		} catch (e) {
 			if (seq !== notesLoadSeq) return;
 			console.error('Failed to load notes', e);
@@ -1162,6 +1165,9 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 		},
 		set isLoading(v: boolean) {
 			isLoading = v;
+		},
+		get loadedSessionId() {
+			return loadedSessionId;
 		},
 		get loadError() {
 			return loadError;

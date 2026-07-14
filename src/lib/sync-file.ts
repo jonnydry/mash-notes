@@ -353,10 +353,15 @@ export async function buildSyncBundle(notes: Note[], sessionId?: string): Promis
 	};
 }
 
-function normalizeSyncBlobs(raw: unknown): SyncBlob[] | string {
+function normalizeSyncBlobs(
+	raw: unknown,
+	limits?: { maxBlobBase64Chars?: number; maxTotalBlobBase64Chars?: number }
+): SyncBlob[] | string {
 	if (raw == null) return [];
 	if (!Array.isArray(raw)) return 'Blobs must be an array';
 	if (raw.length > 5000) return 'Too many blobs in sync bundle';
+	const maxBlobBase64Chars = limits?.maxBlobBase64Chars ?? MAX_SYNC_BLOB_BASE64_CHARS;
+	const maxTotalBlobBase64Chars = limits?.maxTotalBlobBase64Chars ?? MAX_SYNC_BLOBS_BASE64_CHARS;
 	const out: SyncBlob[] = [];
 	const seenIds = new Set<string>();
 	let totalBase64Chars = 0;
@@ -372,11 +377,11 @@ function normalizeSyncBlobs(raw: unknown): SyncBlob[] | string {
 		if (!/^[A-Za-z0-9+/]+={0,2}$/.test(dataBase64) || dataBase64.length % 4 === 1) {
 			return `Blob ${i + 1} has invalid base64 data`;
 		}
-		if (dataBase64.length > MAX_SYNC_BLOB_BASE64_CHARS) {
+		if (dataBase64.length > maxBlobBase64Chars) {
 			return `Blob ${i + 1} is too large`;
 		}
 		totalBase64Chars += dataBase64.length;
-		if (totalBase64Chars > MAX_SYNC_BLOBS_BASE64_CHARS) {
+		if (totalBase64Chars > maxTotalBlobBase64Chars) {
 			return 'Image data in sync bundle is too large';
 		}
 		out.push({
@@ -489,7 +494,11 @@ function normalizeOperations(raw: unknown): Operation[] | string {
 
 export function parseSyncBundle(
 	raw: string,
-	options?: { maxChars?: number }
+	options?: {
+		maxChars?: number;
+		maxBlobBase64Chars?: number;
+		maxTotalBlobBase64Chars?: number;
+	}
 ): { ok: true; bundle: SyncBundle } | { ok: false; error: string } {
 	if (raw.length > (options?.maxChars ?? SYNC_BUNDLE_MAX_CHARS)) {
 		return { ok: false, error: 'Sync file too large' };
@@ -568,7 +577,7 @@ export function parseSyncBundle(
 
 	let blobs: SyncBlob[] | undefined;
 	if (version === SYNC_BUNDLE_VERSION) {
-		const blobResult = normalizeSyncBlobs(obj.blobs);
+		const blobResult = normalizeSyncBlobs(obj.blobs, options);
 		if (typeof blobResult === 'string') return { ok: false, error: blobResult };
 		blobs = blobResult;
 	}

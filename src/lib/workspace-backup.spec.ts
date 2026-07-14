@@ -215,6 +215,27 @@ describe('workspace backup', () => {
 		);
 	});
 
+	it('backs up multiple visual assets beyond the stricter desk-bundle aggregate limit', async () => {
+		const snapshot = fixtureSnapshot();
+		snapshot.assets = Array.from({ length: 5 }, (_, index) => ({
+			id: `workspace-asset-${index}`,
+			mime: 'image/png' as const,
+			bytes: new Uint8Array(1_000_000).fill(index + 1).buffer,
+			width: 100,
+			height: 100,
+			created: 20 + index
+		}));
+		snapshot.notes[0] = {
+			...snapshot.notes[0]!,
+			body: snapshot.assets
+				.map((asset, index) => `![Workspace asset ${index}](mash-blob:${asset.id})`)
+				.join('\n')
+		};
+		const result = await serializeAndVerifyWorkspaceBackup('0.3.0-test', snapshot);
+		expect(result.record.counts.assets).toBe(5);
+		expect(result.raw.length).toBeGreaterThan(6_500_000);
+	});
+
 	it('restores sessions, notes, canvas layout, and operations atomically', async () => {
 		const backup = await buildWorkspaceBackup('0.3.0-test', fixtureSnapshot());
 		const plan = await applyWorkspaceRestore(backup);

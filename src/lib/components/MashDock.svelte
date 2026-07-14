@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount, tick } from 'svelte';
 	import {
 		LayoutGrid,
 		Pin,
@@ -43,50 +44,56 @@
 		active: boolean;
 	};
 
+	let activeDockItem = $derived.by((): DockAction => {
+		if (settingsOpen) return 'settings';
+		if (linkedOpen) return 'linked';
+		if (tagsOpen) return 'tags';
+		if (foldersOpen) return 'folders';
+		if (isNavActive(currentFilter, 'pinned')) return 'pinned';
+		if (currentFilter.type === 'folder') return 'folders';
+		if (currentFilter.type === 'tag') return 'tags';
+		return 'all';
+	});
+
 	let items = $derived<DockItem[]>([
 		{
 			id: 'all',
 			label: 'Desk',
-			active:
-				isNavActive(currentFilter, 'all') &&
-				!foldersOpen &&
-				!tagsOpen &&
-				!linkedOpen &&
-				!settingsOpen
+			active: activeDockItem === 'all'
 		},
 		{
 			id: 'pinned',
 			label: 'Pinned',
-			active: isNavActive(currentFilter, 'pinned')
+			active: activeDockItem === 'pinned'
 		},
 		{
 			id: 'folders',
 			label: 'Folders',
-			active: foldersOpen || currentFilter.type === 'folder'
+			active: activeDockItem === 'folders'
 		},
 		{
 			id: 'tags',
 			label: 'Tags',
-			active: tagsOpen || currentFilter.type === 'tag'
+			active: activeDockItem === 'tags'
 		},
 		{
 			id: 'linked',
 			label: 'Linked',
-			active: linkedOpen
+			active: activeDockItem === 'linked'
 		},
 		{ id: 'new', label: 'New note', accent: true, active: false },
 		{ id: 'search', label: 'Search', active: false },
-		{ id: 'settings', label: 'Settings', active: settingsOpen }
+		{ id: 'settings', label: 'Settings', active: activeDockItem === 'settings' }
 	]);
 
 	let dockEl: HTMLElement | undefined = $state();
 	let magRaf = 0;
-	let leaveTimer = 0;
+	let confirmTimer = 0;
 	let mobileMoreOpen = $state(false);
 
-	const MAG_RADIUS = 80;
-	const MAG_PEAK = 0.32; // subtle swell — stays readable on the cream board
-	const ICON_SIZE = 42; // must match .mash-side-dock-item width/height
+	const MAG_RADIUS = 76;
+	const MAG_PEAK = 0.12;
+	const ICON_SIZE = 44; // must match .mash-side-dock-item width/height
 
 	function iconFor(id: DockAction) {
 		switch (id) {
@@ -177,11 +184,6 @@
 
 	function onPointerMove(e: PointerEvent) {
 		if (!dockEl || prefersReducedMotion()) return;
-		if (leaveTimer) {
-			clearTimeout(leaveTimer);
-			leaveTimer = 0;
-		}
-		dockEl.classList.remove('is-settling');
 		const { clientX, clientY } = e;
 		if (magRaf) cancelAnimationFrame(magRaf);
 		magRaf = requestAnimationFrame(() => {
@@ -193,18 +195,72 @@
 	function onPointerLeave() {
 		if (magRaf) cancelAnimationFrame(magRaf);
 		magRaf = 0;
-		if (dockEl) dockEl.classList.add('is-settling');
 		applyMag(null, null);
-		leaveTimer = window.setTimeout(() => {
-			dockEl?.classList.remove('is-settling');
-			leaveTimer = 0;
-		}, 220);
+	}
+
+	function syncActivePlate() {
+		if (!dockEl) return;
+		const activeButton = [
+			...dockEl.querySelectorAll<HTMLElement>('.mash-side-dock-item.is-active')
+		].find((button) => button.getClientRects().length > 0);
+		if (!activeButton) {
+			dockEl.classList.remove('has-active-item');
+			return;
+		}
+
+		dockEl.style.setProperty('--dock-active-x', `${activeButton.offsetLeft}px`);
+		dockEl.style.setProperty('--dock-active-y', `${activeButton.offsetTop}px`);
+		dockEl.classList.add('has-active-item');
+	}
+
+	function confirmNewNote() {
+		if (!dockEl || prefersReducedMotion()) return;
+		const button = dockEl.querySelector<HTMLElement>('[data-dock-item="new"]');
+		if (!button) return;
+		button.classList.remove('is-confirming');
+		void button.offsetWidth;
+		button.classList.add('is-confirming');
+		if (confirmTimer) window.clearTimeout(confirmTimer);
+		confirmTimer = window.setTimeout(() => {
+			button.classList.remove('is-confirming');
+			confirmTimer = 0;
+		}, 240);
 	}
 
 	function choose(action: DockAction) {
 		mobileMoreOpen = false;
+		if (action === 'new') confirmNewNote();
 		dockSelect(action);
 	}
+
+	$effect(() => {
+		const activeKey = items.map((item) => `${item.id}:${item.active}`).join('|');
+		const moreOpen = mobileMoreOpen;
+		void activeKey;
+		void moreOpen;
+		if (!dockEl) return;
+		let frame = 0;
+		let cancelled = false;
+		void tick().then(() => {
+			if (!cancelled) frame = window.requestAnimationFrame(syncActivePlate);
+		});
+		return () => {
+			cancelled = true;
+			window.cancelAnimationFrame(frame);
+		};
+	});
+
+	onMount(() => {
+		if (!dockEl) return;
+		const observer = new ResizeObserver(syncActivePlate);
+		observer.observe(dockEl);
+		void document.fonts?.ready.then(syncActivePlate);
+		syncActivePlate();
+		return () => {
+			observer.disconnect();
+			if (confirmTimer) window.clearTimeout(confirmTimer);
+		};
+	});
 
 	$effect(() => {
 		if (!mobileMoreOpen) return;
@@ -238,6 +294,7 @@
 	onpointermove={onPointerMove}
 	onpointerleave={onPointerLeave}
 >
+	<span class="mash-side-dock-active-plate" aria-hidden="true"></span>
 	{#each items as item (item.id)}
 		{#if item.id === 'new'}
 			<div class="mash-side-dock-spacer" aria-hidden="true"></div>
@@ -259,9 +316,6 @@
 				<Icon class="h-[18px] w-[18px]" strokeWidth={2} />
 			</span>
 			<span class="mash-side-dock-label">{item.label}</span>
-			{#if item.active}
-				<span class="mash-side-dock-pip" aria-hidden="true"></span>
-			{/if}
 		</button>
 	{/each}
 	<button
