@@ -187,6 +187,10 @@
 	let workspaceHasContent = $state(false);
 	let workspaceBackupBusy = $state(false);
 	let workspaceRestoreError = $state('');
+	let startupError = $state('');
+	let startupBusy = $state(false);
+	let startupAttempt = 0;
+	let startupRetryButton: HTMLButtonElement | undefined = $state();
 	let workspaceRestorePending = $state<{
 		backup: WorkspaceBackup;
 		plan: WorkspaceRestorePlan;
@@ -1869,15 +1873,39 @@
 		}
 	}
 
-	onMount(() => {
-		void (async () => {
+	async function bootstrapWorkspace() {
+		if (startupBusy) return;
+		const attempt = ++startupAttempt;
+		startupBusy = true;
+		try {
 			await sessionManager.bootstrap();
+			if (attempt !== startupAttempt) return;
 			await library.loadNotes();
+			if (attempt !== startupAttempt) return;
+			startupError = '';
 			await refreshWorkspaceBackupHealth();
 			if (workspaceBackupReminded || !workspaceBackupHealth.needsBackup) return;
 			workspaceBackupReminded = true;
 			flashToast('Tip: back up your Mash workspace from Desks or Settings', 4200);
-		})();
+		} catch (error) {
+			if (attempt !== startupAttempt) return;
+			console.error('Mash workspace startup failed', error);
+			// Dexie retains a rejected open promise after an IndexedDB failure. Reset the
+			// connection while preserving auto-open so the visible Retry can genuinely retry.
+			db.close({ disableAutoOpen: false });
+			startupError =
+				'Couldn’t open your local workspace. Check this browser’s storage permissions, then retry.';
+		} finally {
+			if (attempt === startupAttempt) startupBusy = false;
+		}
+		if (startupError) {
+			await tick();
+			startupRetryButton?.focus();
+		}
+	}
+
+	onMount(() => {
+		void bootstrapWorkspace();
 		window.addEventListener('keydown', handleKeydown);
 		window.addEventListener('paste', handleGlobalPaste);
 		window.addEventListener('pointerdown', onSearchPointerDown, true);
@@ -1903,6 +1931,8 @@
 <div
 	class="mash-app-shell mash-board-surface flex h-screen flex-col {snapEnabled ? 'is-snap-on' : ''}"
 	style="color: var(--mash-ink);"
+	inert={Boolean(startupError)}
+	aria-busy={startupBusy}
 >
 	<!-- Header -->
 	<header class="mash-app-header flex items-center justify-between px-5 py-1.5">
@@ -3306,3 +3336,48 @@
 		{/await}
 	{/if}
 </div>
+
+{#if startupError}
+	<div
+		class="fixed inset-0 z-[100] flex items-center justify-center p-5"
+		style="background: var(--mash-board-bg); color: var(--mash-ink);"
+		role="alertdialog"
+		aria-modal="true"
+		aria-labelledby="mash-startup-error-title"
+		aria-describedby="mash-startup-error-copy"
+	>
+		<div
+			class="flex w-full max-w-md flex-col items-center rounded-2xl border px-6 py-7 text-center shadow-2xl"
+			style="border-color: var(--mash-tray-edge); background: var(--mash-card-bg);"
+		>
+			<img
+				src="/icons/mash-logo-sprouts.png"
+				srcset="/icons/mash-logo-sprouts.png 1x, /icons/mash-logo-sprouts@2x.png 2x"
+				alt=""
+				width="56"
+				height="70"
+				class="h-16 w-auto select-none"
+				draggable="false"
+			/>
+			<h1 id="mash-startup-error-title" class="mash-display mt-4 text-xl font-semibold">
+				Your local workspace didn’t open
+			</h1>
+			<p
+				id="mash-startup-error-copy"
+				class="mash-type-body mt-2 max-w-sm leading-relaxed"
+				style="color: var(--mash-ink-muted);"
+			>
+				{startupError} Retry reopens the same on-device workspace; it does not create a replacement.
+			</p>
+			<button
+				bind:this={startupRetryButton}
+				type="button"
+				class="mash-btn mash-focus mash-type-caption mt-5 rounded-lg px-4 py-2 font-semibold"
+				disabled={startupBusy}
+				onclick={() => void bootstrapWorkspace()}
+			>
+				{startupBusy ? 'Retrying…' : 'Retry opening workspace'}
+			</button>
+		</div>
+	</div>
+{/if}

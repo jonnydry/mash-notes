@@ -4,51 +4,23 @@ import { readFile } from 'node:fs/promises';
 import tailwindcss from '@tailwindcss/vite';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { SvelteKitPWA } from '@vite-pwa/sveltekit';
-
-const deferredFeatureEntries = new Set([
-	'pdf',
-	'sequence-pdf',
-	'PdfReader',
-	'board-image-export',
-	'DocxReader',
-	'HtmlReader',
-	'gifuct-js',
-	'image-headers',
-	'sync-file',
-	// Chrome panels loaded on demand from +page
-	'SettingsPanel',
-	'ShortcutsModal',
-	'SpacesOverview',
-	'SessionPanel',
-	'FinishPanel',
-	'PasteChoiceDialog',
-	'GifExplodeDialog',
-	'DelimitedImportDialog',
-	'WorkspaceRestoreDialog'
-]);
+import { prunePrecacheEntries } from './scripts/pwa-precache-policy.js';
 
 async function preparePwaPrecache(
 	manifestEntries: Array<{ url: string; revision: string | null; size: number }>
 ) {
-	let manifest = manifestEntries.filter((entry) => entry.url !== 'manifest.webmanifest');
-	const warnings: string[] = [];
-
+	let viteManifest: Record<
+		string,
+		{ name?: string; file: string; imports?: string[]; css?: string[]; assets?: string[] }
+	>;
 	try {
-		const viteManifest = JSON.parse(
+		viteManifest = JSON.parse(
 			await readFile('.svelte-kit/output/client/.vite/manifest.json', 'utf8')
-		) as Record<string, { name?: string; file: string; css?: string[]; assets?: string[] }>;
-		const deferredFiles = new Set<string>();
-		for (const entry of Object.values(viteManifest)) {
-			if (!entry.name || !deferredFeatureEntries.has(entry.name)) continue;
-			deferredFiles.add(entry.file);
-			entry.css?.forEach((file) => deferredFiles.add(file));
-			entry.assets?.forEach((file) => deferredFiles.add(file));
-		}
-
-		manifest = manifest.filter((entry) => !deferredFiles.has(entry.url.replace(/^\//, '')));
+		);
 	} catch (error) {
-		warnings.push(`Could not identify deferred feature assets: ${String(error)}`);
+		throw new Error('Could not enforce the PWA precache policy', { cause: error });
 	}
+	let manifest = prunePrecacheEntries(manifestEntries, viteManifest);
 
 	// The static adapter creates index.html after Workbox generates the worker.
 	// Add the SPA shell explicitly so navigation requests can be answered offline.
@@ -61,10 +33,10 @@ async function preparePwaPrecache(
 			size: 0
 		});
 	} catch (error) {
-		warnings.push(`Could not version the offline application shell: ${String(error)}`);
+		throw new Error('Could not version the offline application shell', { cause: error });
 	}
 
-	return { manifest, warnings };
+	return { manifest, warnings: [] };
 }
 
 export default defineConfig({
@@ -107,11 +79,30 @@ export default defineConfig({
 					{
 						// Immutable, hashed assets that are intentionally absent from the precache
 						// are cached after their feature is first used.
-						urlPattern: /\/_app\/immutable\/(?:chunks|assets)\//,
+						urlPattern: /\/_app\/immutable\//,
 						handler: 'CacheFirst',
 						options: {
-							cacheName: 'mash-deferred-assets-v1',
-							expiration: { maxEntries: 24, maxAgeSeconds: 30 * 24 * 60 * 60 }
+							cacheName: 'mash-deferred-assets-v2',
+							expiration: { maxEntries: 64, maxAgeSeconds: 30 * 24 * 60 * 60 }
+						}
+					},
+					{
+						// The empty-desk cast is decorative. Cache characters as they appear and
+						// fall back to the core precached mascot when a visit starts offline.
+						urlPattern: /\/icons\/Rotating(?:%20| )Icons\//,
+						handler: 'CacheFirst',
+						options: {
+							cacheName: 'mash-rotating-mascots-v1',
+							expiration: { maxEntries: 24, maxAgeSeconds: 90 * 24 * 60 * 60 }
+						}
+					},
+					{
+						// PDF.js language/font/WASM support is only fetched after opening a PDF.
+						urlPattern: /\/pdfjs\//,
+						handler: 'CacheFirst',
+						options: {
+							cacheName: 'mash-pdf-support-v1',
+							expiration: { maxEntries: 96, maxAgeSeconds: 30 * 24 * 60 * 60 }
 						}
 					}
 				],

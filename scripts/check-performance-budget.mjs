@@ -1,9 +1,14 @@
 import { readFile, stat } from 'node:fs/promises';
+import {
+	collectInitialManifestFiles,
+	collectInitialManifestKeys,
+	isExcludedFromPrecache,
+	normalizePrecacheUrl
+} from './pwa-precache-policy.js';
 
 const clientRoot = '.svelte-kit/output/client';
 const manifestPath = `${clientRoot}/.vite/manifest.json`;
-const initialEntryNames = new Set(['entry/start', 'entry/app', 'nodes/0', 'nodes/2']);
-const deferredPrecacheEntryNames = new Set([
+const deferredInitialEntryNames = new Set([
 	'pdf',
 	'sequence-pdf',
 	'PdfReader',
@@ -21,14 +26,15 @@ const deferredPrecacheEntryNames = new Set([
 	'GifExplodeDialog',
 	'sync-file'
 ]);
-const deferredInitialEntryNames = deferredPrecacheEntryNames;
 const budgets = {
 	// Page orchestrator + canvas still dominate; deferred PDF/GIF stay out of graph.
 	javascript: 630 * 1024,
 	// Layout tokens + board chrome CSS; suite fonts are budgeted separately.
 	css: 130 * 1024,
 	fonts: 120 * 1024,
-	fontFiles: 5
+	fontFiles: 5,
+	// Install/update cost: the shell, initial graph, core fonts, and brand chrome only.
+	precache: 2 * 1024 * 1024
 };
 
 const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
@@ -37,29 +43,8 @@ const byName = new Map(
 		.filter(([, entry]) => entry.name)
 		.map(([key, entry]) => [entry.name, { key, ...entry }])
 );
-const initialKeys = new Set();
-
-function visit(key) {
-	if (initialKeys.has(key)) return;
-	const entry = manifest[key];
-	if (!entry) throw new Error(`Build manifest is missing imported entry ${key}`);
-	initialKeys.add(key);
-	for (const importedKey of entry.imports ?? []) visit(importedKey);
-}
-
-for (const name of initialEntryNames) {
-	const entry = byName.get(name);
-	if (!entry) throw new Error(`Build manifest is missing initial entry ${name}`);
-	visit(entry.key);
-}
-
-const initialFiles = new Set();
-for (const key of initialKeys) {
-	const entry = manifest[key];
-	initialFiles.add(entry.file);
-	for (const file of entry.css ?? []) initialFiles.add(file);
-	for (const file of entry.assets ?? []) initialFiles.add(file);
-}
+const initialKeys = collectInitialManifestKeys(manifest);
+const initialFiles = collectInitialManifestFiles(manifest);
 
 async function totalBytes(files) {
 	let total = 0;
@@ -103,12 +88,30 @@ for (const name of deferredInitialEntryNames) {
 }
 
 const serviceWorker = await readFile('build/sw.js', 'utf8');
-for (const name of deferredPrecacheEntryNames) {
-	const entry = byName.get(name);
-	if (!entry) continue;
-	for (const file of [entry.file, ...(entry.css ?? []), ...(entry.assets ?? [])]) {
-		if (serviceWorker.includes(file)) errors.push(`${file} leaked into the PWA precache`);
+const listedPrecacheFiles = [...serviceWorker.matchAll(/\burl:"([^"]+)"/g)].map((match) =>
+	normalizePrecacheUrl(match[1])
+);
+const precacheFiles = [...new Set(listedPrecacheFiles)];
+let precache = 0;
+if (precacheFiles.length === 0) errors.push('Could not read the generated PWA precache manifest');
+if (!precacheFiles.includes('index.html')) errors.push('PWA precache is missing the offline shell');
+const duplicatePrecacheFiles = new Set(
+	listedPrecacheFiles.filter((file, index) => listedPrecacheFiles.indexOf(file) !== index)
+);
+for (const file of duplicatePrecacheFiles) errors.push(`PWA precache lists ${file} more than once`);
+for (const file of precacheFiles) {
+	if (isExcludedFromPrecache(file)) errors.push(`${file} leaked into the PWA precache`);
+	if (file.startsWith('_app/immutable/') && !initialFiles.has(file)) {
+		errors.push(`${file} is not in the initial graph but leaked into the PWA precache`);
 	}
+	try {
+		precache += (await stat(`build/${file}`)).size;
+	} catch {
+		errors.push(`PWA precache references missing build file ${file}`);
+	}
+}
+if (precache > budgets.precache) {
+	errors.push(`PWA precache is ${format(precache)} (budget ${format(budgets.precache)})`);
 }
 
 console.log(`Initial JavaScript  ${format(javascript)} / ${format(budgets.javascript)}`);
@@ -116,7 +119,10 @@ console.log(`Initial CSS         ${format(css)} / ${format(budgets.css)}`);
 console.log(
 	`Initial fonts       ${format(fonts)} / ${format(budgets.fonts)} (${fontFiles.length} files)`
 );
-console.log('Deferred features   excluded from initial graph and PWA precache');
+console.log(
+	`PWA precache        ${format(precache)} / ${format(budgets.precache)} (${precacheFiles.length} files)`
+);
+console.log('Deferred features   excluded from the initial graph and PWA precache');
 
 if (errors.length) {
 	console.error(`\nPerformance budget failed:\n- ${errors.join('\n- ')}`);

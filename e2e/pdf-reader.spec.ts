@@ -57,6 +57,10 @@ test('returns to a live PDF session without rereading the file', async ({ page }
 	await expect
 		.poll(() => pdfCanvas.evaluate((canvas) => canvas.getBoundingClientRect().width))
 		.toBeGreaterThan(widthBeforeZoom * 1.05);
+	// Zoom updates canvas geometry before PDF.js replaces the selectable text layer.
+	// Wait for the full render so the range below cannot be invalidated mid-selection.
+	await expect(reader.getByText('Rendering page…', { exact: true })).toBeHidden();
+	await expect(selectedSpan).toBeVisible();
 
 	const selectedText = await selectedSpan.evaluate((span) => {
 		const selection = window.getSelection();

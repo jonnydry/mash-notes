@@ -92,6 +92,14 @@
 		}
 	}
 
+	function handleEmptyMascotError(event: Event) {
+		const image = event.currentTarget as HTMLImageElement;
+		if (image.dataset.fallbackMascot === 'true') return;
+		image.dataset.fallbackMascot = 'true';
+		image.srcset = DEFAULT_EMPTY_CANVAS_MASCOT.srcset ?? '';
+		image.src = DEFAULT_EMPTY_CANVAS_MASCOT.src;
+	}
+
 	interface Props {
 		items: CanvasItem[];
 		notesById: Map<string, Note>;
@@ -2582,6 +2590,7 @@
 					height={emptyMascot.height ?? 200}
 					class="mash-empty-mascot pointer-events-none h-40 w-auto select-none sm:h-44"
 					draggable="false"
+					onerror={handleEmptyMascotError}
 				/>
 				<p
 					class="mash-display mash-empty-title mt-5 text-xl font-medium tracking-tight sm:text-[1.35rem]"
