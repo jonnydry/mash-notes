@@ -9,6 +9,7 @@
 	import { flatShortcutRows } from '$lib/keyboard-shortcuts';
 	import { formatNoteTimestamp } from '$lib/format';
 	import { syncBackupHint } from '$lib/sync-hygiene';
+	import { MASH_APP_VERSION } from '$lib/app-version';
 
 	interface Props {
 		snapEnabled: boolean;
@@ -381,9 +382,9 @@
 		<section class="mash-settings-section mash-settings-section--last">
 			<h2 class="mash-settings-heading">About</h2>
 			<p class="mash-settings-about">
-				<strong class="mash-display">Mash</strong> v0.2.0 — a local-first scratch workbench. No account
-				or application server. MIT licensed. Install via your browser’s Add to Home Screen / Install app
-				when offered.
+				<strong class="mash-display">Mash</strong> v{MASH_APP_VERSION} — a local-first scratch workbench.
+				No account or application server. MIT licensed. Install via your browser’s Add to Home Screen
+				/ Install app when offered.
 			</p>
 		</section>
 	</div>

@@ -30,13 +30,7 @@ import {
 	exportNotesMarkdown,
 	notesFromSelection
 } from '$lib/mash';
-import {
-	parseSyncBundle,
-	mergeSyncBundle,
-	persistMergedSync,
-	formatConflictSummary,
-	SYNC_BUNDLE_MAX_CHARS
-} from '$lib/sync-file';
+import { SYNC_BUNDLE_MAX_CHARS } from '$lib/sync-limits';
 import type { SyncConflict } from '$lib/sync-model';
 import { isStaleSyncBundle, recordSyncImport } from '$lib/sync-hygiene';
 import {
@@ -44,6 +38,15 @@ import {
 	isMashTeamWelcomeCandidate,
 	isMashTeamWelcomeNote
 } from '$lib/system-notes';
+
+type SyncFileModule = typeof import('$lib/sync-file');
+type ConflictFormatter = SyncFileModule['formatConflictSummary'];
+
+let syncFileModule: Promise<SyncFileModule> | undefined;
+
+function loadSyncFile(): Promise<SyncFileModule> {
+	return (syncFileModule ??= import('$lib/sync-file'));
+}
 
 export function filterNotes(notes: Note[], currentFilter: NavFilter, searchQuery: string): Note[] {
 	let list = [...notes];
@@ -614,6 +617,8 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 				opts.flashToast(message);
 				return { ok: false, message };
 			}
+			const { parseSyncBundle, mergeSyncBundle, persistMergedSync, formatConflictSummary } =
+				await loadSyncFile();
 			const parsed = parseSyncBundle(text);
 			if (!parsed.ok) {
 				opts.flashToast(parsed.error);
@@ -719,7 +724,7 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 				if (opts.onSyncConflicts) {
 					opts.onSyncConflicts(summary.conflicts);
 				} else {
-					await resolveBodyConflicts(summary.conflicts, mergedNotes);
+					await resolveBodyConflicts(summary.conflicts, mergedNotes, formatConflictSummary);
 				}
 			}
 			return {
@@ -756,7 +761,11 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 	/**
 	 * Fallback when page does not wire Conflicts peel: one-shot dialog for first body conflict.
 	 */
-	function resolveBodyConflicts(conflicts: SyncConflict[], mergedNotes: Note[]) {
+	function resolveBodyConflicts(
+		conflicts: SyncConflict[],
+		mergedNotes: Note[],
+		formatConflictSummary: ConflictFormatter
+	) {
 		const bodyConflicts = conflicts.filter((c) => c.field === 'body' && c.chosen === 'remote');
 		if (bodyConflicts.length === 0) {
 			if (conflicts.length > 0) {

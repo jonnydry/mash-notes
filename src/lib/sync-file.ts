@@ -14,6 +14,7 @@ import type {
 	Operation
 } from './types';
 import { mergeNotesLww, hasConflicts, type MergeResult, type SyncConflict } from './sync-model';
+import { SYNC_BUNDLE_MAX_CHARS } from './sync-limits';
 import { normalizeImportedNote } from './import-notes';
 import { db, getSyncTombstoneNotes, newId } from './db';
 import { exportAllDismissed, importDismissedMap, type DismissedByCanvas } from './canvas-dismiss';
@@ -30,7 +31,7 @@ export const SYNC_BUNDLE_VERSION_V4 = 4 as const;
 export const SYNC_BUNDLE_VERSION_V3 = 3 as const;
 export const SYNC_BUNDLE_VERSION_V2 = 2 as const;
 export const SYNC_BUNDLE_VERSION_V1 = 1 as const;
-export const SYNC_BUNDLE_MAX_CHARS = 8_000_000;
+export { SYNC_BUNDLE_MAX_CHARS } from './sync-limits';
 
 const MAX_ID_CHARS = 128;
 const MAX_DISMISSED_PER_CANVAS = 5000;

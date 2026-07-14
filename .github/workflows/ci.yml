@@ -6,13 +6,16 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   ci:
-    name: Lint · Check · Test · Build · E2E
+    name: Lint · Check · Audit · Test · Build · E2E
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
@@ -34,6 +37,9 @@ jobs:
 
       - name: Typecheck
         run: npm run check
+
+      - name: Dependency audit
+        run: npm run audit:security
 
       - name: Unit tests
         run: npm test

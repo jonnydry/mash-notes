@@ -80,7 +80,7 @@
 			{#if clippings.length === 0}
 				<div class="mash-pdf-clippings-empty">
 					<img
-						src="/icons/New%20Icons/Mashed%20potato%20character@2x.png"
+						src="/icons/Rotating%20Icons/Mashed%20potato%20character@2x.png"
 						alt="Scoop, the Mash mascot"
 					/>
 					<p>{emptyClippingsHint}</p>

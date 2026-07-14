@@ -12,8 +12,9 @@
 /index.html
   Cache-Control: no-cache
 
-/service-worker.js
+/sw.js
   Cache-Control: no-cache
+  Service-Worker-Allowed: /
 
 /boot-theme.js
   Cache-Control: no-cache

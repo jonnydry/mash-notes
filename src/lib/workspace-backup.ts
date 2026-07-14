@@ -18,6 +18,7 @@ import {
 	type SyncTombstone
 } from './sync-file';
 import type { SyncConflict } from './sync-model';
+import { MASH_APP_VERSION } from './app-version';
 
 export const WORKSPACE_BACKUP_VERSION = 6 as const;
 export const WORKSPACE_BACKUP_MAX_CHARS = FILE_FORMAT_LIMITS.workspaceBackupBytes;
@@ -267,7 +268,7 @@ export async function inspectWorkspaceChangedAt(): Promise<{
 }
 
 export async function buildWorkspaceBackup(
-	appVersion = '0.2.0',
+	appVersion = MASH_APP_VERSION,
 	snapshot?: WorkspaceSnapshot
 ): Promise<WorkspaceBackup> {
 	const source = snapshot ?? (await collectWorkspaceSnapshot());
@@ -582,7 +583,7 @@ export async function inspectAndPlanWorkspaceRestore(
 }
 
 export async function serializeAndVerifyWorkspaceBackup(
-	appVersion = '0.2.0',
+	appVersion = MASH_APP_VERSION,
 	snapshot?: WorkspaceSnapshot
 ): Promise<{ raw: string; backup: WorkspaceBackup; record: WorkspaceBackupRecord }> {
 	const source = snapshot ?? (await collectWorkspaceSnapshot());
@@ -611,7 +612,7 @@ export async function serializeAndVerifyWorkspaceBackup(
 
 export async function downloadWorkspaceBackup(
 	filename = 'mash-workspace-backup.json',
-	appVersion = '0.2.0'
+	appVersion = MASH_APP_VERSION
 ): Promise<WorkspaceBackupRecord> {
 	const { raw, record } = await serializeAndVerifyWorkspaceBackup(appVersion);
 	const blob = new Blob([raw], { type: 'application/json' });

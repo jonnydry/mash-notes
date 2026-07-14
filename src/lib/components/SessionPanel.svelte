@@ -102,7 +102,7 @@
 					{#if view === 'finish'}
 						<div class="mash-finish-header-brand">
 							<img
-								src="/icons/New%20Icons/Salt%20and%20pepper%20shakers@2x.png"
+								src="/icons/Rotating%20Icons/Salt%20and%20pepper%20shakers@2x.png"
 								alt=""
 								width="48"
 								height="48"

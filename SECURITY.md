@@ -4,13 +4,13 @@ Mash is a static, local-first web application that accepts untrusted text, archi
 
 ## Supported versions
 
-| Version          | Supported |
-| ---------------- | --------- |
-| `main`           | Yes       |
-| `0.2.x`          | Yes       |
-| Earlier versions | No        |
+| Version                     | Supported |
+| --------------------------- | --------- |
+| `main`                      | Yes       |
+| Latest `1.x` stable release | Yes       |
+| Earlier releases            | No        |
 
-Until the first stable release, fixes land on `main` and the most recent tagged minor release.
+Before the first stable tag, fixes land on `main`. After `v1.0.0`, security fixes target `main` and the latest stable `1.x` release.
 
 ## Report a vulnerability
 

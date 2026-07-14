@@ -2,7 +2,7 @@
 
 Notable changes to Mash are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and release versions follow semantic versioning while the portable bundle schema is versioned independently.
 
-## [0.2.0] - Unreleased
+## [1.0.0] - Unreleased
 
 ### Added
 
@@ -21,6 +21,7 @@ Notable changes to Mash are documented here. The format follows [Keep a Changelo
 - Verified version 6 workspace backups with whole-workspace health, corruption checks, restore impact
   previews, and transaction-first recovery.
 - Retained compatibility fixtures for every supported desk and workspace bundle version.
+- A production PWA registration path and an automated offline-reopen contract that preserves local notes.
 
 ### Changed
 
@@ -32,6 +33,17 @@ Notable changes to Mash are documented here. The format follows [Keep a Changelo
   palette, and public documentation.
 - Centralized supported file extensions, MIME hints, entry points, preservation levels, and top-level
   limits in a typed compatibility registry.
+- Made local browser tests serve the same static `build/` artifact that ships in releases.
+- Made tagged releases run the full lint, type, unit, build, performance, Chromium, Firefox, and WebKit gates.
+- Made pull-request and release gates enforce the high-severity dependency audit.
+
+### Fixed
+
+- Restored the missing installable-manifest link and service-worker registration.
+- Added the static SPA shell to the Workbox precache so a controlled desk can reopen without a network.
+- Corrected the static-host cache rule from the obsolete `/service-worker.js` path to `/sw.js`.
+- Removed an unreferenced duplicate icon source folder from the public release payload.
+- Kept the first-run “Try a mash” action hidden until its desk is ready to accept cards.
 
 ### Security
 
@@ -42,4 +54,4 @@ Notable changes to Mash are documented here. The format follows [Keep a Changelo
 - Kept CSV/TSV formulas and markup inert, bounded rows/columns/cells, and required complete workspace
   validation before restore can write.
 
-[0.2.0]: https://github.com/jonnydry/mash-notes/releases/tag/v0.2.0
+[1.0.0]: https://github.com/jonnydry/mash-notes/releases/tag/v1.0.0

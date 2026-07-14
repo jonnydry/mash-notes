@@ -36,7 +36,11 @@ test.describe('Permanent welcome branding', () => {
 		await page.getByRole('button', { name: 'Pinned' }).click();
 		const card = page.locator('[data-system-welcome="true"]');
 		await expect(card).toBeVisible({ timeout: 15_000 });
-		await expect(card.getByAltText('Scoop, the Mash mascot')).toBeVisible();
+		const cardMascot = card.getByAltText('Scoop, the Mash mascot');
+		await expect(cardMascot).toBeVisible();
+		await expect
+			.poll(() => cardMascot.evaluate((image) => (image as HTMLImageElement).naturalWidth))
+			.toBeGreaterThan(0);
 
 		const peel = page.getByRole('complementary', { name: 'Ingredients' });
 		const row = peel.getByRole('option').filter({ hasText: "Hi — I'm Scoop" });

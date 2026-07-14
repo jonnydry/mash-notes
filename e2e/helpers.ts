@@ -8,6 +8,22 @@ export async function wipeIndexedDb(page: Page) {
 		await Promise.all(regs.map((r) => r.unregister()));
 		const keys = (await caches?.keys?.()) ?? [];
 		await Promise.all(keys.map((k) => caches.delete(k)));
+		try {
+			localStorage.removeItem('mash.openSpaces');
+			localStorage.removeItem('mash.syncHygiene');
+			localStorage.removeItem('mash.workspaceBackupRecord');
+			// Suppress the post-Keep persistence confirm so Finish/desks e2e aren't blocked
+			localStorage.setItem('mash.storagePersistencePrompted', '1');
+		} catch {
+			/* ignore */
+		}
+	});
+
+	// Leave the app document before deleting its database. Resolving an
+	// `onblocked` delete while Dexie still has the database open can race the
+	// next navigation (most visibly in Firefox) and strand startup indefinitely.
+	await page.goto('/robots.txt');
+	await page.evaluate(async () => {
 		const dbs = (await indexedDB.databases?.()) ?? [];
 		await Promise.all(
 			dbs.map(
@@ -24,17 +40,8 @@ export async function wipeIndexedDb(page: Page) {
 					})
 			)
 		);
-		try {
-			localStorage.removeItem('mash.openSpaces');
-			localStorage.removeItem('mash.syncHygiene');
-			localStorage.removeItem('mash.workspaceBackupRecord');
-			// Suppress the post-Keep persistence confirm so Finish/desks e2e aren't blocked
-			localStorage.setItem('mash.storagePersistencePrompted', '1');
-		} catch {
-			/* ignore */
-		}
 	});
-	await page.reload();
+	await page.goto('/');
 	await expect(page.getByRole('navigation', { name: 'Mash dock' })).toBeVisible({
 		timeout: 30_000
 	});

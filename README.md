@@ -111,10 +111,11 @@ The main quality gate covers formatting, linting, Svelte and TypeScript checks, 
 - [Contributing](CONTRIBUTING.md)
 - [Security policy](SECURITY.md)
 - [Changelog](CHANGELOG.md)
+- [V1 release readiness](docs/v1-release-readiness.md)
 
 ## Project status
 
-Mash is preparing its `v0.2.0` Utility Release. The current focus is reliability, safe local file handling, offline behavior, portable exports, and making the workflow understandable without documentation.
+Mash is a `v1.0.0` release candidate. The stable tag is blocked on the documented release gates, not on additional feature scope.
 
 ## License
 

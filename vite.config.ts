@@ -1,4 +1,5 @@
 import { defineConfig } from 'vitest/config';
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import tailwindcss from '@tailwindcss/vite';
 import { sveltekit } from '@sveltejs/kit/vite';
@@ -13,6 +14,7 @@ const deferredFeatureEntries = new Set([
 	'HtmlReader',
 	'gifuct-js',
 	'image-headers',
+	'sync-file',
 	// Chrome panels loaded on demand from +page
 	'SettingsPanel',
 	'ShortcutsModal',
@@ -25,9 +27,12 @@ const deferredFeatureEntries = new Set([
 	'WorkspaceRestoreDialog'
 ]);
 
-async function excludeDeferredFeaturesFromPrecache(
+async function preparePwaPrecache(
 	manifestEntries: Array<{ url: string; revision: string | null; size: number }>
 ) {
+	let manifest = manifestEntries.filter((entry) => entry.url !== 'manifest.webmanifest');
+	const warnings: string[] = [];
+
 	try {
 		const viteManifest = JSON.parse(
 			await readFile('.svelte-kit/output/client/.vite/manifest.json', 'utf8')
@@ -40,16 +45,26 @@ async function excludeDeferredFeaturesFromPrecache(
 			entry.assets?.forEach((file) => deferredFiles.add(file));
 		}
 
-		return {
-			manifest: manifestEntries.filter((entry) => !deferredFiles.has(entry.url.replace(/^\//, ''))),
-			warnings: []
-		};
+		manifest = manifest.filter((entry) => !deferredFiles.has(entry.url.replace(/^\//, '')));
 	} catch (error) {
-		return {
-			manifest: manifestEntries,
-			warnings: [`Could not identify deferred feature assets: ${String(error)}`]
-		};
+		warnings.push(`Could not identify deferred feature assets: ${String(error)}`);
 	}
+
+	// The static adapter creates index.html after Workbox generates the worker.
+	// Add the SPA shell explicitly so navigation requests can be answered offline.
+	try {
+		const versionFile = await readFile('.svelte-kit/output/client/_app/version.json');
+		manifest = manifest.filter((entry) => entry.url !== 'index.html');
+		manifest.push({
+			url: 'index.html',
+			revision: createHash('sha256').update(versionFile).digest('hex'),
+			size: 0
+		});
+	} catch (error) {
+		warnings.push(`Could not version the offline application shell: ${String(error)}`);
+	}
+
+	return { manifest, warnings };
 }
 
 export default defineConfig({
@@ -87,7 +102,7 @@ export default defineConfig({
 			},
 			workbox: {
 				globPatterns: ['client/**/*.{js,mjs,css,html,ico,png,svg,webp,webmanifest,woff,woff2}'],
-				manifestTransforms: [excludeDeferredFeaturesFromPrecache],
+				manifestTransforms: [preparePwaPrecache],
 				runtimeCaching: [
 					{
 						// Immutable, hashed assets that are intentionally absent from the precache

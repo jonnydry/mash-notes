@@ -23,7 +23,8 @@ const deferredFeatureFiles = new Set(
 				'SessionPanel',
 				'FinishPanel',
 				'PasteChoiceDialog',
-				'GifExplodeDialog'
+				'GifExplodeDialog',
+				'sync-file'
 			].includes(entry.name ?? '')
 		)
 		.flatMap((entry) => [entry.file, ...(entry.css ?? []), ...(entry.assets ?? [])])

@@ -1,7 +1,7 @@
 {
 	"name": "mash-notes",
 	"private": true,
-	"version": "0.2.0",
+	"version": "1.0.0",
 	"type": "module",
 	"description": "A fast, local-first scratch workbench for turning messy text and files into useful, portable results.",
 	"license": "MIT",
@@ -21,7 +21,7 @@
 	"scripts": {
 		"dev": "node scripts/sync-pdfjs-assets.mjs && vite dev",
 		"build": "node scripts/sync-pdfjs-assets.mjs && vite build",
-		"preview": "vite preview",
+		"preview": "node scripts/serve-static.mjs",
 		"prepare": "svelte-kit sync || echo ''",
 		"postinstall": "node scripts/sync-pdfjs-assets.mjs",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
@@ -33,7 +33,8 @@
 		"test:e2e": "playwright test --project=chromium",
 		"test:e2e:cross-browser": "playwright test e2e/smoke.spec.ts --project=firefox --project=webkit",
 		"perf:budget": "node scripts/check-performance-budget.mjs",
-		"ci": "npm run lint && npm run check && npm run build && npm run perf:budget && npm run test && npm run test:e2e && npm run test:e2e:cross-browser"
+		"audit:security": "npm audit --audit-level=high",
+		"ci": "npm run lint && npm run check && npm run audit:security && npm run build && npm run perf:budget && npm run test && npm run test:e2e && npm run test:e2e:cross-browser"
 	},
 	"devDependencies": {
 		"@eslint/compat": "^2.0.4",

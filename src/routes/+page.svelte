@@ -57,7 +57,6 @@
 	import { clearCanvasViewport } from '$lib/viewport';
 	import { clearDismissedForCanvas } from '$lib/canvas-dismiss';
 	import { findBacklinks, findOutgoingNotes } from '$lib/links';
-	import { downloadSyncBundle } from '$lib/sync-file';
 	import { readSyncHygiene, recordSyncExport } from '$lib/sync-hygiene';
 	import { loadSnapPref, saveSnapPref } from '$lib/canvas-geom';
 	import {
@@ -206,6 +205,7 @@
 	}
 
 	async function exportSyncBundle() {
+		const { downloadSyncBundle } = await import('$lib/sync-file');
 		await downloadSyncBundle(
 			library.notes,
 			'mash-sync-bundle.json',
@@ -273,7 +273,7 @@
 
 	async function refreshWorkspaceBackupHealth() {
 		try {
-			const { inspectWorkspaceChangedAt } = await import('$lib/workspace-backup');
+			const { inspectWorkspaceChangedAt } = await import('$lib/workspace-inspection');
 			const state = await inspectWorkspaceChangedAt();
 			workspaceChangedAt = state.changedAt;
 			workspaceHasContent = state.hasContent;
@@ -1383,13 +1383,14 @@
 		typeof localStorage !== 'undefined' ? isTryAMashDismissed(localStorage) : false
 	);
 	let showTryAMash = $derived(
-		shouldOfferTryAMash({
-			dismissed: tryAMashDismissed,
-			emptyStateVisible: showCanvasEmptyState,
-			isPinnedBoard: peel.currentFilter.type === 'pinned',
-			// Root Desk only — folder/tag/linked boards stay quiet
-			isRootDesk: peel.currentFilter.type === null
-		})
+		Boolean(canvas.activeCanvas?.id) &&
+			shouldOfferTryAMash({
+				dismissed: tryAMashDismissed,
+				emptyStateVisible: showCanvasEmptyState,
+				isPinnedBoard: peel.currentFilter.type === 'pinned',
+				// Root Desk only — folder/tag/linked boards stay quiet
+				isRootDesk: peel.currentFilter.type === null
+			})
 	);
 
 	function dismissTryAMashForever() {
@@ -3195,7 +3196,7 @@
 		confirmLabel={confirmDialog?.confirmLabel ?? 'Confirm'}
 		danger={confirmDialog?.danger ?? false}
 		illustration={confirmDialog?.confirmLabel === 'Delete'
-			? '/icons/New%20Icons/holding-trash-bag@2x.png'
+			? '/icons/Rotating%20Icons/holding-trash-bag@2x.png'
 			: undefined}
 		onConfirm={() => void runConfirmDialog()}
 		onCancel={() => (confirmDialog = null)}

@@ -3,7 +3,7 @@ import type { Note } from './types';
 
 export const MASH_TEAM_WELCOME_ID = 'mash-team-welcome-v1';
 export const MASH_TEAM_WELCOME_SYSTEM = 'mash-team-welcome' as const;
-export const MASH_TEAM_WELCOME_IMAGE = '/icons/New%20Icons/Mashed%20potato%20character@2x.png';
+export const MASH_TEAM_WELCOME_IMAGE = '/icons/Rotating%20Icons/Mashed%20potato%20character@2x.png';
 
 const LEGACY_WELCOME_BODIES = [
 	'Mash is where notes go to become useful.\n\nOpen Desk in the dock, then drag notes from the peel onto the desk. Select a few, then Mash, Copy, or Export.\n\nTry a [[Project ideas]] link in preview mode — missing links ask before creating.',

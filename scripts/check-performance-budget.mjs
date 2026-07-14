@@ -3,7 +3,7 @@ import { readFile, stat } from 'node:fs/promises';
 const clientRoot = '.svelte-kit/output/client';
 const manifestPath = `${clientRoot}/.vite/manifest.json`;
 const initialEntryNames = new Set(['entry/start', 'entry/app', 'nodes/0', 'nodes/2']);
-const deferredEntryNames = new Set([
+const deferredPrecacheEntryNames = new Set([
 	'pdf',
 	'sequence-pdf',
 	'PdfReader',
@@ -18,11 +18,13 @@ const deferredEntryNames = new Set([
 	'SessionPanel',
 	'FinishPanel',
 	'PasteChoiceDialog',
-	'GifExplodeDialog'
+	'GifExplodeDialog',
+	'sync-file'
 ]);
+const deferredInitialEntryNames = deferredPrecacheEntryNames;
 const budgets = {
 	// Page orchestrator + canvas still dominate; deferred PDF/GIF stay out of graph.
-	javascript: 640 * 1024,
+	javascript: 630 * 1024,
 	// Layout tokens + board chrome CSS; suite fonts are budgeted separately.
 	css: 130 * 1024,
 	fonts: 120 * 1024,
@@ -88,7 +90,7 @@ if (fontFiles.length > budgets.fontFiles) {
 	errors.push(`Initial load has ${fontFiles.length} font files (budget ${budgets.fontFiles})`);
 }
 
-for (const name of deferredEntryNames) {
+for (const name of deferredInitialEntryNames) {
 	const entry = byName.get(name);
 	// Required deferred tooling must exist; chrome/optional names only fail if leaked.
 	if (!entry) {
@@ -101,7 +103,7 @@ for (const name of deferredEntryNames) {
 }
 
 const serviceWorker = await readFile('build/sw.js', 'utf8');
-for (const name of deferredEntryNames) {
+for (const name of deferredPrecacheEntryNames) {
 	const entry = byName.get(name);
 	if (!entry) continue;
 	for (const file of [entry.file, ...(entry.css ?? []), ...(entry.assets ?? [])]) {

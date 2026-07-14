@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
+	import { pwaInfo } from 'virtual:pwa-info';
 	import './fonts.css';
 	import './layout.css';
 	import { theme } from '$lib/stores/theme.svelte';
@@ -8,6 +10,18 @@
 
 	// Ensure suite tokens apply on first paint (store constructor also applies).
 	void typography.suiteId;
+
+	onMount(async () => {
+		if (!pwaInfo) return;
+
+		const { registerSW } = await import('virtual:pwa-register');
+		registerSW({
+			immediate: true,
+			onRegisterError(error) {
+				console.error('Mash offline support could not start', error);
+			}
+		});
+	});
 </script>
 
 <svelte:head>
@@ -18,9 +32,5 @@
 	/>
 	<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
 	<meta name="theme-color" content={theme.metaColor} />
-	<meta
-		http-equiv="content-security-policy"
-		content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; manifest-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none';"
-	/>
 </svelte:head>
 {@render children()}

@@ -51,7 +51,7 @@ Risks:
 ## Asset guidance
 
 - Source: 256×256 RGBA PNG with transparency.
-- Suggested project name: `static/icons/New Icons/bowl-guide.png`.
+- Suggested project name: `static/icons/Rotating Icons/bowl-guide.png`.
 - Ideal display size: 72–88px for the first-use coachmark.
 - Minimum display size: 56px.
 - Do not use the full mascot at toolbar or inline-label size.
