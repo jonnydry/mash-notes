@@ -11,6 +11,9 @@ test('typing on the desk and New note both start in the note body', async ({ pag
 	await expect(body).toBeFocused({ timeout: 10_000 });
 	await page.keyboard.type('ello');
 	await expect(body).toHaveValue('Hello');
+	await page.keyboard.type(' again');
+	await expect(body).toHaveValue('Hello again');
+	await expect(page.getByTestId('board-arrow-tool')).toHaveAttribute('aria-pressed', 'false');
 	await expect(page.locator('[data-canvas-card] input[type="text"]').first()).toHaveValue(
 		'Untitled'
 	);

@@ -27,11 +27,11 @@ const deferredInitialEntryNames = new Set([
 	'sync-file'
 ]);
 const budgets = {
-	// Canvas Relationships v1 adds persistent arrow geometry + editing to the core board.
+	// Direct arrow drawing, its keyboard fallback, and live targeting are core board behavior.
 	// Keep the allowance tight; deferred PDF/GIF/backup tooling must still stay out of graph.
-	javascript: 646 * 1024,
-	// Card palettes and relationship controls are core canvas chrome; fonts remain separate.
-	css: 136 * 1024,
+	javascript: 648 * 1024,
+	// Border palettes and zoom-independent arrow controls are intentional core canvas chrome.
+	css: 139 * 1024,
 	fonts: 120 * 1024,
 	fontFiles: 5,
 	// Install/update cost: the shell, initial graph, core fonts, and brand chrome only.

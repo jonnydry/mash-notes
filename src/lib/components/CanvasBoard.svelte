@@ -294,6 +294,8 @@
 	let altHeld = $state(false);
 	let spaceHeld = $state(false);
 	let pointerOverBoard = $state(false);
+	let arrowShortcutHeld = $state(false);
+	let arrowShortcutOwnsMode = $state(false);
 	let titleInputEl: HTMLInputElement | undefined = $state();
 	let focusedExpandId: string | null = null;
 	let focusedBodyExpandId: string | null = null;
@@ -360,6 +362,16 @@
 	let flowFromItemId = $state<string | null>(null);
 	let flowConnecting = $state(false);
 	let connectMode = $state(false);
+	type ConnectDragState = {
+		pointerId: number;
+		start: CanvasArrowEndpoint;
+		startBoard: { x: number; y: number };
+		currentBoard: { x: number; y: number };
+		targetItemId: string | null;
+		moved: boolean;
+	};
+	let connectDrag = $state<ConnectDragState | null>(null);
+	/** Keyboard-only two-point fallback; pointer input uses direct drag-to-draw. */
 	let connectStart = $state<CanvasArrowEndpoint | null>(null);
 	let connectSaving = $state(false);
 	/** Sequence whose end-card menu stays open (invalid repair / click). */
@@ -455,17 +467,53 @@
 		}
 		return paths;
 	});
+	// Card geometry changes far less often than pointer movement. Reuse this map while
+	// drawing so a large desk does not rebuild every card rect on every pointer event.
+	let canvasItemRectMap = $derived.by(() =>
+		canvasItemRects(items, (item) => cardSize(item, item.noteId))
+	);
 	let elementPaths = $derived.by(() => {
-		const rects = canvasItemRects(items, (item) => cardSize(item, item.noteId));
 		return elements
 			.filter((element): element is CanvasArrowElement => element.kind === 'arrow')
 			.map((element) => {
-				const path = canvasArrowPath(element, rects);
+				const path = canvasArrowPath(element, canvasItemRectMap);
 				return path ? { element, ...path } : null;
 			})
 			.filter((path): path is NonNullable<typeof path> => Boolean(path))
 			.sort((a, b) => a.element.zIndex - b.element.zIndex);
 	});
+	let connectPreview = $derived.by(() => {
+		if (!connectDrag?.moved) return null;
+		const end: CanvasArrowEndpoint = connectDrag.targetItemId
+			? { type: 'item', itemId: connectDrag.targetItemId, anchor: 'auto' }
+			: { type: 'point', ...connectDrag.currentBoard };
+		if (
+			connectDrag.start.type === 'item' &&
+			end.type === 'item' &&
+			connectDrag.start.itemId === end.itemId
+		) {
+			return null;
+		}
+		const now = Date.now();
+		const preview: CanvasArrowElement = {
+			id: 'connect-preview',
+			canvasId: canvasId ?? 'preview',
+			version: 1,
+			kind: 'arrow',
+			start: connectDrag.start,
+			end,
+			zIndex: Number.MAX_SAFE_INTEGER,
+			created: now,
+			modified: now
+		};
+		return canvasArrowPath(preview, canvasItemRectMap);
+	});
+	let connectTargetItemId = $derived(
+		connectDrag?.targetItemId &&
+			!(connectDrag.start.type === 'item' && connectDrag.start.itemId === connectDrag.targetItemId)
+			? connectDrag.targetItemId
+			: null
+	);
 
 	function arrowColor(color?: CanvasColor): string {
 		switch (color) {
@@ -491,16 +539,14 @@
 	}
 
 	function exitConnectMode() {
+		cancelConnectDrag();
 		connectMode = false;
 		connectStart = null;
 		connectSaving = false;
+		arrowShortcutOwnsMode = false;
 	}
 
-	function toggleConnectMode() {
-		if (connectMode) {
-			exitConnectMode();
-			return;
-		}
+	function activateConnectMode() {
 		exitFlowMode();
 		onClearSelection?.();
 		onSelectElement?.(null);
@@ -508,6 +554,120 @@
 		connectStart = null;
 	}
 
+	function toggleConnectMode() {
+		if (!connectMode) {
+			activateConnectMode();
+			return;
+		}
+		// Clicking the tool while A is held converts the temporary mode into a
+		// latched tool. The eventual keyup must not turn it back off.
+		if (arrowShortcutOwnsMode) {
+			arrowShortcutOwnsMode = false;
+			return;
+		}
+		exitConnectMode();
+	}
+
+	function beginArrowShortcut() {
+		if (arrowShortcutHeld) return;
+		arrowShortcutHeld = true;
+		if (connectMode) return;
+		activateConnectMode();
+		arrowShortcutOwnsMode = true;
+	}
+
+	function releaseArrowShortcut() {
+		if (!arrowShortcutHeld) return;
+		arrowShortcutHeld = false;
+		if (arrowShortcutOwnsMode) exitConnectMode();
+	}
+
+	function cardItemIdAtClientPoint(clientX: number, clientY: number): string | null {
+		for (const node of document.elementsFromPoint(clientX, clientY)) {
+			const card = node.closest<HTMLElement>('[data-canvas-item-id]');
+			const itemId = card?.dataset.canvasItemId;
+			if (itemId && canvasItemRectMap.has(itemId)) return itemId;
+		}
+		return null;
+	}
+
+	function beginConnectDrag(e: PointerEvent, start: CanvasArrowEndpoint) {
+		if (!connectMode || connectSaving || e.button !== 0) return;
+		e.preventDefault();
+		e.stopPropagation();
+		onSelectElement?.(null);
+		connectStart = null;
+		const point = clientToBoard(e.clientX, e.clientY);
+		connectDrag = {
+			pointerId: e.pointerId,
+			start,
+			startBoard: point,
+			currentBoard: point,
+			targetItemId: null,
+			moved: false
+		};
+		boardEl?.setPointerCapture(e.pointerId);
+	}
+
+	function updateConnectDrag(e: PointerEvent): boolean {
+		if (!connectDrag || connectDrag.pointerId !== e.pointerId) return false;
+		e.preventDefault();
+		const currentBoard = clientToBoard(e.clientX, e.clientY);
+		const distance =
+			Math.hypot(
+				currentBoard.x - connectDrag.startBoard.x,
+				currentBoard.y - connectDrag.startBoard.y
+			) * scale;
+		connectDrag = {
+			...connectDrag,
+			currentBoard,
+			targetItemId: cardItemIdAtClientPoint(e.clientX, e.clientY),
+			moved: connectDrag.moved || distance >= POINTER_DRAG_THRESHOLD
+		};
+		return true;
+	}
+
+	async function finishConnectDrag(e: PointerEvent) {
+		if (!connectDrag || connectDrag.pointerId !== e.pointerId) return;
+		updateConnectDrag(e);
+		const finished = connectDrag;
+		connectDrag = null;
+		try {
+			boardEl?.releasePointerCapture(e.pointerId);
+		} catch {
+			/* ignore */
+		}
+		if (!finished.moved || connectSaving) return;
+		const end: CanvasArrowEndpoint = finished.targetItemId
+			? { type: 'item', itemId: finished.targetItemId, anchor: 'auto' }
+			: { type: 'point', ...finished.currentBoard };
+		if (
+			finished.start.type === 'item' &&
+			end.type === 'item' &&
+			finished.start.itemId === end.itemId
+		) {
+			return;
+		}
+		connectSaving = true;
+		try {
+			await onCreateArrow?.(finished.start, end);
+		} finally {
+			connectSaving = false;
+		}
+	}
+
+	function cancelConnectDrag() {
+		if (!connectDrag) return;
+		const pointerId = connectDrag.pointerId;
+		connectDrag = null;
+		try {
+			if (boardEl?.hasPointerCapture(pointerId)) boardEl.releasePointerCapture(pointerId);
+		} catch {
+			/* ignore */
+		}
+	}
+
+	/** Accessible keyboard fallback: focus cards and press Enter for start/end. */
 	async function chooseConnectEndpoint(endpoint: CanvasArrowEndpoint) {
 		if (connectSaving) return;
 		if (!connectStart) {
@@ -525,7 +685,7 @@
 		connectSaving = true;
 		try {
 			const saved = await onCreateArrow?.(connectStart, endpoint);
-			if (connectMode && saved === true) connectStart = endpoint;
+			if (connectMode && saved === true) connectStart = null;
 		} finally {
 			connectSaving = false;
 		}
@@ -768,9 +928,8 @@
 		if (e.button !== 0) return;
 		if (flowMode) return;
 		if (connectMode) {
-			e.preventDefault();
 			const pos = clientToBoard(e.clientX, e.clientY);
-			void chooseConnectEndpoint({ type: 'point', x: pos.x, y: pos.y });
+			beginConnectDrag(e, { type: 'point', x: pos.x, y: pos.y });
 			return;
 		}
 		if (expandedNoteId) onCollapse();
@@ -791,6 +950,7 @@
 	}
 
 	function onBoardPointerMove(e: PointerEvent) {
+		if (updateConnectDrag(e)) return;
 		if (isPanning) {
 			pendingPan = {
 				panX: panStart.panX + (e.clientX - panStart.x),
@@ -1071,6 +1231,10 @@
 	}
 
 	function onBoardPointerUp(e: PointerEvent) {
+		if (connectDrag?.pointerId === e.pointerId) {
+			void finishConnectDrag(e);
+			return;
+		}
 		if (isPanning) {
 			if (panRaf) {
 				cancelAnimationFrame(panRaf);
@@ -1102,6 +1266,7 @@
 
 	/** Pointer cancellation should never commit a half-finished gesture. */
 	function cancelBoardGesture(e: PointerEvent) {
+		if (connectDrag?.pointerId === e.pointerId) cancelConnectDrag();
 		isPanning = false;
 		marquee = null;
 		if (moveRaf) {
@@ -1216,6 +1381,10 @@
 
 	function startCardDrag(e: PointerEvent, item: CanvasItem) {
 		if (e.button !== 0) return;
+		if (connectMode) {
+			beginConnectDrag(e, { type: 'item', itemId: item.id, anchor: 'auto' });
+			return;
+		}
 		const target = e.target as HTMLElement;
 		if (
 			target.closest('button') ||
@@ -1225,12 +1394,6 @@
 			target.closest('[data-resize-handle]') ||
 			target.closest('[data-flow-edge]')
 		) {
-			return;
-		}
-		if (connectMode) {
-			e.stopPropagation();
-			e.preventDefault();
-			void chooseConnectEndpoint({ type: 'item', itemId: item.id, anchor: 'auto' });
 			return;
 		}
 		if (flowMode) {
@@ -1813,12 +1976,29 @@
 			// Modal controls own their keyboard events. Canvas shortcuts must never
 			// open cards, nudge selections, or consume radio/button activation behind them.
 			if (eventTarget?.closest('[aria-modal="true"]')) return;
+			if (
+				e.key.toLowerCase() === 'a' &&
+				!e.metaKey &&
+				!e.ctrlKey &&
+				!e.altKey &&
+				pointerOverBoard &&
+				!eventTarget?.closest('input, textarea, select, [contenteditable]')
+			) {
+				e.preventDefault();
+				e.stopImmediatePropagation();
+				beginArrowShortcut();
+				return;
+			}
 			if (e.key === 'Escape' && mobileToolsOpen) {
 				mobileToolsOpen = false;
 				return;
 			}
-			if (e.key === 'Escape' && (connectStart || connectMode)) {
+			if (e.key === 'Escape' && (connectDrag || connectStart || connectMode)) {
 				e.preventDefault();
+				if (connectDrag) {
+					cancelConnectDrag();
+					return;
+				}
 				if (connectStart) {
 					connectStart = null;
 					return;
@@ -1913,12 +2093,18 @@
 		function onKeyUp(e: KeyboardEvent) {
 			if (e.key === 'Alt') altHeld = false;
 			if (e.key === ' ') spaceHeld = false;
+			if (e.key.toLowerCase() === 'a') releaseArrowShortcut();
+		}
+		function onWindowBlur() {
+			releaseArrowShortcut();
 		}
 		window.addEventListener('keydown', onKeyDown, true);
 		window.addEventListener('keyup', onKeyUp, true);
+		window.addEventListener('blur', onWindowBlur);
 		return () => {
 			window.removeEventListener('keydown', onKeyDown, true);
 			window.removeEventListener('keyup', onKeyUp, true);
+			window.removeEventListener('blur', onWindowBlur);
 		};
 	});
 
@@ -1987,7 +2173,11 @@
 		? 'is-drop-target'
 		: ''} {snapEffective ? 'is-snap-on' : ''} {isPanning || spaceHeld
 		? 'cursor-grabbing'
-		: 'cursor-crosshair'} {isPanning || dragItemId || resizeItemId ? 'is-gesture' : ''}"
+		: 'cursor-crosshair'} {connectMode ? 'is-arrow-tool' : ''} {isPanning ||
+	dragItemId ||
+	resizeItemId
+		? 'is-gesture'
+		: ''}"
 	onpointerdown={onBoardPointerDown}
 	onpointermove={onBoardPointerMove}
 	onpointerup={onBoardPointerUp}
@@ -2010,12 +2200,12 @@
 		class="absolute top-0 left-0 origin-top-left will-change-transform"
 		style="transform: translate({panX}px, {panY}px) scale({scale});"
 	>
-		{#if elementPaths.length > 0}
+		{#if elementPaths.length > 0 || connectPreview}
 			<svg
 				class="pointer-events-none absolute top-0 left-0 z-[1] overflow-visible"
 				width="1"
 				height="1"
-				aria-label="Canvas connections"
+				aria-label="Canvas arrows"
 			>
 				<defs>
 					<marker
@@ -2052,8 +2242,8 @@
 							role="button"
 							tabindex="0"
 							aria-label={path.element.label
-								? `Select connection ${path.element.label}`
-								: 'Select connection'}
+								? `Select arrow ${path.element.label}`
+								: 'Select arrow'}
 							d={path.d}
 							fill="none"
 							stroke="transparent"
@@ -2074,6 +2264,19 @@
 						/>
 					</g>
 				{/each}
+				{#if connectPreview}
+					<path
+						data-connect-preview
+						d={connectPreview.d}
+						fill="none"
+						stroke="#5c9ed8"
+						stroke-width="2.5"
+						stroke-linecap="round"
+						marker-end="url(#mash-canvas-arrowhead)"
+						opacity="0.9"
+					/>
+					<circle cx={connectPreview.start.x} cy={connectPreview.start.y} r="4" fill="#5c9ed8" />
+				{/if}
 			</svg>
 		{/if}
 		{#each bowlViews as view (view.bowl.id)}
@@ -2176,6 +2379,7 @@
 				<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 				<div
 					data-canvas-card
+					data-canvas-item-id={item.id}
 					data-note-id={note.id}
 					data-card-color={item.color ?? 'green'}
 					data-system-welcome={isPermanentWelcome ? 'true' : undefined}
@@ -2196,7 +2400,7 @@
 						? 'is-connect-mode'
 						: ''} {connectStart?.type === 'item' && connectStart.itemId === item.id
 						? 'is-connect-source'
-						: ''}"
+						: ''} {connectTargetItemId === item.id ? 'is-connect-target' : ''}"
 					style="left: {item.x}px; top: {item.y}px; width: {size.w}px; height: {size.h}px;"
 					onpointerdown={(e) => startCardDrag(e, item)}
 					onpointerup={(e) => endCardDrag(e, item)}
@@ -2208,6 +2412,12 @@
 					}}
 					onkeydown={(e) => {
 						if (e.key !== 'Enter' || e.metaKey || e.ctrlKey || e.altKey) return;
+						if (connectMode) {
+							e.preventDefault();
+							e.stopPropagation();
+							void chooseConnectEndpoint({ type: 'item', itemId: item.id, anchor: 'auto' });
+							return;
+						}
 						if (flowMode || expanded) return;
 						const t = e.target as HTMLElement;
 						if (t !== e.currentTarget && t.closest('button, input, textarea, [contenteditable]'))
@@ -2597,13 +2807,16 @@
 				</span>
 			{/if}
 			{#if selectedElementId === path.element.id}
+				{@const toolbarBelow = path.midY * scale + panY < 92}
 				<div
 					data-canvas-element
 					data-canvas-chrome
-					class="mash-canvas-arrow-toolbar absolute z-[7] flex -translate-x-1/2 -translate-y-1/2 items-center gap-1 rounded-xl border p-1 shadow-xl"
-					style="left: {path.midX}px; top: {path.midY}px;"
+					class="mash-canvas-arrow-toolbar absolute z-[7] flex items-center gap-1 rounded-xl border p-1 shadow-xl {toolbarBelow
+						? 'is-below'
+						: 'is-above'}"
+					style="left: {path.midX}px; top: {path.midY}px; --canvas-scale-inverse: {1 / scale};"
 					role="group"
-					aria-label="Connection options"
+					aria-label="Arrow options"
 					onpointerdown={(e) => e.stopPropagation()}
 				>
 					<input
@@ -2611,15 +2824,11 @@
 						value={path.element.label ?? ''}
 						placeholder="Label…"
 						maxlength="80"
-						aria-label="Connection label"
+						aria-label="Arrow label"
 						onblur={(e) => {
 							const label = e.currentTarget.value.trim();
 							if (label === (path.element.label ?? '')) return;
-							void onPatchArrow?.(
-								path.element.id,
-								{ label: label || undefined },
-								'Label connection'
-							);
+							void onPatchArrow?.(path.element.id, { label: label || undefined }, 'Label arrow');
 						}}
 						onkeydown={(e) => {
 							if (e.key === 'Enter') e.currentTarget.blur();
@@ -2629,24 +2838,52 @@
 							}
 						}}
 					/>
-					{#each ['green', 'amber', 'blue', 'rose', 'violet', 'slate'] as color (color)}
-						<button
-							type="button"
-							class="mash-canvas-color-dot {path.element.color === color ||
-							(color === 'green' && !path.element.color)
-								? 'is-active'
-								: ''}"
-							style="--dot-color: {arrowColor(color as CanvasColor)}"
-							aria-label={`${color} connection`}
-							title={`${color} connection`}
-							onclick={() =>
-								void onPatchArrow?.(
-									path.element.id,
-									{ color: color as CanvasColor },
-									'Color connection'
-								)}
-						></button>
-					{/each}
+					<details
+						class="mash-canvas-arrow-color-picker relative"
+						data-testid="arrow-color-picker"
+						style="--arrow-color: {arrowColor(path.element.color)}"
+					>
+						<summary
+							class="mash-canvas-arrow-action"
+							aria-label={`Arrow color; current ${path.element.color ?? 'green'}`}
+							title="Arrow color"
+						>
+							<span class="mash-canvas-arrow-current-color"></span>
+						</summary>
+						<div
+							class="mash-canvas-arrow-color-menu absolute bottom-full left-1/2 z-20 mb-2 flex min-w-max -translate-x-1/2 items-center gap-1 rounded-lg border p-1.5 shadow-xl"
+							role="group"
+							aria-label="Arrow color"
+						>
+							{#each ['green', 'amber', 'blue', 'rose', 'violet', 'slate'] as color (color)}
+								<button
+									type="button"
+									class="mash-canvas-arrow-color-swatch inline-flex h-6 w-6 items-center justify-center rounded-md border border-transparent {path
+										.element.color === color ||
+									(color === 'green' && !path.element.color)
+										? 'is-active'
+										: ''}"
+									style="--swatch-color: {arrowColor(color as CanvasColor)}"
+									aria-label={`${color} arrow`}
+									aria-pressed={path.element.color === color ||
+										(color === 'green' && !path.element.color)}
+									title={`${color} arrow`}
+									onclick={(event) => {
+										void onPatchArrow?.(
+											path.element.id,
+											{ color: color as CanvasColor },
+											'Color arrow'
+										);
+										(event.currentTarget.closest('details') as HTMLDetailsElement)?.removeAttribute(
+											'open'
+										);
+									}}
+								>
+									<span class="mash-canvas-arrow-color-line"></span>
+								</button>
+							{/each}
+						</div>
+					</details>
 					<button
 						type="button"
 						class="mash-canvas-arrow-action mash-type-micro"
@@ -2656,7 +2893,7 @@
 							void onPatchArrow?.(
 								path.element.id,
 								{ stroke: path.element.stroke === 'dashed' ? 'solid' : 'dashed' },
-								'Style connection'
+								'Style arrow'
 							)}
 					>
 						{path.element.stroke === 'dashed' ? '—' : '┄'}
@@ -2664,8 +2901,8 @@
 					<button
 						type="button"
 						class="mash-canvas-arrow-action mash-type-micro"
-						title="Delete connection"
-						aria-label="Delete connection"
+						title="Delete arrow"
+						aria-label="Delete arrow"
 						onclick={() => void onRemoveArrow?.(path.element.id)}
 					>
 						×
@@ -2967,6 +3204,7 @@
 		{flowFromItemId}
 		{connectMode}
 		{connectSaving}
+		connectDrawing={connectDrag !== null}
 		connectHasStart={connectStart !== null}
 		{scale}
 		{altHeld}

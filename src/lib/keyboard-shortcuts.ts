@@ -44,6 +44,7 @@ export const KEYBOARD_SHORTCUT_GROUPS: ShortcutGroup[] = [
 		rows: [
 			{ keys: '⌘Z', label: 'Undo layout (on board) / typing (in sticky)' },
 			{ keys: '⌘⇧Z', label: 'Redo layout' },
+			{ keys: 'Hold A', label: 'Temporarily draw arrows' },
 			{ keys: 'Space + drag', label: 'Pan the desk' },
 			{ keys: '⌘ / Ctrl + scroll', label: 'Zoom toward cursor' },
 			{ keys: '⌘+ / ⌘−', label: 'Zoom from the center' },
