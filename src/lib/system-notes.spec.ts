@@ -12,6 +12,7 @@ import {
 describe('Mash team welcome note', () => {
 	beforeEach(async () => {
 		await db.canvasEdges.clear();
+		await db.canvasElements.clear();
 		await db.canvasItems.clear();
 		await db.canvases.clear();
 		await db.notes.clear();

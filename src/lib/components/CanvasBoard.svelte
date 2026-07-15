@@ -1,5 +1,14 @@
 <script lang="ts">
-	import type { CanvasBowl, CanvasEdge, CanvasItem, Note } from '$lib/types';
+	import type {
+		CanvasArrowElement,
+		CanvasArrowEndpoint,
+		CanvasBowl,
+		CanvasColor,
+		CanvasEdge,
+		CanvasElement,
+		CanvasItem,
+		Note
+	} from '$lib/types';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { notePreview } from '$lib/format';
 	import { parseEmbeddedNoteImage } from '$lib/markdown';
@@ -60,6 +69,7 @@
 	} from '$lib/stores/editor-stage.svelte';
 	import { canvasBowlBounds } from '$lib/canvas-bowls';
 	import { COLLAPSED_CARD, EXPANDED_CARD } from '$lib/canvas-card-sizing';
+	import { canvasArrowPath, canvasItemRects } from '$lib/canvas-element-geometry';
 
 	const NOTE_MIME = 'application/x-mash-notes';
 	const MASH_OVERLAP = 0.28;
@@ -113,6 +123,8 @@
 		canvasId?: string | null;
 		/** Directed flow edges between cards on this board. */
 		edges?: CanvasEdge[];
+		elements?: CanvasElement[];
+		selectedElementId?: string | null;
 		bowls?: CanvasBowl[];
 		onSelectBowl?: (bowlId: string) => void;
 		onRenameBowl?: (bowlId: string, name: string) => void | Promise<void>;
@@ -123,6 +135,19 @@
 		onUnstitchSequence?: (seqIndex: number) => void | Promise<void>;
 		/** Re-pack sequences with the current flow gap (called when entering Sequence mode). */
 		onRelayoutFlow?: () => boolean | Promise<boolean>;
+		onCreateArrow?: (
+			start: CanvasArrowEndpoint,
+			end: CanvasArrowEndpoint
+		) => boolean | Promise<boolean>;
+		onPatchArrow?: (
+			id: string,
+			patch: Partial<
+				Pick<CanvasArrowElement, 'label' | 'color' | 'stroke' | 'start' | 'end' | 'zIndex'>
+			>,
+			label?: string
+		) => void | Promise<void>;
+		onRemoveArrow?: (id: string) => void | Promise<void>;
+		onSelectElement?: (id: string | null) => void;
 		/** Clear note selection (used when entering Sequence so Mash/Align don’t stack). */
 		onClearSelection?: () => void;
 		/** Brief status toast (Snap overlap hint, Copy outline, etc.). */
@@ -203,6 +228,8 @@
 		settlingIds = new Set(),
 		canvasId = null,
 		edges = [],
+		elements = [],
+		selectedElementId = null,
 		bowls = [],
 		onSelectBowl,
 		onRenameBowl,
@@ -211,6 +238,10 @@
 		onDisconnectFlow,
 		onUnstitchSequence,
 		onRelayoutFlow,
+		onCreateArrow,
+		onPatchArrow,
+		onRemoveArrow,
+		onSelectElement,
 		onClearSelection,
 		onToast,
 		emptyMascot = DEFAULT_EMPTY_CANVAS_MASCOT,
@@ -328,6 +359,9 @@
 	let flowMode = $state(false);
 	let flowFromItemId = $state<string | null>(null);
 	let flowConnecting = $state(false);
+	let connectMode = $state(false);
+	let connectStart = $state<CanvasArrowEndpoint | null>(null);
+	let connectSaving = $state(false);
 	/** Sequence whose end-card menu stays open (invalid repair / click). */
 	let pinnedFlowMenuSeqId = $state<string | null>(null);
 	let hoveredFlowMenuSeqId = $state<string | null>(null);
@@ -421,11 +455,80 @@
 		}
 		return paths;
 	});
+	let elementPaths = $derived.by(() => {
+		const rects = canvasItemRects(items, (item) => cardSize(item, item.noteId));
+		return elements
+			.filter((element): element is CanvasArrowElement => element.kind === 'arrow')
+			.map((element) => {
+				const path = canvasArrowPath(element, rects);
+				return path ? { element, ...path } : null;
+			})
+			.filter((path): path is NonNullable<typeof path> => Boolean(path))
+			.sort((a, b) => a.element.zIndex - b.element.zIndex);
+	});
+
+	function arrowColor(color?: CanvasColor): string {
+		switch (color) {
+			case 'amber':
+				return '#d9a441';
+			case 'blue':
+				return '#5c9ed8';
+			case 'rose':
+				return '#d8798f';
+			case 'violet':
+				return '#9b83d6';
+			case 'slate':
+				return '#87939d';
+			default:
+				return 'var(--mash-accent)';
+		}
+	}
 
 	function exitFlowMode() {
 		flowMode = false;
 		flowFromItemId = null;
 		flowConnecting = false;
+	}
+
+	function exitConnectMode() {
+		connectMode = false;
+		connectStart = null;
+		connectSaving = false;
+	}
+
+	function toggleConnectMode() {
+		if (connectMode) {
+			exitConnectMode();
+			return;
+		}
+		exitFlowMode();
+		onClearSelection?.();
+		onSelectElement?.(null);
+		connectMode = true;
+		connectStart = null;
+	}
+
+	async function chooseConnectEndpoint(endpoint: CanvasArrowEndpoint) {
+		if (connectSaving) return;
+		if (!connectStart) {
+			connectStart = endpoint;
+			return;
+		}
+		if (
+			connectStart.type === 'item' &&
+			endpoint.type === 'item' &&
+			connectStart.itemId === endpoint.itemId
+		) {
+			connectStart = null;
+			return;
+		}
+		connectSaving = true;
+		try {
+			const saved = await onCreateArrow?.(connectStart, endpoint);
+			if (connectMode && saved === true) connectStart = endpoint;
+		} finally {
+			connectSaving = false;
+		}
 	}
 
 	function toggleFlowMode() {
@@ -434,6 +537,7 @@
 			return;
 		}
 		onClearSelection?.();
+		exitConnectMode();
 		flowMode = true;
 		flowFromItemId = null;
 		if (edges.length > 0) {
@@ -637,6 +741,7 @@
 		if (desktopViewOpen) desktopViewOpen = false;
 		if (mobileToolsOpen) mobileToolsOpen = false;
 		if (target.closest('[data-flow-edge]')) return;
+		if (target.closest('[data-canvas-element]')) return;
 
 		if (flowFromItemId) {
 			flowFromItemId = null;
@@ -646,6 +751,7 @@
 		}
 
 		pinnedFlowMenuSeqId = null;
+		onSelectElement?.(null);
 		onBlankPointerDown?.();
 
 		// Pan: Space+drag or middle-click (scroll/trackpad also pans).
@@ -661,6 +767,12 @@
 
 		if (e.button !== 0) return;
 		if (flowMode) return;
+		if (connectMode) {
+			e.preventDefault();
+			const pos = clientToBoard(e.clientX, e.clientY);
+			void chooseConnectEndpoint({ type: 'point', x: pos.x, y: pos.y });
+			return;
+		}
 		if (expandedNoteId) onCollapse();
 		hoveredBowlId = null;
 
@@ -1113,6 +1225,12 @@
 			target.closest('[data-resize-handle]') ||
 			target.closest('[data-flow-edge]')
 		) {
+			return;
+		}
+		if (connectMode) {
+			e.stopPropagation();
+			e.preventDefault();
+			void chooseConnectEndpoint({ type: 'item', itemId: item.id, anchor: 'auto' });
 			return;
 		}
 		if (flowMode) {
@@ -1699,6 +1817,15 @@
 				mobileToolsOpen = false;
 				return;
 			}
+			if (e.key === 'Escape' && (connectStart || connectMode)) {
+				e.preventDefault();
+				if (connectStart) {
+					connectStart = null;
+					return;
+				}
+				exitConnectMode();
+				return;
+			}
 			if (e.key === 'Escape' && (flowFromItemId || flowMode)) {
 				e.preventDefault();
 				if (flowFromItemId) {
@@ -1721,6 +1848,11 @@
 			if (pendingMash) return;
 			const tag = (e.target as HTMLElement)?.tagName;
 			if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+			if (selectedElementId && pointerOverBoard && (e.key === 'Delete' || e.key === 'Backspace')) {
+				e.preventDefault();
+				void onRemoveArrow?.(selectedElementId);
+				return;
+			}
 			if (
 				(e.metaKey || e.ctrlKey) &&
 				e.key.toLowerCase() === 'a' &&
@@ -1878,6 +2010,72 @@
 		class="absolute top-0 left-0 origin-top-left will-change-transform"
 		style="transform: translate({panX}px, {panY}px) scale({scale});"
 	>
+		{#if elementPaths.length > 0}
+			<svg
+				class="pointer-events-none absolute top-0 left-0 z-[1] overflow-visible"
+				width="1"
+				height="1"
+				aria-label="Canvas connections"
+			>
+				<defs>
+					<marker
+						id="mash-canvas-arrowhead"
+						markerWidth="9"
+						markerHeight="9"
+						refX="7"
+						refY="3.5"
+						orient="auto"
+						markerUnits="strokeWidth"
+					>
+						<path d="M0,0 L7,3.5 L0,7 Z" fill="context-stroke" />
+					</marker>
+				</defs>
+				{#each elementPaths as path (path.element.id)}
+					<g
+						data-canvas-element
+						data-canvas-element-id={path.element.id}
+						class:selected={selectedElementId === path.element.id}
+					>
+						<path
+							d={path.d}
+							fill="none"
+							stroke={arrowColor(path.element.color)}
+							stroke-width={selectedElementId === path.element.id ? 3 : 2.25}
+							stroke-dasharray={path.element.stroke === 'dashed' ? '8 7' : undefined}
+							stroke-linecap="round"
+							marker-end="url(#mash-canvas-arrowhead)"
+							opacity={selectedElementId === path.element.id ? 1 : 0.82}
+						/>
+						<!-- Wide transparent stroke keeps thin arrows easy to select. -->
+						<path
+							data-canvas-element
+							role="button"
+							tabindex="0"
+							aria-label={path.element.label
+								? `Select connection ${path.element.label}`
+								: 'Select connection'}
+							d={path.d}
+							fill="none"
+							stroke="transparent"
+							stroke-width="16"
+							class="pointer-events-auto cursor-pointer"
+							onpointerdown={(e) => e.stopPropagation()}
+							onclick={(e) => {
+								e.stopPropagation();
+								onClearSelection?.();
+								onSelectElement?.(path.element.id);
+							}}
+							onkeydown={(e) => {
+								if (e.key !== 'Enter' && e.key !== ' ') return;
+								e.preventDefault();
+								onClearSelection?.();
+								onSelectElement?.(path.element.id);
+							}}
+						/>
+					</g>
+				{/each}
+			</svg>
+		{/if}
 		{#each bowlViews as view (view.bowl.id)}
 			<div
 				data-bowl-id={view.bowl.id}
@@ -1979,6 +2177,7 @@
 				<div
 					data-canvas-card
 					data-note-id={note.id}
+					data-card-color={item.color ?? 'green'}
 					data-system-welcome={isPermanentWelcome ? 'true' : undefined}
 					role="group"
 					aria-label={`${note.title || 'Untitled'}${selected ? ', selected' : ''}`}
@@ -1993,7 +2192,11 @@
 						? 'is-mash-confirming'
 						: ''} {isMash ? 'is-mash-result' : ''} {flowFromItemId === item.id
 						? 'is-flow-source'
-						: ''} {flowMode ? 'is-flow-mode' : ''}"
+						: ''} {flowMode ? 'is-flow-mode' : ''} {connectMode
+						? 'is-connect-mode'
+						: ''} {connectStart?.type === 'item' && connectStart.itemId === item.id
+						? 'is-connect-source'
+						: ''}"
 					style="left: {item.x}px; top: {item.y}px; width: {size.w}px; height: {size.h}px;"
 					onpointerdown={(e) => startCardDrag(e, item)}
 					onpointerup={(e) => endCardDrag(e, item)}
@@ -2384,6 +2587,93 @@
 			{/if}
 		{/each}
 
+		{#each elementPaths as path (path.element.id)}
+			{#if path.element.label && selectedElementId !== path.element.id}
+				<span
+					class="mash-canvas-arrow-label pointer-events-none absolute z-[3] -translate-x-1/2 -translate-y-1/2"
+					style="left: {path.midX}px; top: {path.midY}px;"
+				>
+					{path.element.label}
+				</span>
+			{/if}
+			{#if selectedElementId === path.element.id}
+				<div
+					data-canvas-element
+					data-canvas-chrome
+					class="mash-canvas-arrow-toolbar absolute z-[7] flex -translate-x-1/2 -translate-y-1/2 items-center gap-1 rounded-xl border p-1 shadow-xl"
+					style="left: {path.midX}px; top: {path.midY}px;"
+					role="group"
+					aria-label="Connection options"
+					onpointerdown={(e) => e.stopPropagation()}
+				>
+					<input
+						class="mash-focus mash-type-micro w-24 rounded-md border bg-transparent px-2 py-1 outline-none"
+						value={path.element.label ?? ''}
+						placeholder="Label…"
+						maxlength="80"
+						aria-label="Connection label"
+						onblur={(e) => {
+							const label = e.currentTarget.value.trim();
+							if (label === (path.element.label ?? '')) return;
+							void onPatchArrow?.(
+								path.element.id,
+								{ label: label || undefined },
+								'Label connection'
+							);
+						}}
+						onkeydown={(e) => {
+							if (e.key === 'Enter') e.currentTarget.blur();
+							if (e.key === 'Escape') {
+								e.currentTarget.value = path.element.label ?? '';
+								e.currentTarget.blur();
+							}
+						}}
+					/>
+					{#each ['green', 'amber', 'blue', 'rose', 'violet', 'slate'] as color (color)}
+						<button
+							type="button"
+							class="mash-canvas-color-dot {path.element.color === color ||
+							(color === 'green' && !path.element.color)
+								? 'is-active'
+								: ''}"
+							style="--dot-color: {arrowColor(color as CanvasColor)}"
+							aria-label={`${color} connection`}
+							title={`${color} connection`}
+							onclick={() =>
+								void onPatchArrow?.(
+									path.element.id,
+									{ color: color as CanvasColor },
+									'Color connection'
+								)}
+						></button>
+					{/each}
+					<button
+						type="button"
+						class="mash-canvas-arrow-action mash-type-micro"
+						title={path.element.stroke === 'dashed' ? 'Use solid line' : 'Use dashed line'}
+						aria-label={path.element.stroke === 'dashed' ? 'Use solid line' : 'Use dashed line'}
+						onclick={() =>
+							void onPatchArrow?.(
+								path.element.id,
+								{ stroke: path.element.stroke === 'dashed' ? 'solid' : 'dashed' },
+								'Style connection'
+							)}
+					>
+						{path.element.stroke === 'dashed' ? '—' : '┄'}
+					</button>
+					<button
+						type="button"
+						class="mash-canvas-arrow-action mash-type-micro"
+						title="Delete connection"
+						aria-label="Delete connection"
+						onclick={() => void onRemoveArrow?.(path.element.id)}
+					>
+						×
+					</button>
+				</div>
+			{/if}
+		{/each}
+
 		{#if marqueeStyle}
 			<div class="mash-marquee absolute" style={marqueeStyle}></div>
 		{/if}
@@ -2675,6 +2965,9 @@
 		{flowMode}
 		{flowConnecting}
 		{flowFromItemId}
+		{connectMode}
+		{connectSaving}
+		connectHasStart={connectStart !== null}
 		{scale}
 		{altHeld}
 		itemCount={items.length}
@@ -2687,6 +2980,7 @@
 		{onOpenShortcuts}
 		{toggleSnap}
 		{toggleFlowMode}
+		{toggleConnectMode}
 		{zoomToFit}
 		{organizeToSnap}
 		{toggleSelectAllOnBoard}

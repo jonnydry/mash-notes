@@ -8,6 +8,9 @@
 /** Body text alignment in the sticky editor / preview. */
 export type TextAlign = 'left' | 'center' | 'right';
 
+/** Restrained visual accents for one card placement or canvas annotation. */
+export type CanvasColor = 'green' | 'amber' | 'blue' | 'rose' | 'violet' | 'slate';
+
 export type SessionMode = 'scratch' | 'kept';
 export type SessionStatus = 'active' | 'recovering';
 
@@ -150,7 +153,39 @@ export interface CanvasItem {
 	y: number;
 	w?: number;
 	h?: number;
+	/** Canvas-only appearance. The underlying note and content exports stay unchanged. */
+	color?: CanvasColor;
 }
+
+export type CanvasArrowAnchor = 'auto' | 'top' | 'right' | 'bottom' | 'left';
+
+/** One end of a visual arrow, either free on the board or bound to a card. */
+export type CanvasArrowEndpoint =
+	| { type: 'point'; x: number; y: number }
+	| { type: 'item'; itemId: string; anchor: CanvasArrowAnchor };
+
+export interface CanvasElementBase {
+	id: string;
+	canvasId: string;
+	/** Per-element schema version for future annotation migrations. */
+	version: 1;
+	zIndex: number;
+	created: number;
+	modified: number;
+}
+
+/** A cosmetic relationship. Unlike CanvasEdge, this never implies Sequence order. */
+export interface CanvasArrowElement extends CanvasElementBase {
+	kind: 'arrow';
+	start: CanvasArrowEndpoint;
+	end: CanvasArrowEndpoint;
+	label?: string;
+	color?: CanvasColor;
+	stroke?: 'solid' | 'dashed';
+}
+
+/** Extensible home for non-note canvas marks (arrows in v1; shapes/freehand later). */
+export type CanvasElement = CanvasArrowElement;
 
 /**
  * Directed flow edge between two cards on a canvas (storyboard / page order).

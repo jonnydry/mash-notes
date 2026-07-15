@@ -4,7 +4,16 @@
  * Desk bundles remain the portable active-session format. Workspace backups
  * preserve every Mash session and validate/preview before any durable writes.
  */
-import type { Canvas, CanvasEdge, CanvasItem, Note, NoteBlob, Operation, Session } from './types';
+import type {
+	Canvas,
+	CanvasEdge,
+	CanvasElement,
+	CanvasItem,
+	Note,
+	NoteBlob,
+	Operation,
+	Session
+} from './types';
 import { db, KEPT_COLLECTION_SESSION_ID } from './db';
 import { FILE_FORMAT_LIMITS } from './file-intake';
 import { exportAllDismissed, importDismissedMap, type DismissedByCanvas } from './canvas-dismiss';
@@ -19,8 +28,11 @@ import {
 } from './sync-file';
 import type { SyncConflict } from './sync-model';
 import { MASH_APP_VERSION } from './app-version';
+import { canvasElementBindsItem, cloneCanvasElement } from './canvas-elements';
+import { WORKSPACE_BACKUP_VERSION } from './workspace-backup-version';
 
-export const WORKSPACE_BACKUP_VERSION = 6 as const;
+export { WORKSPACE_BACKUP_VERSION } from './workspace-backup-version';
+const WORKSPACE_BACKUP_VERSION_V6 = 6 as const;
 export const WORKSPACE_BACKUP_MAX_CHARS = FILE_FORMAT_LIMITS.workspaceBackupBytes;
 export const WORKSPACE_BACKUP_KIND = 'mash-backup' as const;
 
@@ -46,6 +58,7 @@ export type WorkspaceBackup = {
 	canvases: Canvas[];
 	canvasItems: CanvasItem[];
 	canvasEdges: CanvasEdge[];
+	canvasElements: CanvasElement[];
 	operations: Operation[];
 	blobs: SyncBlob[];
 	tombstones: SyncTombstone[];
@@ -62,6 +75,7 @@ export type WorkspaceSnapshot = {
 	canvases: Canvas[];
 	canvasItems: CanvasItem[];
 	canvasEdges: CanvasEdge[];
+	canvasElements: CanvasElement[];
 	operations: Operation[];
 	assets: NoteBlob[];
 	dismissed: DismissedByCanvas;
@@ -202,14 +216,16 @@ function countsFor(backup: Pick<WorkspaceBackup, 'sessions' | 'notes' | 'blobs' 
 }
 
 export async function collectWorkspaceSnapshot(): Promise<WorkspaceSnapshot> {
-	const [sessions, notes, canvases, canvasItems, canvasEdges, operations] = await Promise.all([
-		db.sessions.toArray(),
-		db.notes.toArray(),
-		db.canvases.toArray(),
-		db.canvasItems.toArray(),
-		db.canvasEdges.toArray(),
-		db.operations.toArray()
-	]);
+	const [sessions, notes, canvases, canvasItems, canvasEdges, canvasElements, operations] =
+		await Promise.all([
+			db.sessions.toArray(),
+			db.notes.toArray(),
+			db.canvases.toArray(),
+			db.canvasItems.toArray(),
+			db.canvasEdges.toArray(),
+			db.canvasElements.toArray(),
+			db.operations.toArray()
+		]);
 	const materializedSessions = sessions.map(cloneSession);
 	if (
 		!materializedSessions.some((session) => session.id === KEPT_COLLECTION_SESSION_ID) &&
@@ -236,6 +252,7 @@ export async function collectWorkspaceSnapshot(): Promise<WorkspaceSnapshot> {
 		canvases: canvases.map(cloneCanvas),
 		canvasItems: canvasItems.map((item) => ({ ...item })),
 		canvasEdges: canvasEdges.map((edge) => ({ ...edge })),
+		canvasElements: canvasElements.map(cloneCanvasElement),
 		operations: operations.map(cloneOperation),
 		assets: assets.map((asset) => ({ ...asset, bytes: asset.bytes.slice(0) })),
 		dismissed: exportAllDismissed()
@@ -248,6 +265,7 @@ export function workspaceChangedAt(snapshot: WorkspaceSnapshot): number {
 		...snapshot.sessions.flatMap((session) => [session.modified, session.lastMeaningfulActivityAt]),
 		...snapshot.notes.flatMap((note) => [note.modified, note.deletedAt ?? 0]),
 		...snapshot.canvases.map((canvas) => canvas.modified),
+		...snapshot.canvasElements.map((element) => element.modified),
 		...snapshot.operations.flatMap((operation) => [operation.created, operation.revertedAt ?? 0]),
 		...snapshot.assets.map((asset) => asset.created)
 	);
@@ -294,6 +312,7 @@ export async function buildWorkspaceBackup(
 		canvases: source.canvases.map(cloneCanvas),
 		canvasItems: source.canvasItems.map((item) => ({ ...item })),
 		canvasEdges: source.canvasEdges.map((edge) => ({ ...edge })),
+		canvasElements: source.canvasElements.map(cloneCanvasElement),
 		operations: source.operations.map(cloneOperation),
 		blobs,
 		tombstones,
@@ -312,7 +331,7 @@ function parseWorkspaceBackupValue(data: unknown): WorkspaceBackupInspection {
 	if (data.kind !== WORKSPACE_BACKUP_KIND || data.scope !== 'workspace') {
 		return { ok: false, error: 'This is not a MASH workspace backup' };
 	}
-	if (data.version !== WORKSPACE_BACKUP_VERSION) {
+	if (data.version !== WORKSPACE_BACKUP_VERSION && data.version !== WORKSPACE_BACKUP_VERSION_V6) {
 		return { ok: false, error: `Unsupported workspace backup version (${String(data.version)})` };
 	}
 	if (!Array.isArray(data.sessions) || data.sessions.length > MAX_SESSIONS) {
@@ -346,6 +365,7 @@ function parseWorkspaceBackupValue(data: unknown): WorkspaceBackupInspection {
 			canvases: validationCanvases,
 			items: data.canvasItems,
 			edges: data.canvasEdges,
+			elements: data.canvasElements,
 			dismissed: data.dismissed
 		},
 		tombstones: data.tombstones,
@@ -444,6 +464,7 @@ function parseWorkspaceBackupValue(data: unknown): WorkspaceBackupInspection {
 			return { ok: false, error: 'Workspace backup contains a broken canvas connection' };
 		}
 	}
+	const canvasElements = parsed.bundle.desk?.elements ?? [];
 
 	const integrity = rawIntegrity(data.integrity);
 	if (!integrity) return { ok: false, error: 'Workspace backup is missing its integrity check' };
@@ -461,6 +482,7 @@ function parseWorkspaceBackupValue(data: unknown): WorkspaceBackupInspection {
 		canvases,
 		canvasItems: canvasItems.map((item) => ({ ...item })),
 		canvasEdges: (parsed.bundle.desk?.edges ?? []).map((edge) => ({ ...edge })),
+		canvasElements: canvasElements.map(cloneCanvasElement),
 		operations: (parsed.bundle.operations ?? []).map(cloneOperation),
 		blobs: (parsed.bundle.blobs ?? []).map((blob) => ({ ...blob })),
 		tombstones: (parsed.bundle.tombstones ?? []).map((tombstone) => ({ ...tombstone })),
@@ -537,6 +559,7 @@ export function planWorkspaceRestore(
 	);
 	countRows(backup.canvasItems, local.canvasItems, () => true);
 	countRows(backup.canvasEdges, local.canvasEdges, () => true);
+	countRows(backup.canvasElements, local.canvasElements, () => true);
 	countRows(
 		backup.operations,
 		local.operations,
@@ -653,6 +676,9 @@ export async function applyWorkspaceRestore(
 	const winningCanvasIds = new Set(canvasesToPut.map((canvas) => canvas.id));
 	const itemsToPut = backup.canvasItems.filter((item) => winningCanvasIds.has(item.canvasId));
 	const edgesToPut = backup.canvasEdges.filter((edge) => winningCanvasIds.has(edge.canvasId));
+	const elementsToPut = backup.canvasElements.filter((element) =>
+		winningCanvasIds.has(element.canvasId)
+	);
 	const localOperations = new Map(local.operations.map((operation) => [operation.id, operation]));
 	const operationsToPut = backup.operations.filter((operation) => {
 		const current = localOperations.get(operation.id);
@@ -674,6 +700,7 @@ export async function applyWorkspaceRestore(
 			db.canvases,
 			db.canvasItems,
 			db.canvasEdges,
+			db.canvasElements,
 			db.operations,
 			db.noteBlobs
 		],
@@ -682,6 +709,7 @@ export async function applyWorkspaceRestore(
 			if (mergedNotes.length > 0) await db.notes.bulkPut(mergedNotes.map(cloneNote));
 			for (const canvasId of winningCanvasIds) {
 				await db.canvasEdges.where('canvasId').equals(canvasId).delete();
+				await db.canvasElements.where('canvasId').equals(canvasId).delete();
 				await db.canvasItems.where('canvasId').equals(canvasId).delete();
 			}
 			if (canvasesToPut.length > 0) await db.canvases.bulkPut(canvasesToPut.map(cloneCanvas));
@@ -689,6 +717,8 @@ export async function applyWorkspaceRestore(
 				await db.canvasItems.bulkPut(itemsToPut.map((item) => ({ ...item })));
 			if (edgesToPut.length > 0)
 				await db.canvasEdges.bulkPut(edgesToPut.map((edge) => ({ ...edge })));
+			if (elementsToPut.length > 0)
+				await db.canvasElements.bulkPut(elementsToPut.map(cloneCanvasElement));
 			if (operationsToPut.length > 0) {
 				await db.operations.bulkPut(operationsToPut.map(cloneOperation));
 			}
@@ -704,6 +734,15 @@ export async function applyWorkspaceRestore(
 					await db.canvasEdges.bulkDelete([
 						...new Set([...fromEdges, ...toEdges].map((edge) => edge.id))
 					]);
+					const elements = await db.canvasElements.toArray();
+					const deletedElementIds = elements
+						.filter((element) =>
+							deletedItemIds.some((itemId) => canvasElementBindsItem(element, itemId))
+						)
+						.map((element) => element.id);
+					if (deletedElementIds.length > 0) {
+						await db.canvasElements.bulkDelete(deletedElementIds);
+					}
 					await db.canvasItems.bulkDelete(deletedItemIds);
 				}
 			}

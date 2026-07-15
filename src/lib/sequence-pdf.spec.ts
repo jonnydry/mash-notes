@@ -110,4 +110,14 @@ describe('buildSequencePdf', () => {
 		expect(doc.getPageCount()).toBe(1);
 		expect(withImage.byteLength).toBeGreaterThan(textOnly.byteLength);
 	});
+
+	it('recompiles two image cards as two visible PDF pages', async () => {
+		const bytes = await buildSequencePdf([
+			note({ id: '1', title: 'First clipped image', body: `![First clip](${TINY_PNG})` }),
+			note({ id: '2', title: 'Second clipped image', body: `![Second clip](${TINY_PNG})` })
+		]);
+		const doc = await PDFDocument.load(bytes);
+		expect(doc.getPageCount()).toBe(2);
+		expect(bytes.byteLength).toBeGreaterThan(1_000);
+	});
 });

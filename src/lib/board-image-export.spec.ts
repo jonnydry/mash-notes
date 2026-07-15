@@ -41,11 +41,38 @@ describe('board image plan', () => {
 			noteIds: ['a', 'b'],
 			notesById: new Map(notes.map((row) => [row.id, row])),
 			items: [item('ia', 'a', 100, 200), item('ib', 'b', 400, 200), item('ic', 'c', 800, 900)],
-			edges: [edge('ab', 'ia', 'ib'), edge('bc', 'ib', 'ic')]
+			edges: [edge('ab', 'ia', 'ib'), edge('bc', 'ib', 'ic')],
+			elements: [
+				{
+					id: 'visual-ab',
+					canvasId: 'canvas',
+					version: 1,
+					kind: 'arrow',
+					start: { type: 'item', itemId: 'ia', anchor: 'auto' },
+					end: { type: 'item', itemId: 'ib', anchor: 'auto' },
+					label: 'supports',
+					color: 'blue',
+					zIndex: 1,
+					created: 1,
+					modified: 1
+				},
+				{
+					id: 'visual-bc',
+					canvasId: 'canvas',
+					version: 1,
+					kind: 'arrow',
+					start: { type: 'item', itemId: 'ib', anchor: 'auto' },
+					end: { type: 'item', itemId: 'ic', anchor: 'auto' },
+					zIndex: 2,
+					created: 1,
+					modified: 1
+				}
+			]
 		});
 
 		expect(plan?.cards.map((card) => card.noteId)).toEqual(['a', 'b']);
 		expect(plan?.edges.map((row) => row.id)).toEqual(['ab']);
+		expect(plan?.elements.map((row) => row.id)).toEqual(['visual-ab']);
 		expect(plan).toMatchObject({ minX: 52, minY: 152, logicalWidth: 616, logicalHeight: 216 });
 	});
 
@@ -55,7 +82,8 @@ describe('board image plan', () => {
 			noteIds: ['a', 'b', 'c'],
 			notesById: new Map(notes.map((row) => [row.id, row])),
 			items: [item('ia', 'a', 0, 0)],
-			edges: []
+			edges: [],
+			elements: []
 		});
 
 		const [placed, firstSynthetic, secondSynthetic] = plan!.cards;
@@ -70,7 +98,8 @@ describe('board image plan', () => {
 			noteIds: ['a', 'b'],
 			notesById: new Map(notes.map((row) => [row.id, row])),
 			items: [item('ia', 'a', 0, 0), item('ib', 'b', 50_000, 30_000)],
-			edges: []
+			edges: [],
+			elements: []
 		});
 
 		expect(plan?.downscaled).toBe(true);
@@ -81,7 +110,39 @@ describe('board image plan', () => {
 
 	it('returns null for an empty or invalid scope', () => {
 		expect(
-			buildBoardImagePlan({ noteIds: ['missing'], notesById: new Map(), items: [], edges: [] })
+			buildBoardImagePlan({
+				noteIds: ['missing'],
+				notesById: new Map(),
+				items: [],
+				edges: [],
+				elements: []
+			})
 		).toBeNull();
+	});
+
+	it('includes free arrow endpoints in the exported image bounds and card colors in the plan', () => {
+		const plan = buildBoardImagePlan({
+			noteIds: ['a'],
+			notesById: new Map([['a', note('a')]]),
+			items: [{ ...item('ia', 'a', 100, 100), color: 'amber' }],
+			edges: [],
+			elements: [
+				{
+					id: 'free',
+					canvasId: 'canvas',
+					version: 1,
+					kind: 'arrow',
+					start: { type: 'item', itemId: 'ia', anchor: 'auto' },
+					end: { type: 'point', x: 700, y: 500 },
+					zIndex: 1,
+					created: 1,
+					modified: 1
+				}
+			]
+		});
+		expect(plan?.cards[0]?.color).toBe('amber');
+		expect(plan?.elements).toHaveLength(1);
+		expect(plan!.logicalWidth).toBeGreaterThan(600);
+		expect(plan!.logicalHeight).toBeGreaterThan(400);
 	});
 });

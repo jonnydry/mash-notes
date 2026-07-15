@@ -14,6 +14,12 @@ test.describe('Selection bar primary verbs', () => {
 
 		const bar = page.locator('.mash-dock').filter({ hasText: '2 selected' });
 		await expect(bar).toBeVisible();
+		const barBox = await bar.boundingBox();
+		const viewport = page.viewportSize();
+		expect(barBox).not.toBeNull();
+		expect(viewport).not.toBeNull();
+		expect(barBox!.x).toBeGreaterThanOrEqual(0);
+		expect(barBox!.x + barBox!.width).toBeLessThanOrEqual(viewport!.width);
 
 		// Primary kitchen verbs stay loud
 		await expect(bar.getByTestId('selection-mash')).toBeVisible();

@@ -1,7 +1,7 @@
 /**
  * Finish takeaway export/commit + desk switch/restore helpers.
  */
-import type { CanvasEdge, CanvasItem, Note, Session } from './types';
+import type { CanvasEdge, CanvasElement, CanvasItem, Note, Session } from './types';
 import {
 	createFinishSnapshot,
 	noteIdsForFinishScope,
@@ -28,6 +28,7 @@ export type FinishSessionUiDeps = {
 	getNotesById: () => Map<string, Note>;
 	getCanvasItems: () => CanvasItem[];
 	getCanvasEdges: () => CanvasEdge[];
+	getCanvasElements: () => CanvasElement[];
 	getSelectionIds: () => string[];
 	getOperations: () => import('./types').Operation[];
 	flushPendingSaveAsync: () => Promise<void>;
@@ -101,6 +102,7 @@ export function createFinishSessionUi(deps: FinishSessionUiDeps) {
 					notesById: deps.getNotesById(),
 					items: deps.getCanvasItems(),
 					edges: deps.getCanvasEdges(),
+					elements: deps.getCanvasElements(),
 					theme: deps.getTheme(),
 					filename: `${slugifyFilename(deps.getActiveSession()?.title ?? 'mash-desk')}-${scope}-board.png`
 				});

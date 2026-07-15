@@ -84,6 +84,31 @@ describe('canvas-undo', () => {
 		expect(undone?.edgesBefore).toHaveLength(1);
 	});
 
+	it('records cosmetic element mutations and prunes bindings to removed cards', () => {
+		const stack = new CanvasUndoStack();
+		const arrow = {
+			id: 'arrow-1',
+			canvasId: 'c',
+			version: 1 as const,
+			kind: 'arrow' as const,
+			start: { type: 'item' as const, itemId: 'a', anchor: 'auto' as const },
+			end: { type: 'point' as const, x: 300, y: 200 },
+			zIndex: 1,
+			created: 1,
+			modified: 1
+		};
+		stack.push({
+			label: 'Connect',
+			before: [],
+			after: [],
+			elementsBefore: [],
+			elementsAfter: [arrow]
+		});
+		expect(stack.canUndo).toBe(true);
+		stack.pruneItemIds(['a']);
+		expect(stack.canUndo).toBe(false);
+	});
+
 	it('orders notes spatially and ranges between them', () => {
 		const order = spatialNoteOrder([
 			{ noteId: 'c', x: 100, y: 0 },

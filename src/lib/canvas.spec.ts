@@ -25,6 +25,7 @@ describe('Canvas DB', () => {
 	beforeEach(async () => {
 		await db.notes.clear();
 		await db.canvases.clear();
+		await db.canvasElements.clear();
 		await db.canvasItems.clear();
 	});
 

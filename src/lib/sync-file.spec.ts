@@ -72,7 +72,7 @@ describe('sync-file', () => {
 		expect(parsed.bundle.version).toBe(version);
 	});
 
-	it('round-trips a v4 sync bundle with desk and operation provenance', async () => {
+	it('round-trips the current bundle with appearance, canvas elements, and provenance', async () => {
 		const notes = [note({ id: 'a', title: 'A', body: 'hi', modified: 10, operationId: 'op-1' })];
 		await db.operations.put({
 			id: 'op-1',
@@ -94,13 +94,31 @@ describe('sync-file', () => {
 			canvasId: 'c1',
 			noteId: 'a',
 			x: 10,
-			y: 20
+			y: 20,
+			color: 'amber'
+		});
+		await db.canvasElements.put({
+			id: 'arrow-1',
+			canvasId: 'c1',
+			version: 1,
+			kind: 'arrow',
+			start: { type: 'item', itemId: 'i1', anchor: 'right' },
+			end: { type: 'point', x: 320, y: 80 },
+			zIndex: 1,
+			created: 5,
+			modified: 5,
+			label: 'Next idea',
+			color: 'blue'
 		});
 		dismissNoteFromCanvas('c1', 'gone');
 
 		const bundle = await buildSyncBundle(notes);
 		expect(bundle.version).toBe(SYNC_BUNDLE_VERSION);
 		expect(bundle.desk?.items).toHaveLength(1);
+		expect(bundle.desk?.items[0]?.color).toBe('amber');
+		expect(bundle.desk?.elements).toEqual([
+			expect.objectContaining({ id: 'arrow-1', label: 'Next idea', color: 'blue' })
+		]);
 		expect(bundle.desk?.dismissed.c1).toContain('gone');
 		expect(bundle.tombstones).toEqual([]);
 		expect(bundle.operations?.[0]).toMatchObject({ id: 'op-1', type: 'mash' });
@@ -112,6 +130,46 @@ describe('sync-file', () => {
 		expect(parsed.bundle.notes[0].operationId).toBe('op-1');
 		expect(parsed.bundle.operations?.[0].outputNoteIds).toEqual(['a']);
 		expect(parsed.bundle.desk?.canvases[0].folder).toBe('');
+		expect(parsed.bundle.desk?.elements?.[0]).toMatchObject({
+			start: { type: 'item', itemId: 'i1', anchor: 'right' },
+			end: { type: 'point', x: 320, y: 80 }
+		});
+	});
+
+	it('rejects broken or unsupported canvas element data', () => {
+		const base = {
+			version: SYNC_BUNDLE_VERSION,
+			exportedAt: 1,
+			notes: [note({ id: 'a', title: 'A' })],
+			desk: {
+				canvases: [{ id: 'c1', folder: '', title: 'Desk', created: 1, modified: 1 }],
+				items: [{ id: 'i1', canvasId: 'c1', noteId: 'a', x: 0, y: 0 }],
+				elements: [
+					{
+						id: 'arrow-1',
+						canvasId: 'c1',
+						version: 1,
+						kind: 'arrow',
+						start: { type: 'item', itemId: 'missing', anchor: 'right' },
+						end: { type: 'point', x: 100, y: 100 },
+						zIndex: 0,
+						created: 1,
+						modified: 1
+					}
+				],
+				dismissed: {}
+			}
+		};
+		expect(parseSyncBundle(JSON.stringify(base))).toEqual({
+			ok: false,
+			error: 'Canvas element 1 contains a broken card binding'
+		});
+		base.desk.elements[0]!.start = { type: 'item', itemId: 'i1', anchor: 'right' };
+		base.desk.elements[0]!.version = 2;
+		expect(parseSyncBundle(JSON.stringify(base))).toEqual({
+			ok: false,
+			error: 'Canvas element 1 has an unsupported version'
+		});
 	});
 
 	it('still accepts v3 tombstone bundles without operation history', () => {
@@ -277,6 +335,50 @@ describe('sync-file', () => {
 		const byNote = new Map(items.map((i) => [i.noteId, i.id]));
 		expect(edges[0].fromItemId).toBe(byNote.get('n1'));
 		expect(edges[0].toItemId).toBe(byNote.get('n2'));
+	});
+
+	it('applies visual arrows with remapped bindings and card colors', async () => {
+		await db.canvases.put({
+			id: 'local-root',
+			folder: '',
+			title: 'Desk',
+			created: 1,
+			modified: 1
+		});
+		const desk = {
+			canvases: [{ id: 'remote-root', folder: '', title: 'Desk', created: 1, modified: 10 }],
+			items: [
+				{ id: 'ri1', canvasId: 'remote-root', noteId: 'n1', x: 0, y: 0, color: 'rose' as const },
+				{ id: 'ri2', canvasId: 'remote-root', noteId: 'n2', x: 300, y: 0 }
+			],
+			elements: [
+				{
+					id: 'remote-arrow',
+					canvasId: 'remote-root',
+					version: 1 as const,
+					kind: 'arrow' as const,
+					start: { type: 'item' as const, itemId: 'ri1', anchor: 'right' as const },
+					end: { type: 'item' as const, itemId: 'ri2', anchor: 'left' as const },
+					zIndex: 2,
+					created: 5,
+					modified: 5,
+					label: 'Depends on'
+				}
+			],
+			dismissed: {}
+		};
+		const summary = await applyDeskSnapshot(desk, new Set(['n1', 'n2']));
+		expect(summary.elementsUpserted).toBe(1);
+		const items = await db.canvasItems.where('canvasId').equals('local-root').toArray();
+		const byNote = new Map(items.map((item) => [item.noteId, item]));
+		expect(byNote.get('n1')?.color).toBe('rose');
+		const elements = await db.canvasElements.where('canvasId').equals('local-root').toArray();
+		expect(elements).toHaveLength(1);
+		expect(elements[0]).toMatchObject({
+			start: { type: 'item', itemId: byNote.get('n1')?.id },
+			end: { type: 'item', itemId: byNote.get('n2')?.id },
+			label: 'Depends on'
+		});
 	});
 
 	it('persistMergedSync commits notes and desk together', async () => {
