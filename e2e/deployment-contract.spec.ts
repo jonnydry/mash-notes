@@ -41,4 +41,11 @@ test.describe('Deployment contract', () => {
 		expect(deepLink.ok()).toBe(true);
 		expect(await deepLink.text()).toBe(html);
 	});
+
+	test('returns unknown browser routes to the Mash canvas', async ({ page }) => {
+		await page.goto('/release-smoke/deep-link');
+
+		await expect(page).toHaveURL('/');
+		await expect(page.getByRole('application', { name: 'Mash canvas' })).toBeVisible();
+	});
 });
