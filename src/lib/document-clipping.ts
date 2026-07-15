@@ -4,7 +4,10 @@
  */
 import {
 	docxClippingTitle,
+	docxImageClippingAlt,
+	docxImageClippingTitle,
 	normalizeDocxExcerpt,
+	normalizeDocxImageIndex,
 	type DocxClipPayload,
 	type DocxClipping
 } from './docx-clipping';
@@ -76,7 +79,34 @@ export async function buildPdfClippingDraft(
 	};
 }
 
-export function buildDocxClippingDraft(file: File, excerpt: DocxClipPayload): ClipNoteDraft | null {
+export async function buildDocxClippingDraft(
+	file: File,
+	excerpt: DocxClipPayload
+): Promise<ClipNoteDraft | null> {
+	if (excerpt.imageDataUrl) {
+		const imageIndex = normalizeDocxImageIndex(excerpt.imageIndex);
+		const title = docxImageClippingTitle(file.name, imageIndex);
+		const imageAlt = docxImageClippingAlt(file.name, imageIndex, excerpt.imageAlt);
+		const { putNoteBlobFromDataUrl, imageNoteBodyFromBlob } = await import('./note-blobs');
+		const blob = await putNoteBlobFromDataUrl(excerpt.imageDataUrl);
+		const sourceName = normalizeDocxExcerpt(file.name, 200) || 'Word document';
+		return {
+			title,
+			body: imageNoteBodyFromBlob(blob.id, imageAlt, `_From ${sourceName}._`),
+			tags: ['docx-clipping'],
+			source: { kind: 'docx', title: file.name },
+			toast: 'Saved image from Word document',
+			clipping: {
+				id: crypto.randomUUID(),
+				noteId: '',
+				text: title,
+				imageDataUrl: excerpt.imageDataUrl,
+				imageAlt,
+				imageIndex
+			}
+		};
+	}
+
 	const text = normalizeDocxExcerpt(excerpt.text ?? '');
 	if (!text) return null;
 	return {

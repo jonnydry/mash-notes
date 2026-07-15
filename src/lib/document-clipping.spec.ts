@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import 'fake-indexeddb/auto';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { db } from './db';
+import { extractBlobIdsFromBody } from './note-blobs';
 import {
 	buildDocxClippingDraft,
 	buildHtmlClippingDraft,
@@ -10,9 +13,17 @@ function file(name: string, type = 'application/octet-stream'): File {
 	return new File(['x'], name, { type });
 }
 
+const TINY_PNG =
+	'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
 describe('document clipping drafts', () => {
-	it('buildDocxClippingDraft normalizes text and tags source', () => {
-		const draft = buildDocxClippingDraft(file('brief.docx'), {
+	beforeEach(async () => {
+		await db.delete();
+		await db.open();
+	});
+
+	it('buildDocxClippingDraft normalizes text and tags source', async () => {
+		const draft = await buildDocxClippingDraft(file('brief.docx'), {
 			text: '  Hello   world from Word.  More context.  '
 		});
 		expect(draft).not.toBeNull();
@@ -26,8 +37,35 @@ describe('document clipping drafts', () => {
 		expect(draft!.clipping.id).toBeTruthy();
 	});
 
-	it('buildDocxClippingDraft returns null for empty excerpt', () => {
-		expect(buildDocxClippingDraft(file('a.docx'), { text: '   \n' })).toBeNull();
+	it('buildDocxClippingDraft stores an embedded image as a blob-backed visual note', async () => {
+		const draft = await buildDocxClippingDraft(file('visual brief.docx'), {
+			imageDataUrl: TINY_PNG,
+			imageAlt: 'Quarterly [chart]',
+			imageIndex: 2
+		});
+
+		expect(draft).not.toBeNull();
+		expect(draft!.title).toBe('visual brief · image 2');
+		expect(draft!.body).toContain('![Quarterly chart](mash-blob:');
+		expect(draft!.body).toContain('_From visual brief.docx._');
+		expect(draft!.body).not.toContain('base64');
+		expect(draft!.source).toEqual({ kind: 'docx', title: 'visual brief.docx' });
+		expect(draft!.toast).toBe('Saved image from Word document');
+		expect(draft!.clipping).toMatchObject({
+			noteId: '',
+			text: 'visual brief · image 2',
+			imageDataUrl: TINY_PNG,
+			imageAlt: 'Quarterly chart',
+			imageIndex: 2
+		});
+
+		const blobIds = extractBlobIdsFromBody(draft!.body);
+		expect(blobIds).toHaveLength(1);
+		expect(await db.noteBlobs.get(blobIds[0]!)).toMatchObject({ mime: 'image/png' });
+	});
+
+	it('buildDocxClippingDraft returns null for empty excerpt', async () => {
+		expect(await buildDocxClippingDraft(file('a.docx'), { text: '   \n' })).toBeNull();
 	});
 
 	it('buildHtmlClippingDraft tags html source', () => {

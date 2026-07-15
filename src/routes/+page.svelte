@@ -1132,7 +1132,7 @@
 	async function saveDocxClipping(excerpt: DocxClipPayload) {
 		const file = documentReaders.docxReaderFile;
 		if (!file) return;
-		const draft = buildDocxClippingDraft(file, excerpt);
+		const draft = await buildDocxClippingDraft(file, excerpt);
 		const adopted = await adoptClipDraft(draft);
 		if (!adopted) return;
 		documentReaders.docxClippings = [

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onDestroy } from 'svelte';
+	import { onDestroy, tick } from 'svelte';
 	import { FileText } from 'lucide-svelte';
 	import type { DocxClipPayload, DocxClipping } from '$lib/docx-clipping';
 	import { normalizeDocxExcerpt } from '$lib/docx-clipping';
@@ -26,13 +26,25 @@
 	let selectionText = $state('');
 	let selectionPoint = $state({ left: 0, top: 0 });
 	let savingExcerpt = $state(false);
+	let selectedImage = $state<{ src: string; alt: string; index: number } | null>(null);
+	let selectedImageEl: HTMLImageElement | null = null;
+	let saveImageButtonEl: HTMLButtonElement | undefined = $state();
 	let loadGeneration = 0;
 	let disposed = false;
+	let selectedImageAlreadyClipped = $derived(
+		selectedImage !== null &&
+			clippings.some(
+				(clipping) =>
+					clipping.imageDataUrl !== undefined && clipping.imageIndex === selectedImage?.index
+			)
+	);
 
 	let shellClippings = $derived(
 		clippings.map((clipping) => ({
 			id: clipping.id,
-			text: clipping.text
+			text: clipping.text,
+			meta: clipping.imageDataUrl ? (clipping.imageAlt ?? 'Word image') : undefined,
+			imageDataUrl: clipping.imageDataUrl
 		}))
 	);
 
@@ -46,12 +58,28 @@
 		void loadDocx(currentFile);
 	});
 
+	$effect(() => {
+		const currentHtml = html;
+		const isLoading = loading;
+		const savedImageIndexes = new Set(
+			clippings.flatMap((clipping) =>
+				clipping.imageDataUrl && clipping.imageIndex ? [clipping.imageIndex] : []
+			)
+		);
+		if (!currentHtml || isLoading) return;
+		void tick().then(() => {
+			if (disposed || currentHtml !== html || loading) return;
+			decorateImageTargets(savedImageIndexes);
+		});
+	});
+
 	async function loadDocx(currentFile: File) {
 		const generation = ++loadGeneration;
 		loading = true;
 		error = '';
 		html = '';
 		selectionText = '';
+		clearImageSelection();
 		try {
 			if (currentFile.size > MAX_DOCX_BYTES) {
 				error = 'This Word document is too large to open (max 8 MB).';
@@ -76,7 +104,71 @@
 		}
 	}
 
+	function decorateImageTargets(savedImageIndexes: ReadonlySet<number>) {
+		if (!articleEl) return;
+		const images = [...articleEl.querySelectorAll('img')];
+		for (const [offset, image] of images.entries()) {
+			const index = offset + 1;
+			const alt = image.getAttribute('alt')?.trim() || `Image ${index}`;
+			const isSaved = savedImageIndexes.has(index);
+			image.dataset.docxImageIndex = String(index);
+			image.tabIndex = 0;
+			image.setAttribute('role', 'button');
+			image.setAttribute(
+				'aria-label',
+				isSaved ? `${alt}, saved to clippings` : `Clip ${alt} from this Word document`
+			);
+			image.title = isSaved ? 'Saved to clippings' : 'Click to clip this image';
+			image.draggable = false;
+			image.classList.toggle('is-clipped', isSaved);
+			image.classList.toggle('is-clip-selected', image === selectedImageEl);
+		}
+	}
+
+	function clearImageSelection() {
+		selectedImageEl?.classList.remove('is-clip-selected');
+		selectedImageEl = null;
+		selectedImage = null;
+	}
+
+	async function selectImage(image: HTMLImageElement, focusAction = false) {
+		const src = image.getAttribute('src')?.trim() ?? '';
+		if (!/^data:image\/(?:png|jpe?g|gif|webp);base64,/i.test(src)) return;
+
+		clearImageSelection();
+		selectionText = '';
+		window.getSelection()?.removeAllRanges();
+
+		const images = articleEl ? [...articleEl.querySelectorAll('img')] : [];
+		const storedIndex = Number(image.dataset.docxImageIndex);
+		const imageIndex =
+			Number.isInteger(storedIndex) && storedIndex > 0
+				? storedIndex
+				: Math.max(1, images.indexOf(image) + 1);
+		const alt = image.getAttribute('alt')?.trim() || `Image ${imageIndex}`;
+		selectedImageEl = image;
+		selectedImage = { src, alt, index: imageIndex };
+		image.classList.add('is-clip-selected');
+
+		const imageRect = image.getBoundingClientRect();
+		const shellRect = pageShellEl?.getBoundingClientRect();
+		if (shellRect) {
+			const maxLeft = Math.max(12, shellRect.width - 148);
+			const maxTop = Math.max(12, shellRect.height - 48);
+			selectionPoint = {
+				left: Math.min(maxLeft, Math.max(12, imageRect.right - shellRect.left + 10)),
+				top: Math.min(maxTop, Math.max(12, imageRect.top - shellRect.top + 8))
+			};
+		}
+
+		if (focusAction) {
+			await tick();
+			saveImageButtonEl?.focus();
+		}
+	}
+
 	function captureSelection() {
+		clearImageSelection();
 		const selection = window.getSelection();
 		if (!selection || selection.rangeCount === 0 || selection.isCollapsed || !articleEl) {
 			selectionText = '';
@@ -107,7 +199,20 @@
 	function onStagePointerUp(event: PointerEvent) {
 		const target = event.target as HTMLElement | null;
 		if (target?.closest('.mash-pdf-save-selection')) return;
+		const image = target?.closest('img');
+		if (image instanceof HTMLImageElement && articleEl?.contains(image)) {
+			void selectImage(image);
+			return;
+		}
 		window.setTimeout(captureSelection, 0);
+	}
+
+	function onArticleKeyDown(event: KeyboardEvent) {
+		if (event.key !== 'Enter' && event.key !== ' ') return;
+		const image = event.target;
+		if (!(image instanceof HTMLImageElement) || !articleEl?.contains(image)) return;
+		event.preventDefault();
+		void selectImage(image, true);
 	}
 
 	async function saveSelection() {
@@ -121,7 +226,25 @@
 			savingExcerpt = false;
 		}
 	}
+
+	async function saveImage() {
+		const image = selectedImage;
+		if (!image || savingExcerpt || selectedImageAlreadyClipped) return;
+		savingExcerpt = true;
+		try {
+			await onClip({
+				imageDataUrl: image.src,
+				imageAlt: image.alt,
+				imageIndex: image.index
+			});
+			clearImageSelection();
+		} finally {
+			savingExcerpt = false;
+		}
+	}
 </script>
+
+<svelte:window onkeydown={onArticleKeyDown} />
 
 <DocumentReaderShell
 	{open}
@@ -130,7 +253,7 @@
 	closeAriaLabel="Close Word document reader"
 	clippingsLabel="Word clippings"
 	clippingsCountLabel={`${clippings.length} saved from this document`}
-	emptyClippingsHint="Select text to capture an excerpt."
+	emptyClippingsHint="Select text or click an image to capture it."
 	clippings={shellClippings}
 	{onClose}
 	onOpenClippings={() => void onOpenClippings(clippings.map((clipping) => clipping.noteId))}
@@ -156,7 +279,22 @@
 						<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 						{@html html}
 					</article>
-					{#if selectionText}
+					{#if selectedImage}
+						<button
+							bind:this={saveImageButtonEl}
+							type="button"
+							class="mash-pdf-save-selection"
+							style="left: {selectionPoint.left}px; top: {selectionPoint.top}px;"
+							onclick={() => void saveImage()}
+							disabled={savingExcerpt || selectedImageAlreadyClipped}
+						>
+							{selectedImageAlreadyClipped
+								? 'Image saved'
+								: savingExcerpt
+									? 'Saving…'
+									: 'Save image'}
+						</button>
+					{:else if selectionText}
 						<button
 							type="button"
 							class="mash-pdf-save-selection"
@@ -252,7 +390,25 @@
 		max-width: 100%;
 		height: auto;
 		margin: 1.1rem auto;
+		border-radius: 6px;
 		object-fit: contain;
+		cursor: copy;
+		outline: 0 solid transparent;
+		outline-offset: 4px;
+		transition:
+			outline-color 120ms ease,
+			outline-width 120ms ease,
+			filter 120ms ease;
+	}
+	.mash-docx-article :global(img:hover) {
+		outline: 2px solid color-mix(in srgb, var(--mash-accent) 62%, transparent);
+	}
+	.mash-docx-article :global(img:focus-visible),
+	.mash-docx-article :global(img.is-clip-selected) {
+		outline: 3px solid var(--mash-accent-bright);
+	}
+	.mash-docx-article :global(img.is-clipped:not(.is-clip-selected)) {
+		outline: 2px solid color-mix(in srgb, var(--mash-accent) 72%, transparent);
 	}
 	.mash-docx-article :global(::selection) {
 		background: color-mix(in srgb, var(--mash-accent) 42%, transparent);

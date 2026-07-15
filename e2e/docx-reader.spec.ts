@@ -2,7 +2,10 @@ import { expect, test } from '@playwright/test';
 import JSZip from 'jszip';
 import { wipeIndexedDb } from './helpers';
 
-async function minimalDocxBuffer(paragraphText: string): Promise<Buffer> {
+const TINY_PNG_BASE64 =
+	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+async function minimalDocxBuffer(paragraphText: string, embeddedImage = false): Promise<Buffer> {
 	const zip = new JSZip();
 	zip.file(
 		'[Content_Types].xml',
@@ -10,6 +13,7 @@ async function minimalDocxBuffer(paragraphText: string): Promise<Buffer> {
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
   <Default Extension="xml" ContentType="application/xml"/>
+  ${embeddedImage ? '<Default Extension="png" ContentType="image/png"/>' : ''}
   <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
 </Types>`
 	);
@@ -21,16 +25,44 @@ async function minimalDocxBuffer(paragraphText: string): Promise<Buffer> {
 </Relationships>`
 	);
 	const escaped = paragraphText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-	zip.folder('word')?.file(
+	const word = zip.folder('word');
+	word?.file(
 		'document.xml',
 		`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+  xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+  xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+  xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+  xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">
   <w:body>
     <w:p><w:r><w:t>${escaped}</w:t></w:r></w:p>
+    ${
+			embeddedImage
+				? `<w:p><w:r><w:drawing><wp:inline>
+      <wp:extent cx="95250" cy="95250"/><wp:docPr id="1" name="Picture 1"/>
+      <a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
+        <pic:pic><pic:nvPicPr><pic:cNvPr id="0" name="image1.png"/><pic:cNvPicPr/></pic:nvPicPr>
+        <pic:blipFill><a:blip r:embed="rIdImage"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>
+        <pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="95250" cy="95250"/></a:xfrm><a:prstGeom prst="rect"/></pic:spPr>
+        </pic:pic>
+      </a:graphicData></a:graphic>
+    </wp:inline></w:drawing></w:r></w:p>`
+				: ''
+		}
     <w:sectPr/>
   </w:body>
 </w:document>`
 	);
+	if (embeddedImage) {
+		word?.folder('_rels')?.file(
+			'document.xml.rels',
+			`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rIdImage" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image1.png"/>
+</Relationships>`
+		);
+		word?.folder('media')?.file('image1.png', Buffer.from(TINY_PNG_BASE64, 'base64'));
+	}
 	return Buffer.from(await zip.generateAsync({ type: 'uint8array' }));
 }
 
@@ -92,4 +124,30 @@ test('opens a Word document and saves a text excerpt', async ({ page }) => {
 
 	await reader.getByRole('button', { name: 'Open 1 on canvas' }).click();
 	await expect(page.getByRole('group', { name: 'Docx excerpt for Mash' })).toBeVisible();
+});
+
+test('clips an embedded Word image into a visual canvas note', async ({ page }) => {
+	test.setTimeout(60_000);
+	await wipeIndexedDb(page);
+
+	await page.getByTestId('docx-reader-input').setInputFiles({
+		name: 'visual-brief.docx',
+		mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+		buffer: await minimalDocxBuffer('Chart context for Mash', true)
+	});
+
+	const reader = page.getByRole('region', { name: 'Word document reader' });
+	await expect(reader).toBeVisible();
+	await expect(reader.getByText('Select text or click an image to capture it.')).toBeVisible();
+
+	const embeddedImage = page.getByTestId('docx-reader-stage').locator('img').first();
+	await expect(embeddedImage).toHaveAttribute('role', 'button');
+	await expect(embeddedImage).toHaveAttribute('title', 'Click to clip this image');
+	await embeddedImage.click({ force: true });
+	await reader.getByRole('button', { name: 'Save image' }).click();
+
+	await expect(reader.getByText('1 saved from this document', { exact: true })).toBeVisible();
+	await expect(reader.locator('.mash-pdf-clipping-thumb')).toBeVisible();
+	await reader.getByRole('button', { name: 'Open 1 on canvas' }).click();
+	await expect(page.getByRole('group', { name: 'visual-brief · image 1' })).toBeVisible();
 });
