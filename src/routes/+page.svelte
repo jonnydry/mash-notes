@@ -1452,6 +1452,15 @@
 	let canvasPlaceCount = $derived(
 		canvas.canvasItems.filter((item) => library.notesById.has(item.noteId)).length
 	);
+	let selectedCanvasColor = $derived.by(() => {
+		const selected = new Set(library.selectionIds);
+		const colors = new Set<CanvasColor>(
+			canvas.canvasItems
+				.filter((item) => selected.has(item.noteId))
+				.map((item) => item.color ?? 'green')
+		);
+		return colors.size === 1 ? ([...colors][0] ?? 'green') : null;
+	});
 	let headerSearchResults = $derived.by(() => {
 		if (!peel.searchQuery.trim()) return [];
 		const hits = searchNotes(peel.searchQuery).filter((result) => library.notesById.has(result.id));
@@ -2870,22 +2879,49 @@
 						>
 							{library.selectionIds.length} selected
 						</span>
-						<div class="mash-selection-colors flex items-center gap-1" aria-label="Card color">
-							{#each CANVAS_COLORS as color (color)}
-								<button
-									type="button"
-									class="mash-canvas-color-dot"
-									data-color={color}
-									aria-label={`${color} card color`}
-									title={`${color} card color`}
-									onclick={() =>
-										void canvas.setCanvasSelectionColor(
-											library.selectionIds,
-											color === 'green' ? undefined : (color as CanvasColor)
-										)}
-								></button>
-							{/each}
-						</div>
+						<details class="mash-card-color-picker relative" data-testid="card-border-picker">
+							<summary
+								class="mash-card-color-trigger mash-focus inline-flex h-8 cursor-pointer items-center rounded-lg border px-2"
+								aria-label={`Change card border color${selectedCanvasColor ? `; current ${selectedCanvasColor}` : '; mixed colors'}`}
+								title="Card border color"
+							>
+								<span
+									class:mixed={!selectedCanvasColor}
+									class="mash-card-color-preview"
+									data-color={selectedCanvasColor ?? 'green'}
+								></span>
+							</summary>
+							<div
+								class="mash-card-color-menu absolute bottom-full left-1/2 z-20 mb-2 flex min-w-max -translate-x-1/2 items-center rounded-lg border p-1.5 shadow-xl"
+								role="group"
+								aria-label="Card border color"
+							>
+								<div class="flex items-center gap-1.5">
+									{#each CANVAS_COLORS as color (color)}
+										<button
+											type="button"
+											class="mash-card-color-swatch inline-flex h-6 w-6 items-center justify-center rounded-md {selectedCanvasColor ===
+											color
+												? 'is-active'
+												: ''}"
+											data-color={color}
+											aria-label={`${color} border color`}
+											aria-pressed={selectedCanvasColor === color}
+											title={`${color} border`}
+											onclick={(event) => {
+												void canvas.setCanvasSelectionColor(
+													library.selectionIds,
+													color === 'green' ? undefined : (color as CanvasColor)
+												);
+												(
+													event.currentTarget.closest('details') as HTMLDetailsElement
+												)?.removeAttribute('open');
+											}}
+										></button>
+									{/each}
+								</div>
+							</div>
+						</details>
 						{#if keepableSelectionIds.length > 0}
 							<button
 								type="button"

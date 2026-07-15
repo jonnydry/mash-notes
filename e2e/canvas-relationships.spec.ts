@@ -17,36 +17,79 @@ test('colors cards and creates persistent, editable, exportable visual relations
 	const amberOrigin = page
 		.locator('[data-canvas-card][data-card-color="amber"]')
 		.filter({ hasText: 'Origin' });
+	const originalSurface = await origin.evaluate((element) => {
+		const style = getComputedStyle(element);
+		return { backgroundColor: style.backgroundColor, backgroundImage: style.backgroundImage };
+	});
 	await origin.click({ force: true, position: { x: 8, y: 8 } });
-	await page.getByRole('button', { name: 'amber card color', exact: true }).click();
+	await page.getByTestId('card-border-picker').locator('summary').click();
+	await page.getByRole('button', { name: 'amber border color', exact: true }).click();
 	await expect(amberOrigin).toBeVisible();
+	await expect(amberOrigin).toHaveCSS('border-color', 'rgb(217, 164, 65)');
+	await expect
+		.poll(() =>
+			amberOrigin.evaluate((element) => {
+				const style = getComputedStyle(element);
+				return { backgroundColor: style.backgroundColor, backgroundImage: style.backgroundImage };
+			})
+		)
+		.toEqual(originalSurface);
 
-	await page.getByTestId('board-connect').click();
-	// Cards intentionally cascade and may overlap. Dispatch to the card itself so
-	// this verifies Connect semantics instead of browser hit-testing order.
-	await origin.dispatchEvent('pointerdown', { button: 0, bubbles: true });
-	await expect(page.getByTestId('board-connect')).toContainText('Pick end');
-	await outcome.dispatchEvent('pointerdown', { button: 0, bubbles: true });
+	const arrowTool = page.getByTestId('board-arrow-tool');
+	const board = page.getByRole('application', { name: 'Mash canvas' });
+	const boardBox = await board.boundingBox();
+	expect(boardBox).not.toBeNull();
+	await page.mouse.click(boardBox!.x + boardBox!.width * 0.7, boardBox!.y + boardBox!.height * 0.7);
+	await page.keyboard.down('a');
+	await expect(arrowTool).toHaveAttribute('aria-pressed', 'true');
+	await expect(board).toHaveClass(/is-arrow-tool/);
+	await expect
+		.poll(() => board.evaluate((element) => getComputedStyle(element).cursor))
+		.toContain('url(');
+	// A click is selection-free in the arrow tool; only a real drag commits.
+	await origin.click({ force: true, position: { x: 12, y: 70 } });
+	await expect(page.locator('g[data-canvas-element]')).toHaveCount(0);
+
+	const originBox = await origin.boundingBox();
+	const outcomeBox = await outcome.boundingBox();
+	expect(originBox).not.toBeNull();
+	expect(outcomeBox).not.toBeNull();
+	const start = { x: originBox!.x + 10, y: originBox!.y + originBox!.height * 0.72 };
+	const end = {
+		x: outcomeBox!.x + outcomeBox!.width - 10,
+		y: outcomeBox!.y + outcomeBox!.height * 0.72
+	};
+	await page.mouse.move(start.x, start.y);
+	await page.mouse.down();
+	await page.mouse.move((start.x + end.x) / 2, (start.y + end.y) / 2, { steps: 5 });
+	await page.mouse.move(end.x, end.y, { steps: 5 });
+	// The cards intentionally overlap when newly spawned. Assert the preview once the
+	// pointer reaches the distinct target card, rather than while it is still over the source.
+	await expect(page.locator('[data-connect-preview]')).toBeVisible();
+	await page.mouse.up();
 	await expect(page.locator('g[data-canvas-element]')).toHaveCount(1);
+	await page.keyboard.up('a');
+	await expect(arrowTool).toHaveAttribute('aria-pressed', 'false');
+	await expect(board).not.toHaveClass(/is-arrow-tool/);
 
-	const label = page.getByRole('textbox', { name: 'Connection label' });
+	const label = page.getByRole('textbox', { name: 'Arrow label' });
 	await label.fill('Depends on');
 	await label.press('Enter');
-	await page.getByRole('button', { name: 'blue connection' }).click();
+	await page.getByTestId('arrow-color-picker').locator('summary').click();
+	await page.getByRole('button', { name: 'blue arrow' }).click();
 	await page.getByRole('button', { name: 'Use dashed line' }).click();
-	await page.getByTestId('board-connect').click();
 
 	await page.reload();
 	await expect(amberOrigin).toBeVisible({ timeout: 10_000 });
-	const persistedArrow = page.getByRole('button', { name: 'Select connection Depends on' });
+	const persistedArrow = page.getByRole('button', { name: 'Select arrow Depends on' });
 	await expect(persistedArrow).toBeVisible({ timeout: 10_000 });
 
 	await persistedArrow.click();
-	await expect(page.getByRole('textbox', { name: 'Connection label' })).toHaveValue('Depends on');
-	await page.getByRole('button', { name: 'Delete connection' }).click();
+	await expect(page.getByRole('textbox', { name: 'Arrow label' })).toHaveValue('Depends on');
+	await page.getByRole('button', { name: 'Delete arrow' }).click();
 	await expect(page.locator('g[data-canvas-element]')).toHaveCount(0);
 	await page.getByRole('button', { name: 'Undo', exact: true }).click();
-	await expect(page.getByRole('button', { name: 'Select connection Depends on' })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Select arrow Depends on' })).toBeVisible();
 
 	await page.getByRole('button', { name: 'Finish', exact: true }).click();
 	const finish = page.getByRole('dialog', { name: 'Finish this desk' });

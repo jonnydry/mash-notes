@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * Board chrome: desktop Free/Snap · Connect · Sequence · Fit · Undo · View,
+	 * Board chrome: desktop Free/Snap · Arrow · Sequence · Fit · Undo · View,
 	 * mobile Fit/Organize/More tools, and pan/zoom pad.
 	 */
 	import { MoreHorizontal } from '@lucide/svelte';
@@ -12,6 +12,7 @@
 		flowFromItemId: string | null;
 		connectMode: boolean;
 		connectSaving: boolean;
+		connectDrawing: boolean;
 		connectHasStart: boolean;
 		scale: number;
 		altHeld: boolean;
@@ -43,6 +44,7 @@
 		flowFromItemId,
 		connectMode,
 		connectSaving,
+		connectDrawing,
 		connectHasStart,
 		scale,
 		altHeld,
@@ -106,7 +108,7 @@
 		</div>
 		<button
 			type="button"
-			class="mash-board-chip mash-board-chip-btn mash-type-micro rounded-full px-2.5 py-1 {connectMode
+			class="mash-board-chip mash-board-chip-btn mash-board-tool-button rounded-full {connectMode
 				? 'is-active'
 				: ''}"
 			onclick={(e) => {
@@ -116,22 +118,22 @@
 			}}
 			title={connectMode
 				? connectSaving
-					? 'Adding connection…'
-					: connectHasStart
-						? 'Pick a card or empty point; Escape cancels the current line'
-						: 'Done — exit cosmetic connection mode'
-				: 'Draw visual relationships between cards or free points'}
+					? 'Saving arrow…'
+					: connectDrawing
+						? 'Release to place the arrow; Escape cancels'
+						: connectHasStart
+							? 'Focus another card and press Enter; Escape cancels'
+							: 'Arrow tool active — drag anywhere to draw; Escape exits'
+				: 'Arrow tool — drag anywhere to draw, or hold A for temporary use'}
+			aria-label={connectMode ? 'Exit arrow tool' : 'Arrow tool'}
+			aria-keyshortcuts="A"
 			aria-pressed={connectMode}
 			aria-busy={connectSaving}
-			data-testid="board-connect"
+			data-testid="board-arrow-tool"
 		>
-			{connectMode
-				? connectSaving
-					? 'Adding…'
-					: connectHasStart
-						? 'Pick end…'
-						: 'Done'
-				: 'Connect'}
+			<span class:animate-pulse={connectSaving} class="text-base leading-none" aria-hidden="true"
+				>↗</span
+			>
 		</button>
 		<button
 			type="button"

@@ -518,7 +518,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	box-shadow:
 		var(--mash-shadow-card),
 		inset 0 1px 0 color-mix(in srgb, var(--mash-card-ink) 5%, transparent);
-	border: 1px solid color-mix(in srgb, var(--mash-placement-accent) 42%, var(--mash-card-edge));
+	border: 1.5px solid color-mix(in srgb, var(--mash-placement-accent) 68%, var(--mash-card-edge));
 	cursor: grab;
 	/* Visible so page badges can sit on the corner without clipping;
 	   inner preview / editor panes still clip their own overflow. */
@@ -544,19 +544,10 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 .mash-note-card[data-card-color='slate'] {
 	--mash-placement-accent: #87939d;
 }
-.mash-note-card[data-card-color]:not([data-card-color='green']) {
-	background:
-		linear-gradient(
-			180deg,
-			color-mix(in srgb, var(--mash-placement-accent) 8%, transparent),
-			transparent 38%
-		),
-		var(--mash-card);
-}
 .mash-note-card:hover:not(.is-selected):not(.is-dragging-card):not(.is-mash-target):not(
 		.is-flow-source
 	):not(.is-expanded) {
-	border-color: var(--mash-card-edge-strong);
+	border-color: color-mix(in srgb, var(--mash-placement-accent) 90%, var(--mash-card-edge));
 	box-shadow:
 		0 2px 4px color-mix(in srgb, #000 18%, transparent),
 		0 10px 28px color-mix(in srgb, #000 16%, transparent),
@@ -574,12 +565,12 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 .mash-note-card.is-selected {
 	/* Lift above overlapping unselected cards so the highlight is readable. */
 	z-index: 6;
-	border-color: var(--mash-accent-select);
+	border-color: var(--mash-placement-accent);
 	/* Tight accent edge + soft wash ring — clear multi-select without shouting */
 	box-shadow:
 		var(--mash-shadow-card),
-		0 0 0 1.5px color-mix(in srgb, var(--mash-accent) 48%, transparent),
-		0 0 0 4px color-mix(in srgb, var(--mash-accent) 12%, transparent),
+		0 0 0 1.5px color-mix(in srgb, var(--mash-placement-accent) 48%, transparent),
+		0 0 0 4px color-mix(in srgb, var(--mash-placement-accent) 12%, transparent),
 		inset 0 1px 0 color-mix(in srgb, var(--mash-card-ink) 5%, transparent);
 }
 .mash-note-card:focus-visible {
@@ -592,7 +583,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 .mash-note-card.is-selected:focus-visible {
 	box-shadow:
 		var(--mash-shadow-card),
-		0 0 0 1.5px color-mix(in srgb, var(--mash-accent) 48%, transparent),
+		0 0 0 1.5px color-mix(in srgb, var(--mash-placement-accent) 48%, transparent),
 		0 0 0 4px var(--mash-accent-ring);
 }
 .mash-note-card.is-settling {
@@ -603,7 +594,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	box-shadow:
 		var(--mash-shadow-lift),
 		inset 0 1px 0 color-mix(in srgb, var(--mash-card-ink) 5%, transparent);
-	border-color: color-mix(in srgb, var(--mash-accent) 40%, transparent);
+	border-color: color-mix(in srgb, var(--mash-placement-accent) 76%, var(--mash-card-edge));
 	overflow: visible;
 	min-width: 280px;
 	min-height: 220px;
@@ -617,7 +608,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	z-index: 8;
 	box-shadow:
 		var(--mash-shadow-lift),
-		0 0 0 1px color-mix(in srgb, var(--mash-accent) 18%, transparent);
+		0 0 0 1px color-mix(in srgb, var(--mash-placement-accent) 34%, transparent);
 	cursor: grabbing;
 	transform: scale(1.015);
 }
@@ -1004,6 +995,14 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	background: var(--mash-hover-fill-soft);
 	color: var(--mash-chrome-ink);
 }
+.mash-canvas-chrome-top .mash-board-tool-button {
+	display: inline-flex;
+	width: 30px;
+	height: 30px;
+	align-items: center;
+	justify-content: center;
+	padding: 0;
+}
 .mash-canvas-chrome-pan .mash-board-chip {
 	border-radius: 12px;
 }
@@ -1082,7 +1081,16 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	cursor: crosshair;
 }
 .mash-note-card.is-connect-mode {
-	cursor: cell;
+	cursor: crosshair;
+}
+.mash-board-surface.is-arrow-tool {
+	--mash-arrow-cursor: url('/arrow-cursor.svg') 3 3, crosshair;
+	cursor: var(--mash-arrow-cursor);
+}
+.mash-board-surface.is-arrow-tool .mash-note-card,
+.mash-board-surface.is-arrow-tool .mash-note-card *,
+.mash-board-surface.is-arrow-tool [data-canvas-element]:not([data-canvas-chrome]) {
+	cursor: var(--mash-arrow-cursor) !important;
 }
 .mash-note-card.is-connect-source {
 	border-color: #5c9ed8;
@@ -1090,6 +1098,13 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 		var(--mash-shadow-card),
 		0 0 0 2px color-mix(in srgb, #5c9ed8 48%, transparent),
 		0 0 0 6px color-mix(in srgb, #5c9ed8 15%, transparent);
+}
+.mash-note-card.is-connect-target {
+	border-color: #5c9ed8;
+	box-shadow:
+		var(--mash-shadow-card),
+		0 0 0 2px color-mix(in srgb, #5c9ed8 68%, transparent),
+		0 0 0 7px color-mix(in srgb, #5c9ed8 16%, transparent);
 }
 .mash-canvas-arrow-label {
 	max-width: 12rem;
@@ -1110,46 +1125,116 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	background: color-mix(in srgb, var(--mash-panel) 95%, transparent);
 	color: var(--mash-ink);
 	backdrop-filter: blur(12px);
+	transform-origin: 0 0;
+	transition:
+		transform 120ms ease,
+		opacity 120ms ease;
+}
+.mash-canvas-arrow-toolbar.is-above {
+	transform: scale(var(--canvas-scale-inverse)) translate(-50%, calc(-100% - 14px));
+}
+.mash-canvas-arrow-toolbar.is-below {
+	transform: scale(var(--canvas-scale-inverse)) translate(-50%, 14px);
 }
 .mash-canvas-arrow-toolbar input {
 	border-color: var(--mash-divider);
 	color: var(--mash-ink);
 }
-.mash-canvas-color-dot {
-	--dot-color: var(--mash-accent);
-	display: inline-block;
-	width: 15px;
-	height: 15px;
-	flex: 0 0 auto;
-	border: 2px solid color-mix(in srgb, var(--mash-panel) 72%, transparent);
+:is(.mash-canvas-arrow-color-picker, .mash-card-color-picker) > summary {
+	list-style: none;
+}
+:is(.mash-canvas-arrow-color-picker, .mash-card-color-picker) > summary::-webkit-details-marker {
+	display: none;
+}
+.mash-canvas-arrow-color-picker[open] > summary,
+.mash-card-color-picker[open] .mash-card-color-trigger,
+.mash-card-color-trigger:hover {
+	background: var(--mash-hover-fill-soft);
+	color: var(--mash-ink);
+}
+.mash-card-color-trigger {
+	border-color: var(--mash-divider);
+	color: var(--mash-ink-muted);
+}
+.mash-card-color-picker[open] .mash-card-color-trigger {
+	border-color: color-mix(in srgb, var(--mash-accent) 42%, var(--mash-panel-border));
+}
+.mash-canvas-arrow-current-color {
+	display: block;
+	width: 16px;
+	border-top: 3px solid var(--arrow-color);
 	border-radius: 999px;
-	background: var(--dot-color);
-	box-shadow: 0 0 0 1px color-mix(in srgb, var(--dot-color) 60%, var(--mash-divider));
-	transition:
-		transform 120ms ease,
-		box-shadow 120ms ease;
 }
-.mash-canvas-color-dot:hover,
-.mash-canvas-color-dot.is-active {
-	transform: scale(1.18);
-	box-shadow:
-		0 0 0 1px var(--mash-panel),
-		0 0 0 3px color-mix(in srgb, var(--dot-color) 55%, transparent);
+:is(.mash-canvas-arrow-color-menu, .mash-card-color-menu) {
+	border-color: var(--mash-panel-border);
+	background: color-mix(in srgb, var(--mash-panel) 98%, transparent);
 }
-.mash-canvas-color-dot[data-color='amber'] {
+.mash-canvas-arrow-toolbar.is-below .mash-canvas-arrow-color-menu {
+	top: 100%;
+	bottom: auto;
+	margin-top: 0.5rem;
+	margin-bottom: 0;
+}
+.mash-canvas-arrow-color-swatch:hover,
+.mash-card-color-swatch:hover {
+	background: var(--mash-hover-fill-soft);
+	transform: translateY(-1px);
+}
+.mash-canvas-arrow-color-swatch.is-active {
+	border-color: color-mix(in srgb, var(--swatch-color) 58%, var(--mash-divider));
+	background: color-mix(in srgb, var(--swatch-color) 10%, transparent);
+}
+.mash-canvas-arrow-color-line {
+	display: block;
+	width: 16px;
+	border-top: 3px solid var(--swatch-color);
+	border-radius: 999px;
+}
+.mash-card-color-preview,
+.mash-card-color-swatch {
+	--dot-color: var(--mash-accent);
+}
+.mash-card-color-preview[data-color='amber'],
+.mash-card-color-swatch[data-color='amber'] {
 	--dot-color: #d9a441;
 }
-.mash-canvas-color-dot[data-color='blue'] {
+.mash-card-color-preview[data-color='blue'],
+.mash-card-color-swatch[data-color='blue'] {
 	--dot-color: #5c9ed8;
 }
-.mash-canvas-color-dot[data-color='rose'] {
+.mash-card-color-preview[data-color='rose'],
+.mash-card-color-swatch[data-color='rose'] {
 	--dot-color: #d8798f;
 }
-.mash-canvas-color-dot[data-color='violet'] {
+.mash-card-color-preview[data-color='violet'],
+.mash-card-color-swatch[data-color='violet'] {
 	--dot-color: #9b83d6;
 }
-.mash-canvas-color-dot[data-color='slate'] {
+.mash-card-color-preview[data-color='slate'],
+.mash-card-color-swatch[data-color='slate'] {
 	--dot-color: #87939d;
+}
+.mash-card-color-preview {
+	display: block;
+	width: 16px;
+	height: 16px;
+	border: 3px solid var(--dot-color);
+	border-radius: 5px;
+	background: transparent;
+}
+.mash-card-color-preview.mixed {
+	border-color: transparent;
+	background: conic-gradient(#d9a441, #5c9ed8, #9b83d6, #d8798f, var(--mash-accent));
+	box-shadow: inset 0 0 0 3px var(--mash-panel);
+}
+.mash-card-color-swatch {
+	border: 3px solid var(--dot-color);
+	background: transparent;
+}
+.mash-card-color-swatch.is-active {
+	box-shadow:
+		0 0 0 2px var(--mash-panel),
+		0 0 0 4px color-mix(in srgb, var(--dot-color) 72%, transparent);
 }
 .mash-canvas-arrow-action {
 	display: inline-flex;
@@ -1157,6 +1242,8 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	justify-content: center;
 	min-width: 24px;
 	height: 24px;
+	gap: 4px;
+	padding: 0 5px;
 	border-radius: 7px;
 	color: var(--mash-ink-muted);
 }
