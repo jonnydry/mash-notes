@@ -5,8 +5,11 @@
 	import './layout.css';
 	import { theme } from '$lib/stores/theme.svelte';
 	import { typography } from '$lib/stores/typography.svelte';
+	import MobileDesktopNotice from '$lib/components/MobileDesktopNotice.svelte';
 
 	let { children } = $props();
+	const mobileOnly =
+		typeof window !== 'undefined' && window.matchMedia('(max-width: 960px)').matches;
 
 	// Ensure suite tokens apply on first paint (store constructor also applies).
 	void typography.suiteId;
@@ -33,4 +36,8 @@
 	<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
 	<meta name="theme-color" content={theme.metaColor} />
 </svelte:head>
-{@render children()}
+{#if mobileOnly}
+	<MobileDesktopNotice />
+{:else}
+	{@render children()}
+{/if}

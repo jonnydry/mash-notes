@@ -5,8 +5,8 @@ import path from 'node:path';
 import { confirmMashDialog, createNamedNote, selectNotesInPeel, wipeIndexedDb } from './helpers';
 
 test.describe('Finish release hardening', () => {
-	test('keeps actions reachable on mobile and at 200% text size', async ({ page }) => {
-		await page.setViewportSize({ width: 390, height: 844 });
+	test('keeps actions reachable on compact desktops and at 200% text size', async ({ page }) => {
+		await page.setViewportSize({ width: 1024, height: 768 });
 		await wipeIndexedDb(page);
 		for (let index = 1; index <= 5; index++) {
 			await createNamedNote(
@@ -22,8 +22,10 @@ test.describe('Finish release hardening', () => {
 		const scroll = finish.getByTestId('finish-scroll');
 		const dialogBox = await finish.boundingBox();
 		expect(dialogBox).not.toBeNull();
-		expect(Math.abs(dialogBox!.y + dialogBox!.height - 844)).toBeLessThanOrEqual(2);
-		expect(dialogBox!.width).toBeLessThanOrEqual(390);
+		expect(dialogBox!.x).toBeGreaterThanOrEqual(0);
+		expect(dialogBox!.y).toBeGreaterThanOrEqual(0);
+		expect(dialogBox!.x + dialogBox!.width).toBeLessThanOrEqual(1024);
+		expect(dialogBox!.y + dialogBox!.height).toBeLessThanOrEqual(768);
 
 		const footerY = (await footer.boundingBox())!.y;
 		await scroll.evaluate((element) => element.scrollTo({ top: element.scrollHeight }));

@@ -52,27 +52,3 @@ test.describe('Dock motion', () => {
 		await expect(newNote).not.toHaveClass(/is-confirming/, { timeout: 1_000 });
 	});
 });
-
-test.describe('Mobile dock motion', () => {
-	test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
-
-	test('uses full-size touch targets and opens More from the dock', async ({ page }) => {
-		await wipeIndexedDb(page);
-		const dock = page.getByRole('navigation', { name: 'Mash dock' });
-		const primaryButtons = dock.locator(':scope > button:visible');
-		const boxes = await primaryButtons.evaluateAll((buttons) =>
-			buttons.map((button) => {
-				const rect = button.getBoundingClientRect();
-				return { width: rect.width, height: rect.height };
-			})
-		);
-		expect(boxes).not.toHaveLength(0);
-		for (const box of boxes) {
-			expect(box.width).toBeGreaterThanOrEqual(44);
-			expect(box.height).toBeGreaterThanOrEqual(44);
-		}
-
-		await dock.getByRole('button', { name: 'More navigation' }).click();
-		await expect(dock.getByRole('menu', { name: 'More navigation' })).toBeVisible();
-	});
-});

@@ -1,52 +1,45 @@
 import { expect, test } from '@playwright/test';
-import { createNamedNote, wipeIndexedDb } from './helpers';
 
-test.describe('Mobile canvas controls', () => {
+test.describe('Mobile desktop notice', () => {
 	test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
 
-	test('keeps secondary controls out of the primary canvas and opens desks from More', async ({
-		page
-	}) => {
-		test.setTimeout(60_000);
-		await wipeIndexedDb(page);
+	test('shows the hardhat mascot and keeps the workspace unmounted', async ({ page }) => {
+		await page.goto('/');
 
-		// Desks entry is under More on mobile (Finish-only header)
-		await page.getByRole('button', { name: 'More navigation' }).click();
-		await page.locator('.mash-dock-more-menu').getByRole('menuitem', { name: 'Desks' }).click();
-		const closeTarget = await page
-			.getByRole('dialog', { name: 'Your desks' })
-			.getByRole('button', { name: 'Close desk panel' })
-			.boundingBox();
-		expect(closeTarget?.width).toBeGreaterThanOrEqual(44);
-		expect(closeTarget?.height).toBeGreaterThanOrEqual(44);
-		await page
-			.getByRole('dialog', { name: 'Your desks' })
-			.getByRole('button', { name: 'Close desk panel' })
-			.click();
+		const notice = page.getByTestId('mobile-desktop-notice');
+		await expect(notice).toBeVisible();
+		await expect(
+			notice.getByRole('heading', { name: 'Mash is currently optimized for desktop use.' })
+		).toBeVisible();
+		await expect(notice).toContainText('Open Mash on a laptop or desktop');
+		await expect(page.getByTestId('mobile-settings-mascot')).toHaveAttribute(
+			'src',
+			'/icons/mash-settings-mascot.png'
+		);
+		await expect(page.locator('.mash-app-shell')).toHaveCount(0);
+		await expect(page.getByRole('navigation', { name: 'Mash dock' })).toHaveCount(0);
+	});
 
-		const dismiss = page.getByTestId('try-a-mash-dismiss');
-		if (await dismiss.isVisible().catch(() => false)) {
-			await dismiss.click();
-		}
-		await createNamedNote(page, 'Mobile alpha', 'Stay on this desk');
-		await expect(page.getByRole('group', { name: /Mobile alpha/ })).toBeVisible({
-			timeout: 10_000
-		});
+	test('fits the complete notice inside a phone landscape viewport', async ({ page }) => {
+		await page.setViewportSize({ width: 844, height: 390 });
+		await page.goto('/');
 
-		await expect(page.locator('.mash-canvas-chrome-mobile')).toBeVisible();
-		await expect(page.locator('.mash-canvas-chrome-top')).toBeHidden();
-		await expect(page.locator('.mash-canvas-chrome-pan')).toBeHidden();
-		await expect(page.getByRole('button', { name: 'More navigation' })).toBeVisible();
-
-		await page.getByRole('button', { name: 'More canvas tools' }).click();
-		await expect(page.getByRole('button', { name: 'Free placement' })).toBeVisible();
-		await expect(page.getByRole('button', { name: 'Reset view' })).toBeVisible();
-		await page.getByRole('button', { name: 'More canvas tools' }).click();
-
-		await page.getByRole('button', { name: 'More navigation' }).click();
-		const moreMenu = page.locator('.mash-dock-more-menu');
-		await expect(moreMenu.getByRole('menuitem', { name: 'Settings' })).toBeVisible();
-		await expect(moreMenu.getByRole('menuitem', { name: 'Folders' })).toBeVisible();
-		await expect(moreMenu.getByRole('menuitem', { name: 'Desks' })).toBeVisible();
+		const notice = page.getByTestId('mobile-desktop-notice');
+		await expect(notice).toBeVisible();
+		const card = notice.locator('section');
+		await expect(card).toBeVisible();
+		const box = await card.boundingBox();
+		expect(box).not.toBeNull();
+		expect(box!.x).toBeGreaterThanOrEqual(0);
+		expect(box!.y).toBeGreaterThanOrEqual(0);
+		expect(box!.x + box!.width).toBeLessThanOrEqual(844);
+		expect(box!.y + box!.height).toBeLessThanOrEqual(390);
+		expect(
+			await page.evaluate(
+				() =>
+					document.documentElement.scrollWidth <= document.documentElement.clientWidth &&
+					document.documentElement.scrollHeight <= document.documentElement.clientHeight
+			)
+		).toBe(true);
 	});
 });
