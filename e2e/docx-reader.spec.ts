@@ -150,4 +150,19 @@ test('clips an embedded Word image into a visual canvas note', async ({ page }) 
 	await expect(reader.locator('.mash-pdf-clipping-thumb')).toBeVisible();
 	await reader.getByRole('button', { name: 'Open 1 on canvas' }).click();
 	await expect(page.getByRole('group', { name: 'visual-brief · image 1' })).toBeVisible();
+
+	const returnToWord = page.locator('.mash-reader-return');
+	const canvasToolbar = page.locator('.mash-canvas-chrome-top');
+	await expect(returnToWord).toBeVisible();
+	await expect(canvasToolbar.getByRole('button', { name: 'Sequence' })).toBeVisible();
+	const returnBox = await returnToWord.boundingBox();
+	const toolbarBox = await canvasToolbar.boundingBox();
+	expect(returnBox).not.toBeNull();
+	expect(toolbarBox).not.toBeNull();
+	const overlaps =
+		returnBox!.x < toolbarBox!.x + toolbarBox!.width &&
+		returnBox!.x + returnBox!.width > toolbarBox!.x &&
+		returnBox!.y < toolbarBox!.y + toolbarBox!.height &&
+		returnBox!.y + returnBox!.height > toolbarBox!.y;
+	expect(overlaps).toBe(false);
 });

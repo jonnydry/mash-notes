@@ -1,4 +1,6 @@
-import type { CanvasEdge, CanvasItem, Note, TextAlign } from './types';
+import type { CanvasColor, CanvasEdge, CanvasElement, CanvasItem, Note, TextAlign } from './types';
+import { canvasArrowPath } from './canvas-element-geometry';
+import { canvasElementItemIds, cloneCanvasElement } from './canvas-elements';
 
 const DEFAULT_CARD = { w: 220, h: 120 };
 const CARD_GAP = 24;
@@ -22,11 +24,13 @@ export type BoardImageCard = {
 	pinned: boolean;
 	sourceLabel?: string;
 	provenanceCount: number;
+	color?: CanvasColor;
 };
 
 export type BoardImagePlan = {
 	cards: BoardImageCard[];
 	edges: CanvasEdge[];
+	elements: CanvasElement[];
 	minX: number;
 	minY: number;
 	logicalWidth: number;
@@ -42,6 +46,7 @@ export type BoardImageInput = {
 	notesById: ReadonlyMap<string, Note>;
 	items: CanvasItem[];
 	edges: CanvasEdge[];
+	elements: CanvasElement[];
 };
 
 export type BoardImageDownloadInput = BoardImageInput & {
@@ -134,27 +139,55 @@ export function buildBoardImagePlan(input: BoardImageInput): BoardImagePlan | nu
 						  note.source?.kind === 'table'
 						? note.source.title
 						: undefined,
-			provenanceCount: note.mashedFrom?.length ?? 0
+			provenanceCount: note.mashedFrom?.length ?? 0,
+			color: existing?.color
 		};
 	});
-
-	const minCardX = Math.min(...cards.map((card) => card.x));
-	const minCardY = Math.min(...cards.map((card) => card.y));
-	const maxCardX = Math.max(...cards.map((card) => card.x + card.w));
-	const maxCardY = Math.max(...cards.map((card) => card.y + card.h));
+	const cardItemIds = new Set(cards.map((card) => card.itemId));
+	const edges = input.edges.filter(
+		(edge) => cardItemIds.has(edge.fromItemId) && cardItemIds.has(edge.toItemId)
+	);
+	const wholePlacedDesk = input.items.every((item) => cardItemIds.has(item.id));
+	const elements = input.elements
+		.filter((element) => {
+			const boundIds = canvasElementItemIds(element);
+			return boundIds.length === 0
+				? wholePlacedDesk
+				: boundIds.every((itemId) => cardItemIds.has(itemId));
+		})
+		.map(cloneCanvasElement);
+	const rects = new Map(cards.map((card) => [card.itemId, card]));
+	const elementPoints = elements.flatMap((element) => {
+		if (element.kind !== 'arrow') return [];
+		const path = canvasArrowPath(element, rects);
+		return path ? [path.start, path.end, path.c1, path.c2] : [];
+	});
+	const minCardX = Math.min(
+		...cards.map((card) => card.x),
+		...elementPoints.map((point) => point.x)
+	);
+	const minCardY = Math.min(
+		...cards.map((card) => card.y),
+		...elementPoints.map((point) => point.y)
+	);
+	const maxCardX = Math.max(
+		...cards.map((card) => card.x + card.w),
+		...elementPoints.map((point) => point.x)
+	);
+	const maxCardY = Math.max(
+		...cards.map((card) => card.y + card.h),
+		...elementPoints.map((point) => point.y)
+	);
 	const minX = minCardX - BOARD_PADDING;
 	const minY = minCardY - BOARD_PADDING;
 	const logicalWidth = Math.max(1, maxCardX - minCardX + BOARD_PADDING * 2);
 	const logicalHeight = Math.max(1, maxCardY - minCardY + BOARD_PADDING * 2);
 	const pixelRatio = imageScale(logicalWidth, logicalHeight);
-	const cardItemIds = new Set(cards.map((card) => card.itemId));
-	const edges = input.edges.filter(
-		(edge) => cardItemIds.has(edge.fromItemId) && cardItemIds.has(edge.toItemId)
-	);
 
 	return {
 		cards,
 		edges,
+		elements,
 		minX,
 		minY,
 		logicalWidth,
@@ -271,6 +304,75 @@ function drawArrow(
 	ctx.restore();
 }
 
+function colorAccent(color: CanvasColor | undefined, fallback: string): string {
+	switch (color) {
+		case 'amber':
+			return '#d9a441';
+		case 'blue':
+			return '#5c9ed8';
+		case 'rose':
+			return '#d8798f';
+		case 'violet':
+			return '#9b83d6';
+		case 'slate':
+			return '#87939d';
+		default:
+			return fallback;
+	}
+}
+
+function drawVisualArrow(
+	ctx: CanvasRenderingContext2D,
+	element: Extract<CanvasElement, { kind: 'arrow' }>,
+	cards: ReadonlyMap<string, BoardImageCard>,
+	fallbackAccent: string,
+	labelInk: string,
+	labelBackground: string
+) {
+	const path = canvasArrowPath(element, cards);
+	if (!path) return;
+	const accent = colorAccent(element.color, fallbackAccent);
+	ctx.save();
+	ctx.strokeStyle = accent;
+	ctx.fillStyle = accent;
+	ctx.globalAlpha = 0.9;
+	ctx.lineWidth = 2.25;
+	ctx.lineCap = 'round';
+	if (element.stroke === 'dashed') ctx.setLineDash([8, 7]);
+	ctx.beginPath();
+	ctx.moveTo(path.start.x, path.start.y);
+	ctx.bezierCurveTo(path.c1.x, path.c1.y, path.c2.x, path.c2.y, path.end.x, path.end.y);
+	ctx.stroke();
+	ctx.setLineDash([]);
+	const angle = Math.atan2(path.end.y - path.c2.y, path.end.x - path.c2.x);
+	ctx.beginPath();
+	ctx.moveTo(path.end.x, path.end.y);
+	ctx.lineTo(
+		path.end.x - 10 * Math.cos(angle - Math.PI / 6),
+		path.end.y - 10 * Math.sin(angle - Math.PI / 6)
+	);
+	ctx.lineTo(
+		path.end.x - 10 * Math.cos(angle + Math.PI / 6),
+		path.end.y - 10 * Math.sin(angle + Math.PI / 6)
+	);
+	ctx.closePath();
+	ctx.fill();
+	if (element.label?.trim()) {
+		const label = element.label.trim().slice(0, 80);
+		ctx.globalAlpha = 1;
+		ctx.font = '600 10px "IBM Plex Sans", system-ui, sans-serif';
+		ctx.textAlign = 'center';
+		ctx.textBaseline = 'middle';
+		const width = Math.min(180, ctx.measureText(label).width + 14);
+		roundedRect(ctx, path.midX - width / 2, path.midY - 10, width, 20, 10);
+		ctx.fillStyle = labelBackground;
+		ctx.fill();
+		ctx.fillStyle = labelInk;
+		ctx.fillText(truncateLine(ctx, label, width - 12), path.midX, path.midY);
+	}
+	ctx.restore();
+}
+
 export async function downloadBoardImage(
 	input: BoardImageDownloadInput
 ): Promise<BoardImageResult> {
@@ -303,8 +405,14 @@ export async function downloadBoardImage(
 		const to = cardByItemId.get(edge.toItemId);
 		if (from && to) drawArrow(ctx, from, to, palette.accent);
 	}
+	for (const element of plan.elements) {
+		if (element.kind === 'arrow') {
+			drawVisualArrow(ctx, element, cardByItemId, palette.accent, palette.ink, palette.card);
+		}
+	}
 
 	for (const card of plan.cards) {
+		const cardAccent = colorAccent(card.color, palette.accent);
 		ctx.save();
 		ctx.shadowColor = palette.shadow;
 		ctx.shadowBlur = 18;
@@ -313,9 +421,11 @@ export async function downloadBoardImage(
 		ctx.fillStyle = palette.card;
 		ctx.fill();
 		ctx.shadowColor = 'transparent';
-		ctx.strokeStyle = palette.edge;
-		ctx.lineWidth = 1;
+		ctx.strokeStyle = card.color ? cardAccent : palette.edge;
+		ctx.globalAlpha = card.color ? 0.82 : 1;
+		ctx.lineWidth = card.color ? 1.6 : 1;
 		ctx.stroke();
+		ctx.globalAlpha = 1;
 
 		ctx.beginPath();
 		ctx.moveTo(card.x, card.y + 34);
@@ -347,7 +457,7 @@ export async function downloadBoardImage(
 		lines.forEach((line, index) => ctx.fillText(line, textX, card.y + 45 + index * 15));
 
 		ctx.textAlign = 'left';
-		ctx.fillStyle = palette.accent;
+		ctx.fillStyle = cardAccent;
 		ctx.font = '500 9px "IBM Plex Sans", system-ui, sans-serif';
 		let footerY = card.y + card.h - 15;
 		if (card.provenanceCount > 0) {

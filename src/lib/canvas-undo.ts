@@ -2,7 +2,7 @@
  * Lightweight undo stack for canvas layout + flow-edge mutations.
  */
 
-import type { CanvasEdge, CanvasItem, Note } from './types';
+import type { CanvasEdge, CanvasElement, CanvasItem, Note } from './types';
 
 export type CanvasLayoutSnapshot = {
 	itemId: string;
@@ -37,6 +37,9 @@ export type CanvasUndoEntry = {
 	edgesBefore?: CanvasEdge[];
 	/** Full edge list after the action. */
 	edgesAfter?: CanvasEdge[];
+	/** Full cosmetic element list before/after a visual annotation action. */
+	elementsBefore?: CanvasElement[];
+	elementsAfter?: CanvasElement[];
 };
 
 const MAX_ENTRIES = 40;
@@ -69,6 +72,15 @@ function itemsChanged(before?: CanvasItem[], after?: CanvasItem[]): boolean {
 		const next = byId.get(item.id);
 		return !next || JSON.stringify(item) !== JSON.stringify(next);
 	});
+}
+
+function elementsChanged(before?: CanvasElement[], after?: CanvasElement[]): boolean {
+	if (!before && !after) return false;
+	const b = before ?? [];
+	const a = after ?? [];
+	if (b.length !== a.length) return true;
+	const byId = new Map(a.map((element) => [element.id, element]));
+	return b.some((element) => JSON.stringify(element) !== JSON.stringify(byId.get(element.id)));
 }
 
 function notesChanged(before?: Note[], after?: Note[]): boolean {
@@ -104,6 +116,7 @@ export class CanvasUndoStack {
 		const meaningful =
 			layoutChanged(entry.before, entry.after) ||
 			edgesChanged(entry.edgesBefore, entry.edgesAfter) ||
+			elementsChanged(entry.elementsBefore, entry.elementsAfter) ||
 			itemsChanged(entry.itemsBefore, entry.itemsAfter) ||
 			notesChanged(entry.notesBefore, entry.notesAfter);
 		if (!meaningful) return;
@@ -141,6 +154,11 @@ export class CanvasUndoStack {
 		const keep = (entry: CanvasUndoEntry): CanvasUndoEntry | null => {
 			for (const item of [...(entry.itemsBefore ?? []), ...(entry.itemsAfter ?? [])]) {
 				if (drop.has(item.id)) return null;
+			}
+			for (const element of [...(entry.elementsBefore ?? []), ...(entry.elementsAfter ?? [])]) {
+				if (element.kind !== 'arrow') continue;
+				if (element.start.type === 'item' && drop.has(element.start.itemId)) return null;
+				if (element.end.type === 'item' && drop.has(element.end.itemId)) return null;
 			}
 			const hasEdgeChange =
 				(entry.edgesBefore?.length ?? 0) > 0 || (entry.edgesAfter?.length ?? 0) > 0;

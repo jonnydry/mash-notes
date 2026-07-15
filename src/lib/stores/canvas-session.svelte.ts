@@ -4,24 +4,40 @@
  */
 import { untrack } from 'svelte';
 import {
+	addCanvasElement,
 	addCanvasEdge,
 	addNoteToCanvas,
+	bulkUpdateCanvasItemColors,
 	db,
 	getCanvasItems,
 	getOrCreateFolderCanvas,
+	listCanvasElements,
 	listCanvasEdges,
 	newId,
+	removeCanvasElement,
 	removeCanvasEdge,
 	removeCanvasItem,
 	removeNotesFromCanvas,
 	replaceCanvasEdges,
+	replaceCanvasElements,
 	replaceCanvasItemSubset,
 	setOperationReverted,
 	bulkUpdateCanvasItemPositions,
 	updateCanvasBowls,
+	updateCanvasElement,
 	updateCanvasItemPosition
 } from '$lib/db';
-import type { Canvas, CanvasBowl, CanvasEdge, CanvasItem, Note } from '$lib/types';
+import type {
+	Canvas,
+	CanvasArrowElement,
+	CanvasArrowEndpoint,
+	CanvasBowl,
+	CanvasColor,
+	CanvasEdge,
+	CanvasElement,
+	CanvasItem,
+	Note
+} from '$lib/types';
 import { isBlankUntitledNote, notePreview } from '$lib/format';
 import {
 	dismissNoteFromCanvas,
@@ -52,6 +68,7 @@ import {
 import type { SnapZone } from '$lib/stores/editor-stage.svelte';
 import { cleanCanvasBowls, createBowlMembership, removeItemsFromBowls } from '$lib/canvas-bowls';
 import { COLLAPSED_CARD, EXPANDED_CARD } from '$lib/canvas-card-sizing';
+import { cloneCanvasElement, canvasElementBindsItem } from '$lib/canvas-elements';
 
 export { COLLAPSED_CARD, EXPANDED_CARD } from '$lib/canvas-card-sizing';
 export const BUMP_GAP = 24;
@@ -174,6 +191,8 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 	let activeCanvas = $state<Canvas | null>(null);
 	let canvasItems = $state<CanvasItem[]>([]);
 	let canvasEdges = $state<CanvasEdge[]>([]);
+	let canvasElements = $state<CanvasElement[]>([]);
+	let selectedCanvasElementId = $state<string | null>(null);
 	let expandedNoteId = $state<string | null>(null);
 	let expandFocus = $state<'title' | 'body' | null>(null);
 	let bumpRestore: Map<string, { x: number; y: number }> | null = $state(null);
@@ -332,6 +351,15 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 			const edges = await listCanvasEdges(canvas.id);
 			if (seq !== canvasLoadSeq) return;
 			canvasEdges = edges;
+			const elements = await listCanvasElements(canvas.id);
+			if (seq !== canvasLoadSeq) return;
+			canvasElements = elements;
+			if (
+				selectedCanvasElementId &&
+				!elements.some((element) => element.id === selectedCanvasElementId)
+			) {
+				selectedCanvasElementId = null;
+			}
 			if (expandedNoteId && !items.some((i) => i.noteId === expandedNoteId)) {
 				expandedNoteId = null;
 				expandFocus = null;
@@ -343,6 +371,8 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 			activeCanvas = null;
 			canvasItems = [];
 			canvasEdges = [];
+			canvasElements = [];
+			selectedCanvasElementId = null;
 		}
 	}
 
@@ -354,8 +384,11 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		if (seq !== canvasLoadSeq || activeCanvas?.id !== canvasId) return;
 		const edges = await listCanvasEdges(canvasId);
 		if (seq !== canvasLoadSeq || activeCanvas?.id !== canvasId) return;
+		const elements = await listCanvasElements(canvasId);
+		if (seq !== canvasLoadSeq || activeCanvas?.id !== canvasId) return;
 		canvasItems = items;
 		canvasEdges = edges;
+		canvasElements = elements;
 	}
 
 	async function snapSequenceForLink(fromItemId: string, toItemId: string) {
@@ -657,6 +690,19 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		canvasItems = [...canvasItems.filter((item) => !affected.has(item.id)), ...desired];
 	}
 
+	async function applyElementSnapshots(elements: CanvasElement[] | undefined) {
+		if (!activeCanvas || !elements) return;
+		const desired = elements.map(cloneCanvasElement);
+		await replaceCanvasElements(activeCanvas.id, desired);
+		canvasElements = desired;
+		if (
+			selectedCanvasElementId &&
+			!desired.some((element) => element.id === selectedCanvasElementId)
+		) {
+			selectedCanvasElementId = null;
+		}
+	}
+
 	function applyDismissalReceipt(
 		dismissedBefore: string[] | undefined,
 		dismissedAfter: string[] | undefined,
@@ -703,6 +749,7 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		if (entry.edgesBefore) {
 			await applyEdgeSnapshots(entry.edgesBefore);
 		}
+		await applyElementSnapshots(entry.elementsBefore);
 		applyDismissalReceipt(entry.dismissedBefore, entry.dismissedAfter, 'before');
 		if (entry.operationId) {
 			await setOperationReverted(entry.operationId, entry.operationRevertedBefore ?? true);
@@ -726,6 +773,7 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		if (entry.edgesAfter) {
 			await applyEdgeSnapshots(entry.edgesAfter);
 		}
+		await applyElementSnapshots(entry.elementsAfter);
 		applyDismissalReceipt(entry.dismissedBefore, entry.dismissedAfter, 'after');
 		if (entry.operationId) {
 			await setOperationReverted(entry.operationId, entry.operationRevertedAfter ?? false);
@@ -832,10 +880,13 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		const edgesAfter = canvasEdges.filter(
 			(edge) => !removeIds.has(edge.fromItemId) && !removeIds.has(edge.toItemId)
 		);
+		const elementsBefore = elementSnapshot();
+		const elementsAfter = withoutCanvasElementsForItemIds(removeIds);
 		await replaceCanvasItemSubset(activeCanvas.id, result.removeItemIds, []);
 		await replaceCanvasEdges(activeCanvas.id, edgesAfter);
 		canvasItems = canvasItems.filter((item) => !removeIds.has(item.id));
 		canvasEdges = edgesAfter;
+		canvasElements = elementsAfter;
 		canvasUndo.push({
 			label: 'Deduplicate',
 			actionId: 'deduplicate-selection',
@@ -846,7 +897,9 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 			itemsBefore: removedItems,
 			itemsAfter: [],
 			edgesBefore,
-			edgesAfter
+			edgesAfter,
+			elementsBefore,
+			elementsAfter
 		});
 		canvasUndoTick++;
 		opts.onMeaningfulActivity?.();
@@ -937,6 +990,8 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		const edgesAfter = edgesBefore.filter(
 			(edge) => edge.fromItemId !== sourceItem.id && edge.toItemId !== sourceItem.id
 		);
+		const elementsBefore = elementSnapshot();
+		const elementsAfter = withoutCanvasElementsForItemIds(new Set([sourceItem.id]));
 		try {
 			await replaceCanvasItemSubset(
 				activeCanvas.id,
@@ -946,6 +1001,7 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 			await replaceCanvasEdges(activeCanvas.id, edgesAfter);
 			canvasItems = [...canvasItems.filter((item) => item.id !== sourceItem.id), ...itemsAfter];
 			canvasEdges = edgesAfter;
+			canvasElements = elementsAfter;
 			dismissNoteFromCanvas(activeCanvas.id, sourceNoteId);
 			const outputIds = outputNotes.map((note) => note.id);
 			canvasUndo.push({
@@ -964,6 +1020,8 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 				notesAfter: outputNotes.map(plainNoteSnapshot),
 				edgesBefore,
 				edgesAfter,
+				elementsBefore,
+				elementsAfter,
 				selectionBefore: [sourceNoteId],
 				selectionAfter: outputIds,
 				dismissedBefore: [],
@@ -982,11 +1040,13 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 				itemsBefore
 			);
 			await replaceCanvasEdges(activeCanvas.id, edgesBefore);
+			await replaceCanvasElements(activeCanvas.id, elementsBefore);
 			canvasItems = [
 				...canvasItems.filter((item) => !itemsAfter.some((next) => next.id === item.id)),
 				sourceItem
 			];
 			canvasEdges = edgesBefore;
+			canvasElements = elementsBefore;
 			return false;
 		}
 	}
@@ -1024,6 +1084,8 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		const dismissedBefore = sourceNoteIds.filter((id) =>
 			getDismissedNoteIds(activeCanvas!.id).has(id)
 		);
+		const elementsBefore = elementSnapshot();
+		const elementsAfter = withoutCanvasElementsForItemIds(sourceItemIds);
 		try {
 			await replaceCanvasItemSubset(
 				activeCanvas.id,
@@ -1033,6 +1095,7 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 			await replaceCanvasEdges(activeCanvas.id, edgesAfter);
 			canvasItems = [...canvasItems.filter((item) => !sourceItemIds.has(item.id)), outputItem];
 			canvasEdges = edgesAfter;
+			canvasElements = elementsAfter;
 			for (const noteId of sourceNoteIds) dismissNoteFromCanvas(activeCanvas.id, noteId);
 			canvasUndo.push({
 				label: 'Mash',
@@ -1050,6 +1113,8 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 				notesAfter: [plainNoteSnapshot(outputNote)],
 				edgesBefore,
 				edgesAfter,
+				elementsBefore,
+				elementsAfter,
 				selectionBefore: sourceNoteIds,
 				selectionAfter: [outputNote.id],
 				dismissedBefore,
@@ -1068,8 +1133,10 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 				itemsBefore
 			);
 			await replaceCanvasEdges(activeCanvas.id, edgesBefore);
+			await replaceCanvasElements(activeCanvas.id, elementsBefore);
 			canvasItems = [...canvasItems.filter((item) => item.id !== outputItem.id), ...itemsBefore];
 			canvasEdges = edgesBefore;
+			canvasElements = elementsBefore;
 			applyDismissalReceipt(dismissedBefore, sourceNoteIds, 'before');
 			return null;
 		}
@@ -1110,6 +1177,8 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		const edgesAfter = edgesBefore.filter(
 			(edge) => edge.fromItemId !== mashItem.id && edge.toItemId !== mashItem.id
 		);
+		const elementsBefore = elementSnapshot();
+		const elementsAfter = withoutCanvasElementsForItemIds(new Set([mashItem.id]));
 		try {
 			await opts.applyNoteReceipt([mashNote], [], 'after');
 			await replaceCanvasItemSubset(activeCanvas.id, affectedIds, sourceItems);
@@ -1117,6 +1186,7 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 			const affected = new Set(affectedIds);
 			canvasItems = [...canvasItems.filter((item) => !affected.has(item.id)), ...sourceItems];
 			canvasEdges = edgesAfter;
+			canvasElements = elementsAfter;
 			undismissNotesFromCanvas(activeCanvas.id, sourceIds);
 			if (mashNote.operationId) await setOperationReverted(mashNote.operationId, true);
 			canvasUndo.push({
@@ -1135,6 +1205,8 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 				notesAfter: [],
 				edgesBefore,
 				edgesAfter,
+				elementsBefore,
+				elementsAfter,
 				selectionBefore: [mashNote.id],
 				selectionAfter: sourceNotes.map((note) => note.id),
 				dismissedBefore,
@@ -1155,9 +1227,11 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 			await opts.applyNoteReceipt([mashNote], [], 'before');
 			await replaceCanvasItemSubset(activeCanvas.id, affectedIds, itemsBefore);
 			await replaceCanvasEdges(activeCanvas.id, edgesBefore);
+			await replaceCanvasElements(activeCanvas.id, elementsBefore);
 			const affected = new Set(affectedIds);
 			canvasItems = [...canvasItems.filter((item) => !affected.has(item.id)), ...itemsBefore];
 			canvasEdges = edgesBefore;
+			canvasElements = elementsBefore;
 			applyDismissalReceipt(dismissedBefore, [], 'before');
 			return { restored: 0, missing: sourceIds.length, itemIds: [] };
 		}
@@ -1258,6 +1332,125 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		opts.flashToast('Bowl dissolved · cards stayed on the desk');
 	}
 
+	function elementSnapshot(): CanvasElement[] {
+		return canvasElements.map(cloneCanvasElement);
+	}
+
+	function withoutCanvasElementsForItemIds(itemIds: ReadonlySet<string>): CanvasElement[] {
+		return canvasElements
+			.filter((element) => [...itemIds].every((itemId) => !canvasElementBindsItem(element, itemId)))
+			.map(cloneCanvasElement);
+	}
+
+	async function createCanvasArrow(start: CanvasArrowEndpoint, end: CanvasArrowEndpoint) {
+		if (!activeCanvas) return false;
+		const now = Date.now();
+		const element: CanvasArrowElement = {
+			id: newId(),
+			canvasId: activeCanvas.id,
+			version: 1,
+			kind: 'arrow',
+			start: { ...start },
+			end: { ...end },
+			color: 'green',
+			stroke: 'solid',
+			zIndex: Math.max(0, ...canvasElements.map((candidate) => candidate.zIndex)) + 1,
+			created: now,
+			modified: now
+		};
+		const before = elementSnapshot();
+		try {
+			const saved = await addCanvasElement(element);
+			canvasElements = [...canvasElements, saved];
+			selectedCanvasElementId = saved.id;
+			opts.setSelection([], null);
+			canvasUndo.push({
+				label: 'Connect',
+				before: [],
+				after: [],
+				elementsBefore: before,
+				elementsAfter: elementSnapshot()
+			});
+			canvasUndoTick++;
+			opts.onMeaningfulActivity?.();
+			return true;
+		} catch (error) {
+			console.error('Failed to create canvas arrow', error);
+			opts.flashToast('Could not add connection');
+			return false;
+		}
+	}
+
+	async function patchCanvasArrow(
+		id: string,
+		patch: Partial<
+			Pick<CanvasArrowElement, 'start' | 'end' | 'label' | 'color' | 'stroke' | 'zIndex'>
+		>,
+		label = 'Edit connection'
+	) {
+		const existing = canvasElements.find((element) => element.id === id);
+		if (!existing || existing.kind !== 'arrow') return;
+		const before = elementSnapshot();
+		const saved = await updateCanvasElement(id, patch);
+		if (!saved) return;
+		canvasElements = canvasElements.map((element) => (element.id === id ? saved : element));
+		canvasUndo.push({
+			label,
+			before: [],
+			after: [],
+			elementsBefore: before,
+			elementsAfter: elementSnapshot()
+		});
+		canvasUndoTick++;
+		opts.onMeaningfulActivity?.();
+	}
+
+	async function deleteCanvasArrow(id: string) {
+		if (!canvasElements.some((element) => element.id === id)) return;
+		const before = elementSnapshot();
+		await removeCanvasElement(id);
+		canvasElements = canvasElements.filter((element) => element.id !== id);
+		if (selectedCanvasElementId === id) selectedCanvasElementId = null;
+		canvasUndo.push({
+			label: 'Delete connection',
+			before: [],
+			after: [],
+			elementsBefore: before,
+			elementsAfter: elementSnapshot()
+		});
+		canvasUndoTick++;
+		opts.onMeaningfulActivity?.();
+	}
+
+	async function setCanvasSelectionColor(noteIds: string[], color?: CanvasColor) {
+		const selected = new Set(noteIds);
+		const before = canvasItems
+			.filter((item) => selected.has(item.noteId))
+			.map((item) => ({ ...item }));
+		if (before.length === 0) return;
+		const after = before.map((item) => {
+			const next = { ...item };
+			if (color) next.color = color;
+			else delete next.color;
+			return next;
+		});
+		await bulkUpdateCanvasItemColors(
+			after.map((item) => item.id),
+			color
+		);
+		const changed = new Map(after.map((item) => [item.id, item]));
+		canvasItems = canvasItems.map((item) => changed.get(item.id) ?? item);
+		canvasUndo.push({
+			label: 'Color cards',
+			before: [],
+			after: [],
+			itemsBefore: before,
+			itemsAfter: after
+		});
+		canvasUndoTick++;
+		opts.onMeaningfulActivity?.();
+	}
+
 	function selectBowl(bowlId: string) {
 		const bowl = activeCanvas?.bowls?.find((candidate) => candidate.id === bowlId);
 		if (!bowl) return;
@@ -1273,6 +1466,13 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		opts.onMeaningfulActivity?.();
 		canvasItems = canvasItems.filter((i) => i.id !== itemId);
 		canvasEdges = canvasEdges.filter((e) => e.fromItemId !== itemId && e.toItemId !== itemId);
+		canvasElements = canvasElements.filter((element) => !canvasElementBindsItem(element, itemId));
+		if (
+			selectedCanvasElementId &&
+			!canvasElements.some((element) => element.id === selectedCanvasElementId)
+		) {
+			selectedCanvasElementId = null;
+		}
 		if (activeCanvas?.bowls?.some((bowl) => bowl.itemIds.includes(itemId))) {
 			await commitCanvasBowls(removeItemsFromBowls(activeCanvas.bowls, [itemId]));
 		}
@@ -1517,6 +1717,18 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		get canvasEdges() {
 			return canvasEdges;
 		},
+		get canvasElements() {
+			return canvasElements;
+		},
+		set canvasElements(v: CanvasElement[]) {
+			canvasElements = v;
+		},
+		get selectedCanvasElementId() {
+			return selectedCanvasElementId;
+		},
+		set selectedCanvasElementId(v: string | null) {
+			selectedCanvasElementId = v;
+		},
 		get canvasBowls() {
 			return activeCanvas?.bowls ?? [];
 		},
@@ -1610,6 +1822,10 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		renameBowl,
 		dissolveBowl,
 		selectBowl,
+		createCanvasArrow,
+		patchCanvasArrow,
+		deleteCanvasArrow,
+		setCanvasSelectionColor,
 		handleCanvasRemove,
 		bumpNeighborsAround,
 		restoreBumpLayout,

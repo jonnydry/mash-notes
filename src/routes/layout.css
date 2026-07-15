@@ -511,13 +511,14 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 }
 
 .mash-note-card {
+	--mash-placement-accent: var(--mash-accent);
 	background: var(--mash-card);
 	color: var(--mash-card-ink);
 	/* Soft paper stack: contact shadow + ambient lift + faint top edge */
 	box-shadow:
 		var(--mash-shadow-card),
 		inset 0 1px 0 color-mix(in srgb, var(--mash-card-ink) 5%, transparent);
-	border: 1px solid var(--mash-card-edge);
+	border: 1px solid color-mix(in srgb, var(--mash-placement-accent) 42%, var(--mash-card-edge));
 	cursor: grab;
 	/* Visible so page badges can sit on the corner without clipping;
 	   inner preview / editor panes still clip their own overflow. */
@@ -527,6 +528,30 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 		transform 160ms ease,
 		border-color 160ms ease,
 		opacity 120ms ease;
+}
+.mash-note-card[data-card-color='amber'] {
+	--mash-placement-accent: #d9a441;
+}
+.mash-note-card[data-card-color='blue'] {
+	--mash-placement-accent: #5c9ed8;
+}
+.mash-note-card[data-card-color='rose'] {
+	--mash-placement-accent: #d8798f;
+}
+.mash-note-card[data-card-color='violet'] {
+	--mash-placement-accent: #9b83d6;
+}
+.mash-note-card[data-card-color='slate'] {
+	--mash-placement-accent: #87939d;
+}
+.mash-note-card[data-card-color]:not([data-card-color='green']) {
+	background:
+		linear-gradient(
+			180deg,
+			color-mix(in srgb, var(--mash-placement-accent) 8%, transparent),
+			transparent 38%
+		),
+		var(--mash-card);
 }
 .mash-note-card:hover:not(.is-selected):not(.is-dragging-card):not(.is-mash-target):not(
 		.is-flow-source
@@ -1056,6 +1081,89 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 .mash-note-card.is-flow-mode {
 	cursor: crosshair;
 }
+.mash-note-card.is-connect-mode {
+	cursor: cell;
+}
+.mash-note-card.is-connect-source {
+	border-color: #5c9ed8;
+	box-shadow:
+		var(--mash-shadow-card),
+		0 0 0 2px color-mix(in srgb, #5c9ed8 48%, transparent),
+		0 0 0 6px color-mix(in srgb, #5c9ed8 15%, transparent);
+}
+.mash-canvas-arrow-label {
+	max-width: 12rem;
+	padding: 2px 7px;
+	border: 1px solid var(--mash-panel-border);
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--mash-panel) 92%, transparent);
+	color: var(--mash-ink-muted);
+	font-size: var(--mash-type-micro);
+	font-weight: 650;
+	line-height: 1.3;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.mash-canvas-arrow-toolbar {
+	border-color: var(--mash-panel-border);
+	background: color-mix(in srgb, var(--mash-panel) 95%, transparent);
+	color: var(--mash-ink);
+	backdrop-filter: blur(12px);
+}
+.mash-canvas-arrow-toolbar input {
+	border-color: var(--mash-divider);
+	color: var(--mash-ink);
+}
+.mash-canvas-color-dot {
+	--dot-color: var(--mash-accent);
+	display: inline-block;
+	width: 15px;
+	height: 15px;
+	flex: 0 0 auto;
+	border: 2px solid color-mix(in srgb, var(--mash-panel) 72%, transparent);
+	border-radius: 999px;
+	background: var(--dot-color);
+	box-shadow: 0 0 0 1px color-mix(in srgb, var(--dot-color) 60%, var(--mash-divider));
+	transition:
+		transform 120ms ease,
+		box-shadow 120ms ease;
+}
+.mash-canvas-color-dot:hover,
+.mash-canvas-color-dot.is-active {
+	transform: scale(1.18);
+	box-shadow:
+		0 0 0 1px var(--mash-panel),
+		0 0 0 3px color-mix(in srgb, var(--dot-color) 55%, transparent);
+}
+.mash-canvas-color-dot[data-color='amber'] {
+	--dot-color: #d9a441;
+}
+.mash-canvas-color-dot[data-color='blue'] {
+	--dot-color: #5c9ed8;
+}
+.mash-canvas-color-dot[data-color='rose'] {
+	--dot-color: #d8798f;
+}
+.mash-canvas-color-dot[data-color='violet'] {
+	--dot-color: #9b83d6;
+}
+.mash-canvas-color-dot[data-color='slate'] {
+	--dot-color: #87939d;
+}
+.mash-canvas-arrow-action {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 24px;
+	height: 24px;
+	border-radius: 7px;
+	color: var(--mash-ink-muted);
+}
+.mash-canvas-arrow-action:hover {
+	background: var(--mash-hover-fill-soft);
+	color: var(--mash-ink);
+}
 .mash-canvas-bowl {
 	z-index: 0;
 	pointer-events: none;
@@ -1349,12 +1457,18 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 @keyframes mash-dock-in {
 	from {
 		opacity: 0;
-		transform: translate(-50%, 8px);
+		translate: 0 8px;
 	}
 	to {
 		opacity: 1;
-		transform: translate(-50%, 0);
+		translate: 0 0;
 	}
+}
+
+.mash-selection-toolbar {
+	max-width: calc(100vw - 2rem);
+	flex-wrap: wrap;
+	justify-content: center;
 }
 
 /* Vertical side dock — fixed glass; icons grow out like macOS */
@@ -2981,9 +3095,9 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 
 .mash-reader-return {
 	position: absolute;
-	top: 12px;
+	top: 52px;
 	right: 16px;
-	z-index: 18;
+	z-index: 9;
 	display: flex;
 	max-width: min(360px, calc(100% - 7rem));
 	min-height: 38px;
@@ -3023,6 +3137,9 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 }
 
 @media (max-width: 700px) {
+	.mash-reader-return {
+		top: 68px;
+	}
 	.mash-reader-return small {
 		display: none;
 	}

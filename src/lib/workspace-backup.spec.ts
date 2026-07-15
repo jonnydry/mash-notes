@@ -10,6 +10,7 @@ import {
 	inspectAndPlanWorkspaceRestore,
 	inspectWorkspaceBackup,
 	serializeAndVerifyWorkspaceBackup,
+	WORKSPACE_BACKUP_VERSION,
 	type WorkspaceSnapshot
 } from './workspace-backup';
 
@@ -94,6 +95,20 @@ function fixtureSnapshot(): WorkspaceSnapshot {
 			{ id: 'item-a', canvasId: 'canvas-a', noteId: 'note-a', x: 40, y: 60, w: 300, h: 220 }
 		],
 		canvasEdges: [],
+		canvasElements: [
+			{
+				id: 'arrow-a',
+				canvasId: 'canvas-a',
+				version: 1,
+				kind: 'arrow',
+				start: { type: 'item', itemId: 'item-a', anchor: 'right' },
+				end: { type: 'point', x: 420, y: 120 },
+				zIndex: 1,
+				created: 20,
+				modified: 20,
+				color: 'blue'
+			}
+		],
 		operations: [
 			{
 				id: 'operation-a',
@@ -118,7 +133,13 @@ describe('workspace backup', () => {
 
 	it('serializes, verifies, and previews a complete workspace', async () => {
 		const result = await serializeAndVerifyWorkspaceBackup('0.3.0-test', fixtureSnapshot());
-		expect(result.backup.version).toBe(6);
+		expect(result.backup.version).toBe(WORKSPACE_BACKUP_VERSION);
+		expect(result.backup.canvasItems[0]?.color).toBeUndefined();
+		expect(result.backup.canvasElements[0]).toMatchObject({
+			id: 'arrow-a',
+			color: 'blue',
+			start: { type: 'item', itemId: 'item-a' }
+		});
 		expect(result.record.counts).toEqual({ sessions: 2, notes: 2, assets: 0, operations: 1 });
 		const inspected = await inspectAndPlanWorkspaceRestore(result.raw, {
 			...fixtureSnapshot(),
@@ -165,6 +186,7 @@ describe('workspace backup', () => {
 		expect(inspected.ok).toBe(true);
 		if (!inspected.ok) return;
 		expect(inspected.backup.sessions[0]?.title).toBe('Fixture desk');
+		expect(inspected.backup.canvasElements).toEqual([]);
 	});
 
 	it('allows the same folder path on different desks', async () => {
@@ -201,6 +223,17 @@ describe('workspace backup', () => {
 		broken.canvasItems[0] = { ...broken.canvasItems[0]!, noteId: 'missing-note' };
 		await expect(serializeAndVerifyWorkspaceBackup('0.3.0-test', broken)).rejects.toThrow(
 			'broken canvas placement'
+		);
+	});
+
+	it('rejects cosmetic arrows whose bound cards are missing', async () => {
+		const broken = fixtureSnapshot();
+		broken.canvasElements[0] = {
+			...broken.canvasElements[0]!,
+			start: { type: 'item', itemId: 'missing-item', anchor: 'right' }
+		};
+		await expect(serializeAndVerifyWorkspaceBackup('0.3.0-test', broken)).rejects.toThrow(
+			'broken card binding'
 		);
 	});
 
@@ -247,6 +280,11 @@ describe('workspace backup', () => {
 		]);
 		expect(restored.notes.map((entry) => entry.title).sort()).toEqual(['Alpha', 'Beta']);
 		expect(restored.canvasItems[0]).toMatchObject({ noteId: 'note-a', x: 40, y: 60 });
+		expect(restored.canvasElements[0]).toMatchObject({
+			id: 'arrow-a',
+			start: { type: 'item', itemId: 'item-a' },
+			end: { type: 'point', x: 420, y: 120 }
+		});
 		expect(restored.operations[0]?.id).toBe('operation-a');
 	});
 

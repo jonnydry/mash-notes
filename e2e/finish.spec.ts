@@ -113,7 +113,7 @@ test.describe('Consolidated Finish takeaway', () => {
 		const bundlePath = path.join(os.tmpdir(), `mash-finish-${Date.now()}.json`);
 		await bundle.saveAs(bundlePath);
 		const bundleJson = JSON.parse(fs.readFileSync(bundlePath, 'utf8'));
-		expect(bundleJson.version).toBe(5);
+		expect(bundleJson.version).toBe(6);
 		expect(bundleJson.notes.map((note: { title: string }) => note.title)).toEqual(
 			expect.arrayContaining(['Finish Alpha', 'Finish Beta'])
 		);

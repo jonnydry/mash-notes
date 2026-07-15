@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * Board chrome: desktop Free/Snap · Sequence · Fit · Undo · View,
+	 * Board chrome: desktop Free/Snap · Connect · Sequence · Fit · Undo · View,
 	 * mobile Fit/Organize/More tools, and pan/zoom pad.
 	 */
 	import { MoreHorizontal } from '@lucide/svelte';
@@ -10,6 +10,9 @@
 		flowMode: boolean;
 		flowConnecting: boolean;
 		flowFromItemId: string | null;
+		connectMode: boolean;
+		connectSaving: boolean;
+		connectHasStart: boolean;
 		scale: number;
 		altHeld: boolean;
 		itemCount: number;
@@ -22,6 +25,7 @@
 		onOpenShortcuts?: () => void;
 		toggleSnap: () => void;
 		toggleFlowMode: () => void;
+		toggleConnectMode: () => void;
 		zoomToFit: (selectionOnly?: boolean) => void;
 		organizeToSnap: () => void;
 		toggleSelectAllOnBoard: () => void;
@@ -37,6 +41,9 @@
 		flowMode,
 		flowConnecting,
 		flowFromItemId,
+		connectMode,
+		connectSaving,
+		connectHasStart,
 		scale,
 		altHeld,
 		itemCount,
@@ -49,6 +56,7 @@
 		onOpenShortcuts,
 		toggleSnap,
 		toggleFlowMode,
+		toggleConnectMode,
 		zoomToFit,
 		organizeToSnap,
 		toggleSelectAllOnBoard,
@@ -96,6 +104,35 @@
 				Snap
 			</button>
 		</div>
+		<button
+			type="button"
+			class="mash-board-chip mash-board-chip-btn mash-type-micro rounded-full px-2.5 py-1 {connectMode
+				? 'is-active'
+				: ''}"
+			onclick={(e) => {
+				e.stopPropagation();
+				setDesktopViewOpen(false);
+				toggleConnectMode();
+			}}
+			title={connectMode
+				? connectSaving
+					? 'Adding connection…'
+					: connectHasStart
+						? 'Pick a card or empty point; Escape cancels the current line'
+						: 'Done — exit cosmetic connection mode'
+				: 'Draw visual relationships between cards or free points'}
+			aria-pressed={connectMode}
+			aria-busy={connectSaving}
+			data-testid="board-connect"
+		>
+			{connectMode
+				? connectSaving
+					? 'Adding…'
+					: connectHasStart
+						? 'Pick end…'
+						: 'Done'
+				: 'Connect'}
+		</button>
 		<button
 			type="button"
 			class="mash-board-chip mash-board-chip-btn mash-type-micro rounded-full px-2.5 py-1 {flowMode

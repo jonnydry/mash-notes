@@ -7,7 +7,7 @@
 		removeNoteFromSearch,
 		searchNotes
 	} from '$lib/search';
-	import type { Note, Operation } from '$lib/types';
+	import type { CanvasColor, Note, Operation } from '$lib/types';
 	import {
 		Search,
 		Command,
@@ -139,6 +139,7 @@
 		recordWorkspaceBackup
 	} from '$lib/backup-health';
 	import type { WorkspaceBackup, WorkspaceRestorePlan } from '$lib/workspace-backup';
+	import { CANVAS_COLORS, canvasElementBindsItem } from '$lib/canvas-elements';
 
 	let actionToast = $state('');
 	let srAnnouncement = $state('');
@@ -510,6 +511,15 @@
 				canvas.canvasEdges = canvas.canvasEdges.filter(
 					(e) => !removeSet.has(e.fromItemId) && !removeSet.has(e.toItemId)
 				);
+				canvas.canvasElements = canvas.canvasElements.filter((element) =>
+					removedItemIds.every((itemId) => !canvasElementBindsItem(element, itemId))
+				);
+				if (
+					canvas.selectedCanvasElementId &&
+					!canvas.canvasElements.some((element) => element.id === canvas.selectedCanvasElementId)
+				) {
+					canvas.selectedCanvasElementId = null;
+				}
 				canvas.pruneCanvasUndo(removedItemIds);
 			}
 		},
@@ -521,6 +531,7 @@
 			if (folderCanvas) {
 				await db.canvasItems.where('canvasId').equals(folderCanvas.id).delete();
 				await db.canvasEdges.where('canvasId').equals(folderCanvas.id).delete();
+				await db.canvasElements.where('canvasId').equals(folderCanvas.id).delete();
 				await db.canvases.delete(folderCanvas.id);
 				clearCanvasViewport(folderCanvas.id);
 				clearDismissedForCanvas(folderCanvas.id);
@@ -789,6 +800,7 @@
 		getNotesById: () => library.notesById,
 		getCanvasItems: () => canvas.canvasItems,
 		getCanvasEdges: () => canvas.canvasEdges,
+		getCanvasElements: () => canvas.canvasElements,
 		getSelectionIds: () => library.selectionIds,
 		getOperations: () => operationHistory,
 		flushPendingSaveAsync: () => library.flushPendingSaveAsync(),
@@ -2214,6 +2226,8 @@
 					settlingIds={canvas.settlingIds}
 					canvasId={canvas.activeCanvas?.id ?? null}
 					edges={canvas.canvasEdges}
+					elements={canvas.canvasElements}
+					selectedElementId={canvas.selectedCanvasElementId}
 					bowls={canvas.canvasBowls}
 					onSelectBowl={canvas.selectBowl}
 					onRenameBowl={(bowlId, name) => canvas.renameBowl(bowlId, name)}
@@ -2222,6 +2236,13 @@
 					onDisconnectFlow={(id) => void canvas.disconnectFlowEdge(id)}
 					onUnstitchSequence={(i) => void canvas.unstitchSequence(i)}
 					onRelayoutFlow={() => canvas.relayoutFlowSequences()}
+					onCreateArrow={(start, end) => canvas.createCanvasArrow(start, end)}
+					onPatchArrow={(id, patch, label) => canvas.patchCanvasArrow(id, patch, label)}
+					onRemoveArrow={(id) => canvas.deleteCanvasArrow(id)}
+					onSelectElement={(id) => {
+						canvas.selectedCanvasElementId = id;
+						if (id) library.clearSelection();
+					}}
 					onClearSelection={() => library.clearSelection()}
 					onToast={flashToast}
 					emptyMascot={peel.currentFilter.type === 'pinned'
@@ -2265,6 +2286,7 @@
 					onDropFiles={handleDroppedFiles}
 					onMashCards={handleMashCards}
 					onBlankPointerDown={() => {
+						canvas.selectedCanvasElementId = null;
 						peel.closePeel();
 						settingsOpen = false;
 					}}
@@ -2839,7 +2861,7 @@
 
 				{#if library.selectionIds.length > 0}
 					<div
-						class="mash-dock mash-selection-bar flex items-center gap-1 rounded-2xl border px-2 py-1.5 shadow-xl"
+						class="mash-dock mash-selection-toolbar flex items-center gap-1 rounded-2xl border px-2 py-1.5 shadow-xl"
 						style="border-color: var(--mash-panel-border); background: var(--mash-panel); backdrop-filter: blur(10px);"
 					>
 						<span
@@ -2848,6 +2870,22 @@
 						>
 							{library.selectionIds.length} selected
 						</span>
+						<div class="mash-selection-colors flex items-center gap-1" aria-label="Card color">
+							{#each CANVAS_COLORS as color (color)}
+								<button
+									type="button"
+									class="mash-canvas-color-dot"
+									data-color={color}
+									aria-label={`${color} card color`}
+									title={`${color} card color`}
+									onclick={() =>
+										void canvas.setCanvasSelectionColor(
+											library.selectionIds,
+											color === 'green' ? undefined : (color as CanvasColor)
+										)}
+								></button>
+							{/each}
+						</div>
 						{#if keepableSelectionIds.length > 0}
 							<button
 								type="button"

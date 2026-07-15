@@ -3,12 +3,13 @@ import { wipeIndexedDb } from './helpers';
 
 const NOTE_COUNT = 5_000;
 const CANVAS_CARD_COUNT = 160;
+const CANVAS_ELEMENT_COUNT = 360;
 const SEARCH_NEEDLE = 'zxqv-needle-4999';
 
 async function seedMessyWorkspace(page: Page) {
 	await page.goto('/robots.txt');
 	await page.evaluate(
-		async ({ noteCount, canvasCardCount, searchNeedle }) => {
+		async ({ noteCount, canvasCardCount, canvasElementCount, searchNeedle }) => {
 			type SeedSession = {
 				id: string;
 				title: string;
@@ -57,7 +58,7 @@ async function seedMessyWorkspace(page: Page) {
 			const now = Date.now();
 			localStorage.setItem('mash.activeSessionId', session.id);
 			const writeTransaction = database.transaction(
-				['sessions', 'notes', 'canvases', 'canvasItems'],
+				['sessions', 'notes', 'canvases', 'canvasItems', 'canvasElements'],
 				'readwrite'
 			);
 			writeTransaction.objectStore('sessions').put({
@@ -68,6 +69,7 @@ async function seedMessyWorkspace(page: Page) {
 			});
 			const notes = writeTransaction.objectStore('notes');
 			const canvasItems = writeTransaction.objectStore('canvasItems');
+			const canvasElements = writeTransaction.objectStore('canvasElements');
 			if (!existingCanvas) {
 				writeTransaction.objectStore('canvases').put({
 					id: canvasId,
@@ -107,15 +109,43 @@ async function seedMessyWorkspace(page: Page) {
 						x: (index % 20) * 260,
 						y: Math.floor(index / 20) * 160,
 						w: 220,
-						h: 120
+						h: 120,
+						...(index % 6 === 0 ? { color: 'amber' } : {}),
+						...(index % 11 === 0 ? { color: 'blue' } : {})
 					});
 				}
+			}
+
+			const colors = ['green', 'amber', 'blue', 'rose', 'violet', 'slate'] as const;
+			for (let index = 0; index < canvasElementCount; index += 1) {
+				const from = index % canvasCardCount;
+				let to = (index * 7 + 13) % canvasCardCount;
+				if (to === from) to = (to + 1) % canvasCardCount;
+				canvasElements.put({
+					id: `stress-arrow-${index}`,
+					canvasId,
+					version: 1,
+					kind: 'arrow',
+					start: { type: 'item', itemId: `stress-item-${from}`, anchor: 'auto' },
+					end: { type: 'item', itemId: `stress-item-${to}`, anchor: 'auto' },
+					...(index % 9 === 0 ? { label: `relationship ${index}` } : {}),
+					color: colors[index % colors.length],
+					stroke: index % 4 === 0 ? 'dashed' : 'solid',
+					zIndex: index,
+					created: now - index,
+					modified: now - index
+				});
 			}
 
 			await transactionDone(writeTransaction);
 			database.close();
 		},
-		{ noteCount: NOTE_COUNT, canvasCardCount: CANVAS_CARD_COUNT, searchNeedle: SEARCH_NEEDLE }
+		{
+			noteCount: NOTE_COUNT,
+			canvasCardCount: CANVAS_CARD_COUNT,
+			canvasElementCount: CANVAS_ELEMENT_COUNT,
+			searchNeedle: SEARCH_NEEDLE
+		}
 	);
 }
 
@@ -140,6 +170,10 @@ test('keeps a messy 5,000-note workspace usable', async ({ page }, testInfo) => 
 	const mountedCanvasCards = await page.locator('[data-canvas-card]').count();
 	expect(mountedCanvasCards).toBeGreaterThan(0);
 	expect(mountedCanvasCards).toBeLessThan(60);
+	await expect(page.locator('g[data-canvas-element]')).toHaveCount(CANVAS_ELEMENT_COUNT, {
+		timeout: 10_000
+	});
+	const mountedCanvasElements = await page.locator('g[data-canvas-element]').count();
 
 	const search = page.getByPlaceholder('Search notes to grab…');
 	const searchStartedAt = Date.now();
@@ -201,7 +235,14 @@ test('keeps a messy 5,000-note workspace usable', async ({ page }, testInfo) => 
 	}, 'stress-note-4999');
 	expect(persistedLength).toBe(revisedBody.length);
 
-	const metrics = { startupMs, searchMs, navigationChurnMs, mountedCanvasCards, persistedLength };
+	const metrics = {
+		startupMs,
+		searchMs,
+		navigationChurnMs,
+		mountedCanvasCards,
+		mountedCanvasElements,
+		persistedLength
+	};
 	console.log(`[stress] ${JSON.stringify(metrics)}`);
 	await testInfo.attach('messy-workload-metrics.json', {
 		body: JSON.stringify(metrics, null, 2),

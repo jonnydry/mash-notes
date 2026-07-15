@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { deriveBackupHealth, WORKSPACE_BACKUP_STALE_MS } from './backup-health';
 import type { WorkspaceBackupRecord } from './workspace-backup';
+import { WORKSPACE_BACKUP_VERSION } from './workspace-backup-version';
 
 const record: WorkspaceBackupRecord = {
 	createdAt: 1000,
 	workspaceChangedAt: 900,
-	bundleVersion: 6,
+	bundleVersion: WORKSPACE_BACKUP_VERSION,
 	byteLength: 100,
 	digest: 'a'.repeat(64),
 	counts: { sessions: 1, notes: 2, assets: 0, operations: 0 }

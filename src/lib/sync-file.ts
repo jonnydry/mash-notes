@@ -1,12 +1,14 @@
 /**
  * File-based sync transport on top of LWW merge.
- * Desk bundle v5 includes notes, layout, tombstones, operation provenance,
- * and referenced visual assets. Versions 1 through 4 still import.
+ * Desk bundle v6 adds canvas appearance and cosmetic elements to notes, layout,
+ * tombstones, provenance, and visual assets. Versions 1 through 5 still import.
  */
 import type {
 	Canvas,
+	CanvasArrowAnchor,
 	CanvasBowl,
 	CanvasEdge,
+	CanvasElement,
 	CanvasItem,
 	Note,
 	NoteBlob,
@@ -25,8 +27,16 @@ import {
 	getNoteBlobsByIds,
 	normalizeBlobMime
 } from './note-blobs';
+import {
+	CANVAS_ARROW_ANCHORS,
+	canvasElementBindsItem,
+	cloneCanvasElement,
+	isCanvasColor,
+	remapCanvasElement
+} from './canvas-elements';
 
-export const SYNC_BUNDLE_VERSION = 5 as const;
+export const SYNC_BUNDLE_VERSION = 6 as const;
+export const SYNC_BUNDLE_VERSION_V5 = 5 as const;
 export const SYNC_BUNDLE_VERSION_V4 = 4 as const;
 export const SYNC_BUNDLE_VERSION_V3 = 3 as const;
 export const SYNC_BUNDLE_VERSION_V2 = 2 as const;
@@ -41,6 +51,8 @@ const MAX_SYNC_BLOB_BASE64_CHARS = 5_600_000;
 const MAX_SYNC_BLOBS_BASE64_CHARS = 6_500_000;
 const MAX_CANVAS_COORDINATE = 1_000_000;
 const MAX_CANVAS_ITEM_EDGE = 5000;
+const MAX_CANVAS_ELEMENTS = 50_000;
+const MAX_CANVAS_ELEMENT_LABEL_CHARS = 200;
 
 /** Keep soft-delete tombstones in sync exports for this long. */
 export const TOMBSTONE_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
@@ -55,6 +67,8 @@ export type DeskSnapshot = {
 	items: CanvasItem[];
 	/** Directed flow edges between canvas items (optional on older bundles). */
 	edges?: CanvasEdge[];
+	/** Cosmetic canvas marks. Introduced in v6; absent on older bundles. */
+	elements?: CanvasElement[];
 	/** canvasId → dismissed note ids */
 	dismissed: DismissedByCanvas;
 };
@@ -71,6 +85,7 @@ export type SyncBlob = {
 export type SyncBundle = {
 	version:
 		| typeof SYNC_BUNDLE_VERSION
+		| typeof SYNC_BUNDLE_VERSION_V5
 		| typeof SYNC_BUNDLE_VERSION_V4
 		| typeof SYNC_BUNDLE_VERSION_V3
 		| typeof SYNC_BUNDLE_VERSION_V2
@@ -91,6 +106,8 @@ export type DeskApplySummary = {
 	itemsSkipped: number;
 	edgesUpserted: number;
 	edgesSkipped: number;
+	elementsUpserted: number;
+	elementsSkipped: number;
 };
 
 export type SyncMergeSummary = {
@@ -178,7 +195,67 @@ function normalizeCanvasItem(raw: unknown, index: number): CanvasItem | string {
 	if (typeof raw.h === 'number' && Number.isFinite(raw.h)) {
 		item.h = clampNumber(raw.h, 160, 1, MAX_CANVAS_ITEM_EDGE);
 	}
+	if (isCanvasColor(raw.color)) item.color = raw.color;
 	return item;
+}
+
+function normalizeCanvasElementEndpoint(
+	raw: unknown,
+	elementIndex: number,
+	name: 'start' | 'end'
+): CanvasElement['start'] | string {
+	if (!isRecord(raw)) return `Canvas element ${elementIndex + 1} has an invalid ${name}`;
+	if (raw.type === 'point') {
+		return {
+			type: 'point',
+			x: clampNumber(raw.x, 0, -MAX_CANVAS_COORDINATE, MAX_CANVAS_COORDINATE),
+			y: clampNumber(raw.y, 0, -MAX_CANVAS_COORDINATE, MAX_CANVAS_COORDINATE)
+		};
+	}
+	if (raw.type === 'item') {
+		const itemId = boundedId(raw.itemId);
+		if (!itemId) return `Canvas element ${elementIndex + 1} has a missing ${name} item`;
+		const anchor =
+			typeof raw.anchor === 'string' &&
+			(CANVAS_ARROW_ANCHORS as readonly string[]).includes(raw.anchor)
+				? (raw.anchor as CanvasArrowAnchor)
+				: 'auto';
+		return { type: 'item', itemId, anchor };
+	}
+	return `Canvas element ${elementIndex + 1} has an unsupported ${name} binding`;
+}
+
+function normalizeCanvasElement(raw: unknown, index: number): CanvasElement | string {
+	if (!isRecord(raw)) return `Canvas element ${index + 1} is not an object`;
+	if (raw.kind !== 'arrow') return `Canvas element ${index + 1} has an unsupported kind`;
+	if (raw.version !== undefined && raw.version !== 1) {
+		return `Canvas element ${index + 1} has an unsupported version`;
+	}
+	const canvasId = boundedId(raw.canvasId);
+	if (!canvasId) return `Canvas element ${index + 1} is missing canvasId`;
+	const start = normalizeCanvasElementEndpoint(raw.start, index, 'start');
+	if (typeof start === 'string') return start;
+	const end = normalizeCanvasElementEndpoint(raw.end, index, 'end');
+	if (typeof end === 'string') return end;
+	const now = Date.now();
+	const element: CanvasElement = {
+		id: boundedId(raw.id) || newId(),
+		canvasId,
+		version: 1,
+		kind: 'arrow',
+		start,
+		end,
+		zIndex: Math.trunc(clampNumber(raw.zIndex, 0, -MAX_CANVAS_ELEMENTS, MAX_CANVAS_ELEMENTS)),
+		created: asNumber(raw.created, now),
+		modified: asNumber(raw.modified, now)
+	};
+	if (typeof raw.label === 'string') {
+		const label = raw.label.trim().slice(0, MAX_CANVAS_ELEMENT_LABEL_CHARS);
+		if (label) element.label = label;
+	}
+	if (isCanvasColor(raw.color)) element.color = raw.color;
+	if (raw.stroke === 'dashed') element.stroke = 'dashed';
+	return element;
 }
 
 function normalizeCanvasEdge(raw: unknown, index: number): CanvasEdge | string {
@@ -227,9 +304,11 @@ function normalizeDesk(raw: unknown): DeskSnapshot | string {
 	const canvasesRaw = Array.isArray(raw.canvases) ? raw.canvases : [];
 	const itemsRaw = Array.isArray(raw.items) ? raw.items : [];
 	const edgesRaw = Array.isArray(raw.edges) ? raw.edges : [];
+	const elementsRaw = Array.isArray(raw.elements) ? raw.elements : [];
 	if (canvasesRaw.length > 200) return 'Too many canvases in sync bundle';
 	if (itemsRaw.length > 20_000) return 'Too many canvas items in sync bundle';
 	if (edgesRaw.length > 50_000) return 'Too many canvas edges in sync bundle';
+	if (elementsRaw.length > MAX_CANVAS_ELEMENTS) return 'Too many canvas elements in sync bundle';
 
 	const canvases: Canvas[] = [];
 	const canvasIds = new Set<string>();
@@ -265,12 +344,32 @@ function normalizeDesk(raw: unknown): DeskSnapshot | string {
 		edgeIds.add(edge.id);
 		edges.push(edge);
 	}
+	const elements: CanvasElement[] = [];
+	const elementIds = new Set<string>();
+	const itemCanvas = new Map(items.map((item) => [item.id, item.canvasId]));
+	for (let i = 0; i < elementsRaw.length; i++) {
+		const element = normalizeCanvasElement(elementsRaw[i], i);
+		if (typeof element === 'string') return element;
+		if (elementIds.has(element.id)) {
+			return `Duplicate canvas element id: ${element.id.slice(0, 40)}`;
+		}
+		if (!canvasIds.has(element.canvasId)) {
+			return `Canvas element ${i + 1} references an unknown canvas`;
+		}
+		const brokenBinding = [element.start, element.end].some(
+			(endpoint) => endpoint.type === 'item' && itemCanvas.get(endpoint.itemId) !== element.canvasId
+		);
+		if (brokenBinding) return `Canvas element ${i + 1} contains a broken card binding`;
+		elementIds.add(element.id);
+		elements.push(element);
+	}
 	const dismissed = normalizeDismissed(raw.dismissed);
 	if (typeof dismissed === 'string') return dismissed;
 	return {
 		canvases,
 		items,
 		edges,
+		elements,
 		dismissed
 	};
 }
@@ -285,6 +384,8 @@ export async function collectDeskSnapshot(sessionId?: string): Promise<DeskSnaps
 	const items = allItems.filter((item) => canvasIds.has(item.canvasId));
 	const allEdges = await db.canvasEdges.toArray();
 	const edges = allEdges.filter((edge) => canvasIds.has(edge.canvasId));
+	const allElements = await db.canvasElements.toArray();
+	const elements = allElements.filter((element) => canvasIds.has(element.canvasId));
 	const allDismissed = exportAllDismissed();
 	const dismissed = Object.fromEntries(
 		Object.entries(allDismissed).filter(([canvasId]) => canvasIds.has(canvasId))
@@ -298,6 +399,7 @@ export async function collectDeskSnapshot(sessionId?: string): Promise<DeskSnaps
 		})),
 		items: items.map((i) => ({ ...i })),
 		edges: edges.map((e) => ({ ...e })),
+		elements: elements.map(cloneCanvasElement),
 		dismissed
 	};
 }
@@ -516,6 +618,7 @@ export function parseSyncBundle(
 	const version = obj.version;
 	if (
 		version !== SYNC_BUNDLE_VERSION &&
+		version !== SYNC_BUNDLE_VERSION_V5 &&
 		version !== SYNC_BUNDLE_VERSION_V4 &&
 		version !== SYNC_BUNDLE_VERSION_V3 &&
 		version !== SYNC_BUNDLE_VERSION_V2 &&
@@ -548,6 +651,7 @@ export function parseSyncBundle(
 	let desk: DeskSnapshot | undefined;
 	if (
 		version === SYNC_BUNDLE_VERSION ||
+		version === SYNC_BUNDLE_VERSION_V5 ||
 		version === SYNC_BUNDLE_VERSION_V4 ||
 		version === SYNC_BUNDLE_VERSION_V3 ||
 		version === SYNC_BUNDLE_VERSION_V2
@@ -560,6 +664,7 @@ export function parseSyncBundle(
 	let tombstones: SyncTombstone[] | undefined;
 	if (
 		version === SYNC_BUNDLE_VERSION ||
+		version === SYNC_BUNDLE_VERSION_V5 ||
 		version === SYNC_BUNDLE_VERSION_V4 ||
 		version === SYNC_BUNDLE_VERSION_V3
 	) {
@@ -569,14 +674,18 @@ export function parseSyncBundle(
 	}
 
 	let operations: Operation[] | undefined;
-	if (version === SYNC_BUNDLE_VERSION || version === SYNC_BUNDLE_VERSION_V4) {
+	if (
+		version === SYNC_BUNDLE_VERSION ||
+		version === SYNC_BUNDLE_VERSION_V5 ||
+		version === SYNC_BUNDLE_VERSION_V4
+	) {
 		const operationResult = normalizeOperations(obj.operations);
 		if (typeof operationResult === 'string') return { ok: false, error: operationResult };
 		operations = operationResult;
 	}
 
 	let blobs: SyncBlob[] | undefined;
-	if (version === SYNC_BUNDLE_VERSION) {
+	if (version === SYNC_BUNDLE_VERSION || version === SYNC_BUNDLE_VERSION_V5) {
 		const blobResult = normalizeSyncBlobs(obj.blobs, options);
 		if (typeof blobResult === 'string') return { ok: false, error: blobResult };
 		blobs = blobResult;
@@ -607,6 +716,11 @@ async function stripCanvasForDeletedNotes(noteIds: string[]): Promise<void> {
 	]);
 	const edgeIds = [...new Set([...from, ...to].map((edge) => edge.id))];
 	if (edgeIds.length > 0) await db.canvasEdges.bulkDelete(edgeIds);
+	const elements = await db.canvasElements.toArray();
+	const elementIds = elements
+		.filter((element) => itemIds.some((itemId) => canvasElementBindsItem(element, itemId)))
+		.map((element) => element.id);
+	if (elementIds.length > 0) await db.canvasElements.bulkDelete(elementIds);
 	await db.canvasItems.bulkDelete(itemIds);
 }
 
@@ -729,6 +843,8 @@ async function applyDeskIdbSnapshot(
 	let itemsSkipped = 0;
 	let edgesUpserted = 0;
 	let edgesSkipped = 0;
+	let elementsUpserted = 0;
+	let elementsSkipped = 0;
 
 	/** remote canvas id → local canvas id */
 	const idMap = new Map<string, string>();
@@ -817,7 +933,8 @@ async function applyDeskIdbSnapshot(
 				x: remoteItem.x,
 				y: remoteItem.y,
 				w: remoteItem.w,
-				h: remoteItem.h
+				h: remoteItem.h,
+				color: remoteItem.color
 			};
 			itemUpserts.push(next);
 			byNote.set(remoteItem.noteId, next);
@@ -833,7 +950,8 @@ async function applyDeskIdbSnapshot(
 				x: remoteItem.x,
 				y: remoteItem.y,
 				w: remoteItem.w,
-				h: remoteItem.h
+				h: remoteItem.h,
+				color: remoteItem.color
 			};
 			itemUpserts.push(next);
 			byNote.set(remoteItem.noteId, next);
@@ -893,6 +1011,51 @@ async function applyDeskIdbSnapshot(
 	}
 	if (edgeUpserts.length > 0) await db.canvasEdges.bulkPut(edgeUpserts);
 
+	const existingElementRows =
+		targetCanvasIds.length > 0
+			? await db.canvasElements.where('canvasId').anyOf(targetCanvasIds).toArray()
+			: [];
+	const elementFingerprint = (element: CanvasElement) =>
+		JSON.stringify({
+			canvasId: element.canvasId,
+			kind: element.kind,
+			start: element.start,
+			end: element.end,
+			label: element.label ?? '',
+			color: element.color ?? 'green',
+			stroke: element.stroke ?? 'solid',
+			zIndex: element.zIndex
+		});
+	const elementKeys = new Set(existingElementRows.map(elementFingerprint));
+	const elementUpserts: CanvasElement[] = [];
+	for (const remoteElement of desk.elements ?? []) {
+		const localCanvasId = idMap.get(remoteElement.canvasId);
+		const remoteCanvas = remoteCanvasById.get(remoteElement.canvasId);
+		if (!localCanvasId || !remoteCanvas) {
+			elementsSkipped += 1;
+			continue;
+		}
+		const localMod = folderModified.get(remoteCanvas.folder) ?? 0;
+		if (remoteCanvas.modified < localMod) {
+			elementsSkipped += 1;
+			continue;
+		}
+		const next = remapCanvasElement(remoteElement, localCanvasId, itemIdMap, newId());
+		if (!next) {
+			elementsSkipped += 1;
+			continue;
+		}
+		const key = elementFingerprint(next);
+		if (elementKeys.has(key)) {
+			elementsSkipped += 1;
+			continue;
+		}
+		elementKeys.add(key);
+		elementUpserts.push(next);
+		elementsUpserted += 1;
+	}
+	if (elementUpserts.length > 0) await db.canvasElements.bulkPut(elementUpserts);
+
 	const remappedDismissed: DismissedByCanvas = {};
 	for (const [remoteCanvasId, noteIds] of Object.entries(desk.dismissed)) {
 		const localId = idMap.get(remoteCanvasId);
@@ -906,6 +1069,8 @@ async function applyDeskIdbSnapshot(
 		itemsSkipped,
 		edgesUpserted,
 		edgesSkipped,
+		elementsUpserted,
+		elementsSkipped,
 		remappedDismissed
 	};
 }
@@ -951,7 +1116,15 @@ export async function persistMergedSync(
 
 	await db.transaction(
 		'rw',
-		[db.notes, db.canvases, db.canvasItems, db.canvasEdges, db.operations, db.noteBlobs],
+		[
+			db.notes,
+			db.canvases,
+			db.canvasItems,
+			db.canvasEdges,
+			db.canvasElements,
+			db.operations,
+			db.noteBlobs
+		],
 		async () => {
 			const operationIdMap = new Map<string, string>();
 			const existingOperations = await db.operations.bulkGet(

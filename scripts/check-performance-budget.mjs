@@ -27,10 +27,11 @@ const deferredInitialEntryNames = new Set([
 	'sync-file'
 ]);
 const budgets = {
-	// Page orchestrator + canvas still dominate; deferred PDF/GIF stay out of graph.
-	javascript: 630 * 1024,
-	// Layout tokens, board chrome, and the mobile gate; suite fonts are budgeted separately.
-	css: 134 * 1024,
+	// Canvas Relationships v1 adds persistent arrow geometry + editing to the core board.
+	// Keep the allowance tight; deferred PDF/GIF/backup tooling must still stay out of graph.
+	javascript: 646 * 1024,
+	// Card palettes and relationship controls are core canvas chrome; fonts remain separate.
+	css: 136 * 1024,
 	fonts: 120 * 1024,
 	fontFiles: 5,
 	// Install/update cost: the shell, initial graph, core fonts, and brand chrome only.

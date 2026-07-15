@@ -1,5 +1,6 @@
 import type { StoragePressure } from './storage-health';
 import type { WorkspaceBackupRecord } from './workspace-backup';
+import { WORKSPACE_BACKUP_VERSION } from './workspace-backup-version';
 
 export const WORKSPACE_BACKUP_RECORD_KEY = 'mash.workspaceBackupRecord';
 export const WORKSPACE_BACKUP_STALE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -33,7 +34,7 @@ export function readWorkspaceBackupRecord(): WorkspaceBackupRecord | null {
 		if (
 			!isFiniteNumber(value.createdAt) ||
 			!isFiniteNumber(value.workspaceChangedAt) ||
-			value.bundleVersion !== 6 ||
+			value.bundleVersion !== WORKSPACE_BACKUP_VERSION ||
 			!isFiniteNumber(value.byteLength) ||
 			typeof value.digest !== 'string' ||
 			!value.counts ||
