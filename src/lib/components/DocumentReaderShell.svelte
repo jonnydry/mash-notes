@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { FileText, GripVertical, Inbox, X } from 'lucide-svelte';
+	import { FileText, GripVertical, Inbox, X } from '@lucide/svelte';
 
 	export type DocumentReaderClipping = {
 		id: string;

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
-	import { ChevronLeft, ChevronRight, Crop, FileText, Minus, Plus } from 'lucide-svelte';
+	import { ChevronLeft, ChevronRight, Crop, FileText, Minus, Plus } from '@lucide/svelte';
 	import type { PDFDocumentLoadingTask, PDFDocumentProxy, RenderTask } from 'pdfjs-dist';
 	import pdfWorkerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
 	import type { CssRect, PdfClipPayload, PdfClipping } from '$lib/pdf-clipping';

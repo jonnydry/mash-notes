@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { focusTrap } from '$lib/focus-trap';
 	import { untrack } from 'svelte';
-	import { X } from 'lucide-svelte';
+	import { X } from '@lucide/svelte';
 	import { getCanvasItems, getOrCreateFolderCanvas } from '$lib/db';
 	import type { CanvasItem } from '$lib/types';
 	import { COLLAPSED_CARD } from '$lib/stores/canvas-session.svelte';

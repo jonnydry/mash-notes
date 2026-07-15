@@ -34,7 +34,7 @@
 		FileText,
 		IceCreamBowl,
 		GripVertical
-	} from 'lucide-svelte';
+	} from '@lucide/svelte';
 	import { focusTrap } from '$lib/focus-trap';
 	import StickyEditor from '$lib/components/StickyEditor.svelte';
 	import CanvasChrome from '$lib/components/CanvasChrome.svelte';

@@ -2,6 +2,7 @@ import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { extname, resolve, sep } from 'node:path';
+import { CACHE_CONTROL, SECURITY_HEADERS } from './deployment-contract.mjs';
 
 const args = process.argv.slice(2);
 
@@ -45,23 +46,20 @@ const mimeTypes = new Map([
 ]);
 
 function applyHeaders(response, pathname) {
-	response.setHeader('X-Content-Type-Options', 'nosniff');
-	response.setHeader('Referrer-Policy', 'no-referrer');
-	response.setHeader('X-Frame-Options', 'DENY');
-	response.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
-	response.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
-	response.setHeader(
-		'Permissions-Policy',
-		'camera=(), microphone=(), geolocation=(), payment=(), usb=()'
-	);
+	for (const [name, value] of SECURITY_HEADERS) response.setHeader(name, value);
 
 	if (pathname.startsWith('/_app/immutable/')) {
-		response.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+		response.setHeader('Cache-Control', CACHE_CONTROL.immutable);
 	} else if (pathname === '/sw.js') {
-		response.setHeader('Cache-Control', 'no-cache');
+		response.setHeader('Cache-Control', CACHE_CONTROL.revalidate);
 		response.setHeader('Service-Worker-Allowed', '/');
-	} else if (pathname === '/' || pathname.endsWith('.html') || pathname === '/boot-theme.js') {
-		response.setHeader('Cache-Control', 'no-cache');
+	} else if (
+		pathname === '/' ||
+		pathname.endsWith('.html') ||
+		pathname === '/boot-theme.js' ||
+		pathname === '/manifest.webmanifest'
+	) {
+		response.setHeader('Cache-Control', CACHE_CONTROL.revalidate);
 	}
 }
 

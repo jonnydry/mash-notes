@@ -36,7 +36,7 @@
 		Bookmark,
 		MoreHorizontal,
 		IceCreamBowl
-	} from 'lucide-svelte';
+	} from '@lucide/svelte';
 	import MashDock from '$lib/components/MashDock.svelte';
 	import PeelScanner from '$lib/components/PeelScanner.svelte';
 	import SearchResultsDropdown from '$lib/components/SearchResultsDropdown.svelte';
@@ -152,6 +152,7 @@
 		danger: boolean;
 		action: () => void | Promise<void>;
 	} | null>(null);
+	let confirmDialogBusy = $state(false);
 
 	let showPalette = $state(false);
 	let paletteQuery = $state('');
@@ -399,6 +400,7 @@
 		danger?: boolean;
 		action: () => void | Promise<void>;
 	}) {
+		confirmDialogBusy = false;
 		confirmDialog = {
 			title: opts.title,
 			message: opts.message,
@@ -1053,7 +1055,7 @@
 				return true;
 			}
 			if (confirmDialog) {
-				confirmDialog = null;
+				if (!confirmDialogBusy) confirmDialog = null;
 				return true;
 			}
 			if (spacesOverviewOpen) {
@@ -1556,9 +1558,17 @@
 
 	async function runConfirmDialog() {
 		const pending = confirmDialog;
-		confirmDialog = null;
-		if (!pending) return;
-		await pending.action();
+		if (!pending || confirmDialogBusy) return;
+		confirmDialogBusy = true;
+		try {
+			await pending.action();
+			if (confirmDialog === pending) confirmDialog = null;
+		} catch (error) {
+			console.error('Confirmed action failed', error);
+			flashToast('That action could not finish. Please try again.', 4200);
+		} finally {
+			confirmDialogBusy = false;
+		}
 	}
 
 	function selectionExportTitle(notes: Note[]): string {
@@ -3232,11 +3242,14 @@
 		message={confirmDialog?.message ?? ''}
 		confirmLabel={confirmDialog?.confirmLabel ?? 'Confirm'}
 		danger={confirmDialog?.danger ?? false}
+		busy={confirmDialogBusy}
 		illustration={confirmDialog?.confirmLabel === 'Delete'
 			? '/icons/Rotating%20Icons/holding-trash-bag@2x.png'
 			: undefined}
 		onConfirm={() => void runConfirmDialog()}
-		onCancel={() => (confirmDialog = null)}
+		onCancel={() => {
+			if (!confirmDialogBusy) confirmDialog = null;
+		}}
 	/>
 
 	{#if shortcutsOpen}

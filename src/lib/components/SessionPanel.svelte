@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { Check, Clock3, Plus, RotateCcw, X } from 'lucide-svelte';
+	import { Check, Clock3, Plus, RotateCcw, X } from '@lucide/svelte';
 	import { SCRATCH_RETENTION_OPTIONS, sessionLifecycleLabel } from '$lib/session-lifecycle';
 	import type { Note, Session } from '$lib/types';
 	import { focusTrap } from '$lib/focus-trap';

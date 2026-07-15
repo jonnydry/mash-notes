@@ -54,6 +54,13 @@ Workspace backups are validated and given a SHA-256 digest before download. That
 accidental corruption; it is not encryption, authentication, or proof of who created a file. Restore
 still treats every selected backup as untrusted input and previews its impact before writing.
 
+## Origin and domain changes
+
+Browser storage belongs to the exact site origin. A Vercel Preview URL, a `vercel.app` production
+URL, and a custom domain each have separate IndexedDB, local storage, service-worker, and cache data.
+Work does not move between those origins automatically. Use synthetic content on previews, choose a
+stable public domain before inviting users, and create a workspace backup before changing domains.
+
 ## Self-hosting
 
 Self-hosters control the static origin, headers, deployment logs, and update policy. Preserve the supplied security headers and Content Security Policy, serve over HTTPS outside local development, and review changes before deploying them to users who trust that origin.

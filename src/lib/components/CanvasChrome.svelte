@@ -3,7 +3,7 @@
 	 * Board chrome: desktop Free/Snap · Sequence · Fit · Undo · View,
 	 * mobile Fit/Organize/More tools, and pan/zoom pad.
 	 */
-	import { MoreHorizontal } from 'lucide-svelte';
+	import { MoreHorizontal } from '@lucide/svelte';
 
 	interface Props {
 		snapEnabled: boolean;

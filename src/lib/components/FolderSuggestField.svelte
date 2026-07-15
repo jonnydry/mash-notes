@@ -4,7 +4,7 @@
 	 * Portals the list into document body so it isn’t clipped by pane overflow
 	 * or mis-scaled under the canvas transform (native datalist fails both).
 	 */
-	import { Folder } from 'lucide-svelte';
+	import { Folder } from '@lucide/svelte';
 	import { fly } from 'svelte/transition';
 	import { portal } from '$lib/portal';
 	import {

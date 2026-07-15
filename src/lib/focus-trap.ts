@@ -32,6 +32,12 @@ export function focusTrap(node: HTMLElement, options: FocusTrapOptions = {}) {
 	const originalTabIndex = node.getAttribute('tabindex');
 	let initialFrame = requestAnimationFrame(() => {
 		initialFrame = 0;
+		// A quick keyboard or pointer interaction can move focus into the dialog
+		// before this deferred initial-focus pass runs. Preserve that explicit
+		// choice instead of stealing focus back to the configured default.
+		if (document.activeElement instanceof HTMLElement && node.contains(document.activeElement)) {
+			return;
+		}
 		const requested = options.initialFocus
 			? node.querySelector<HTMLElement>(options.initialFocus)
 			: null;

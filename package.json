@@ -33,8 +33,9 @@
 		"test:e2e": "playwright test --project=chromium",
 		"test:e2e:cross-browser": "playwright test e2e/smoke.spec.ts --project=firefox --project=webkit",
 		"perf:budget": "node scripts/check-performance-budget.mjs",
+		"check:deploy": "node scripts/check-deployment-contract.mjs",
 		"audit:security": "npm audit --audit-level=high",
-		"ci": "npm run lint && npm run check && npm run audit:security && npm run build && npm run perf:budget && npm run test && npm run test:e2e && npm run test:e2e:cross-browser"
+		"ci": "npm run lint && npm run check && npm run audit:security && npm run build && npm run perf:budget && npm run check:deploy && npm run test && npm run test:e2e && npm run test:e2e:cross-browser"
 	},
 	"devDependencies": {
 		"@eslint/compat": "^2.0.4",
@@ -49,7 +50,6 @@
 		"@fontsource/source-sans-3": "^5.2.9",
 		"@fontsource/source-serif-4": "^5.2.9",
 		"@playwright/test": "^1.61.1",
-		"@sveltejs/adapter-auto": "^7.0.1",
 		"@sveltejs/adapter-static": "^3.0.10",
 		"@sveltejs/kit": "^2.69.2",
 		"@sveltejs/vite-plugin-svelte": "^7.2.0",
@@ -74,9 +74,9 @@
 		"vitest": "^4.1.10"
 	},
 	"dependencies": {
+		"@lucide/svelte": "^1.24.0",
 		"dexie": "^4.4.4",
 		"gifuct-js": "^2.1.2",
-		"lucide-svelte": "^1.0.1",
 		"mammoth": "^1.12.0",
 		"marked": "^18.0.6",
 		"minisearch": "^7.2.0",

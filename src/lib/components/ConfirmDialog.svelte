@@ -8,7 +8,8 @@
 		cancelLabel?: string;
 		danger?: boolean;
 		illustration?: string;
-		onConfirm: () => void;
+		busy?: boolean;
+		onConfirm: () => void | Promise<void>;
 		onCancel: () => void;
 	}
 
@@ -20,6 +21,7 @@
 		cancelLabel = 'Cancel',
 		danger = false,
 		illustration,
+		busy = false,
 		onConfirm,
 		onCancel
 	}: Props = $props();
@@ -30,6 +32,7 @@
 			if (e.key === 'Escape') {
 				e.preventDefault();
 				e.stopImmediatePropagation();
+				if (busy) return;
 				onCancel();
 				return;
 			}
@@ -37,6 +40,11 @@
 			if (e.key === 'Enter') {
 				const target = e.target;
 				if (!(target instanceof HTMLElement)) return;
+				if (busy) {
+					e.preventDefault();
+					e.stopImmediatePropagation();
+					return;
+				}
 				if (target.closest('[data-dialog-confirm]')) {
 					e.preventDefault();
 					e.stopImmediatePropagation();
@@ -69,6 +77,7 @@
 			class:has-illustration={Boolean(illustration)}
 			role="alertdialog"
 			aria-modal="true"
+			aria-busy={busy}
 			aria-labelledby="mash-confirm-title"
 			aria-describedby="mash-confirm-msg"
 		>
@@ -97,6 +106,7 @@
 					type="button"
 					data-dialog-cancel
 					class="mash-btn-ghost mash-dialog-btn"
+					disabled={busy}
 					onclick={onCancel}
 				>
 					{cancelLabel}
@@ -106,9 +116,10 @@
 					data-dialog-confirm
 					type="button"
 					class="mash-dialog-btn mash-dialog-btn-primary {danger ? 'mash-btn-danger' : 'mash-btn'}"
-					onclick={onConfirm}
+					disabled={busy}
+					onclick={() => void onConfirm()}
 				>
-					{confirmLabel}
+					{busy ? `${confirmLabel}…` : confirmLabel}
 				</button>
 			</div>
 		</div>

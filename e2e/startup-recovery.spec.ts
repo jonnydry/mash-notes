@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { DEFAULT_EMPTY_CANVAS_MASCOT } from '../src/lib/empty-canvas-mascot';
 
 test('blocks unsafe interaction and retries after local storage startup fails', async ({
 	page
@@ -55,7 +56,7 @@ test('falls back to the core mascot when a rotating character is unavailable', a
 	await page.goto('/');
 	const mascot = page.getByTestId('empty-canvas-mascot');
 	await expect(mascot).toBeVisible({ timeout: 15_000 });
-	await expect(mascot).toHaveAttribute('src', '/icons/mash-empty-mascot.png');
+	await expect(mascot).toHaveAttribute('src', DEFAULT_EMPTY_CANVAS_MASCOT.src);
 	await expect
 		.poll(() => mascot.evaluate((image: HTMLImageElement) => image.naturalWidth))
 		.toBeGreaterThan(0);

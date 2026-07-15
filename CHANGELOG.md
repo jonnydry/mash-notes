@@ -22,6 +22,8 @@ Notable changes to Mash are documented here. The format follows [Keep a Changelo
   previews, and transaction-first recovery.
 - Retained compatibility fixtures for every supported desk and workspace bundle version.
 - A production PWA registration path and an automated offline-reopen contract that preserves local notes.
+- Vercel-native static output, SPA fallback, security-header, and cache configuration with an automated deployment-contract gate.
+- Embedded Word images as directly clippable visual canvas notes.
 
 ### Changed
 
@@ -36,6 +38,7 @@ Notable changes to Mash are documented here. The format follows [Keep a Changelo
 - Made local browser tests serve the same static `build/` artifact that ships in releases.
 - Made tagged releases run the full lint, type, unit, build, performance, Chromium, Firefox, and WebKit gates.
 - Made pull-request and release gates enforce the high-severity dependency audit.
+- Pinned GitHub Actions to immutable commits and added a SHA-256 checksum to release artifacts.
 
 ### Fixed
 
@@ -44,6 +47,7 @@ Notable changes to Mash are documented here. The format follows [Keep a Changelo
 - Corrected the static-host cache rule from the obsolete `/service-worker.js` path to `/sw.js`.
 - Removed an unreferenced duplicate icon source folder from the public release payload.
 - Kept the first-run “Try a mash” action hidden until its desk is ready to accept cards.
+- Kept asynchronous confirmations mounted until completion, left failed actions available for retry, and prevented delayed dialog focus from overriding an explicit user focus move.
 
 ### Security
 

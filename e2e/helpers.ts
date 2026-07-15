@@ -127,6 +127,9 @@ export async function confirmMashDialog(page: Page) {
 	await expect(dialog).toBeVisible();
 	await expect(dialog.getByRole('heading', { name: 'Mash these notes?' })).toBeVisible();
 	await dialog.getByRole('button', { name: 'Mash', exact: true }).click();
+	// Confirmation remains mounted and busy until the async Mash transaction,
+	// canvas update, and operation-history refresh have all completed.
+	await expect(dialog).toBeHidden({ timeout: 15_000 });
 }
 
 /** Dismiss confirm / storage-protection dialogs that block the header Finish button. */

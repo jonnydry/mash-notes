@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { FileSpreadsheet, Rows3, Table2, X } from 'lucide-svelte';
+	import { FileSpreadsheet, Rows3, Table2, X } from '@lucide/svelte';
 	import {
 		DELIMITED_MAX_CARDS,
 		delimitedTableBody,

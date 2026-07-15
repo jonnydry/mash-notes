@@ -2,7 +2,7 @@
 	/**
 	 * Screen-space editor stage — OS-like tiled note panes over the canvas.
 	 */
-	import { Minimize2, X, Pin } from 'lucide-svelte';
+	import { Minimize2, X, Pin } from '@lucide/svelte';
 	import { onDestroy } from 'svelte';
 	import type { Note } from '$lib/types';
 	import StickyEditor from '$lib/components/StickyEditor.svelte';

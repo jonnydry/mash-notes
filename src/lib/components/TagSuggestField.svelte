@@ -4,7 +4,7 @@
 	 * Focus always offers unused existing tags (even when the note already has some).
 	 * New tags are committed via the + action at the top of the menu.
 	 */
-	import { Plus, Tag } from 'lucide-svelte';
+	import { Plus, Tag } from '@lucide/svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { fly } from 'svelte/transition';
 	import { portal } from '$lib/portal';

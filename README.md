@@ -74,10 +74,11 @@ Production builds are static:
 
 ```bash
 npm run build
+npm run check:deploy
 npm run preview
 ```
 
-The deployable site is written to `build/`. It can be hosted on any static host that supports the included SPA fallback and security headers.
+The deployable site is written to `build/`. It can be hosted on any static host that supports the included SPA fallback and security headers. See the [deployment runbook](docs/deployment.md) before promoting a public release.
 
 ## Move work between devices
 
@@ -101,6 +102,7 @@ npm run check
 npm test
 npm run build
 npm run perf:budget
+npm run check:deploy
 npm run test:e2e
 npm run ci
 ```
@@ -110,6 +112,7 @@ The main quality gate covers formatting, linting, Svelte and TypeScript checks, 
 - [Architecture](docs/architecture.md)
 - [Contributing](CONTRIBUTING.md)
 - [Security policy](SECURITY.md)
+- [Deployment runbook](docs/deployment.md)
 - [Changelog](CHANGELOG.md)
 - [V1 release readiness](docs/v1-release-readiness.md)
 

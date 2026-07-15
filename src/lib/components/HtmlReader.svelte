@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
-	import { FileText } from 'lucide-svelte';
+	import { FileText } from '@lucide/svelte';
 	import type { HtmlClipPayload, HtmlClipping } from '$lib/html-clipping';
 	import { normalizeHtmlExcerpt } from '$lib/html-clipping';
 	import { convertHtmlFile } from '$lib/html-import';

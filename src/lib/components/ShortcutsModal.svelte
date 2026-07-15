@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { X } from 'lucide-svelte';
+	import { X } from '@lucide/svelte';
 	import { KEYBOARD_SHORTCUT_GROUPS, type ShortcutGroup } from '$lib/keyboard-shortcuts';
 	import { focusTrap } from '$lib/focus-trap';
 

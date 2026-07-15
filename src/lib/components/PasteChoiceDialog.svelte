@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ClipboardPaste, Pilcrow, Rows3, X } from 'lucide-svelte';
+	import { ClipboardPaste, Pilcrow, Rows3, X } from '@lucide/svelte';
 	import type { PasteAnalysis, PasteSplitMode } from '$lib/paste-cards';
 	import { focusTrap } from '$lib/focus-trap';
 

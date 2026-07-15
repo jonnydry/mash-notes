@@ -20,7 +20,7 @@
 		X,
 		ZoomIn,
 		ZoomOut
-	} from 'lucide-svelte';
+	} from '@lucide/svelte';
 	import MarkdownPreview from '$lib/components/MarkdownPreview.svelte';
 	import { focusTrap } from '$lib/focus-trap';
 	import { composeEmbeddedNoteImage, parseEmbeddedNoteImage } from '$lib/markdown';

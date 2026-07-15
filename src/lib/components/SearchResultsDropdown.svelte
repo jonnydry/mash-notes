@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { GripVertical, Pin } from 'lucide-svelte';
+	import { GripVertical, Pin } from '@lucide/svelte';
 	import type { Note } from '$lib/types';
 	import type { SearchResult } from '$lib/search';
 	import { formatNoteTimestamp, notePreview } from '$lib/format';

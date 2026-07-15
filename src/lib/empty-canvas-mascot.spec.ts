@@ -9,12 +9,13 @@ import {
 
 describe('empty canvas mascot rotation', () => {
 	it('includes every character asset with a unique encoded URL', () => {
-		expect(EMPTY_CANVAS_MASCOTS).toHaveLength(21);
-		expect(new Set(EMPTY_CANVAS_MASCOTS.map((mascot) => mascot.src))).toHaveLength(21);
+		expect(EMPTY_CANVAS_MASCOTS).toHaveLength(22);
+		expect(new Set(EMPTY_CANVAS_MASCOTS.map((mascot) => mascot.src))).toHaveLength(22);
 		for (const mascot of EMPTY_CANVAS_MASCOTS) {
 			expect(mascot.src).toMatch(/^\/icons\/Rotating%20Icons\/.+\.png$/);
 			expect(mascot.src).not.toContain(' ');
-			expect(mascot.width).toBe(mascot.height);
+			expect(mascot.width).toBeGreaterThan(0);
+			expect(mascot.height).toBeGreaterThan(0);
 			expect(
 				existsSync(fileURLToPath(new URL(`../../static${decodeURI(mascot.src)}`, import.meta.url)))
 			).toBe(true);

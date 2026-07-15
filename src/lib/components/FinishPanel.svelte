@@ -8,7 +8,7 @@
 		Package,
 		Printer,
 		Trash2
-	} from 'lucide-svelte';
+	} from '@lucide/svelte';
 	import {
 		defaultFinishScope,
 		finishScopeOptions,

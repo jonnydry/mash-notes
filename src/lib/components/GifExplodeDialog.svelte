@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Film, Image as ImageIcon, X } from 'lucide-svelte';
+	import { Film, Image as ImageIcon, X } from '@lucide/svelte';
 	import { focusTrap } from '$lib/focus-trap';
 	import { GIF_EXPLODE_MAX_FRAMES, type GifExplodeMode } from '$lib/gif-explode';
 

@@ -18,7 +18,7 @@
 		ArrowUpRight,
 		ArrowDownLeft,
 		Diff
-	} from 'lucide-svelte';
+	} from '@lucide/svelte';
 
 	export type PeelMode = 'notes' | 'folders' | 'tags' | 'linked' | 'conflicts';
 

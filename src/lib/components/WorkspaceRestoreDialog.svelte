@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ArchiveRestore, AlertTriangle, X } from 'lucide-svelte';
+	import { ArchiveRestore, AlertTriangle, X } from '@lucide/svelte';
 	import { focusTrap } from '$lib/focus-trap';
 	import type { WorkspaceBackup, WorkspaceRestorePlan } from '$lib/workspace-backup';
 

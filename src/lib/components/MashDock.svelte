@@ -11,7 +11,7 @@
 		Settings,
 		MoreHorizontal,
 		Clock3
-	} from 'lucide-svelte';
+	} from '@lucide/svelte';
 	import type { NavFilter } from '$lib/note-ui';
 	import { isNavActive } from '$lib/note-ui';
 	import type { DockAction } from '$lib/dock';

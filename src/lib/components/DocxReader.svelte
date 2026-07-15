@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onDestroy, tick } from 'svelte';
-	import { FileText } from 'lucide-svelte';
+	import { FileText } from '@lucide/svelte';
 	import type { DocxClipPayload, DocxClipping } from '$lib/docx-clipping';
 	import { normalizeDocxExcerpt } from '$lib/docx-clipping';
 	import { convertDocxToHtml, MAX_DOCX_BYTES } from '$lib/docx-import';

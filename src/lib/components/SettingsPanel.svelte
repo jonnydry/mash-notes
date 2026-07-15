@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { X } from 'lucide-svelte';
+	import { X } from '@lucide/svelte';
 	import { theme } from '$lib/stores/theme.svelte';
 	import {
 		typography,
