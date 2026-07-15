@@ -29,8 +29,8 @@ const deferredInitialEntryNames = new Set([
 const budgets = {
 	// Page orchestrator + canvas still dominate; deferred PDF/GIF stay out of graph.
 	javascript: 630 * 1024,
-	// Layout tokens + board chrome CSS; suite fonts are budgeted separately.
-	css: 130 * 1024,
+	// Layout tokens, board chrome, and the mobile gate; suite fonts are budgeted separately.
+	css: 134 * 1024,
 	fonts: 120 * 1024,
 	fontFiles: 5,
 	// Install/update cost: the shell, initial graph, core fonts, and brand chrome only.
