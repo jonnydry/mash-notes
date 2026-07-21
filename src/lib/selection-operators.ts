@@ -99,8 +99,8 @@ export function createSelectionOperators(deps: SelectionOperatorsDeps) {
 		}
 		const label =
 			result.replacedLinks > 0
-				? `Sequenced ${result.sequenced} · replaced ${result.replacedLinks} prior link${result.replacedLinks === 1 ? '' : 's'}`
-				: `Sequenced ${result.sequenced} cards`;
+				? `Sequence created · ${result.sequenced} pages · replaced ${result.replacedLinks} prior link${result.replacedLinks === 1 ? '' : 's'}`
+				: `Sequence created · ${result.sequenced} pages`;
 		deps.flashToast(formatLayoutOperatorToast(label));
 	}
 

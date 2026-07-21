@@ -46,6 +46,7 @@ test.describe('Permanent welcome branding', () => {
 		const row = peel.getByRole('option').filter({ hasText: "Hi — I'm Scoop" });
 		await expect(row.getByAltText('Scoop, the Mash mascot')).toBeVisible();
 		await row.dblclick();
+		await card.getByRole('button', { name: 'Open large editor' }).click();
 
 		const stage = page.getByRole('region', { name: 'Note editor stage' });
 		await expect(stage.getByAltText('Scoop, the Mash mascot')).toBeVisible();

@@ -33,6 +33,12 @@ describe('operator-kitchen', () => {
 
 	it('shortens titles and writes plain subtitles', () => {
 		expect(kitchenActionTitle('stack-selection', 'Stack selected cards')).toBe('Stack');
+		expect(kitchenActionTitle('sequence-selection', 'Sequence selected cards')).toBe(
+			'Sequence selected'
+		);
+		expect(kitchenActionSubtitle('sequence-selection')).toBe(
+			'Orders cards top-to-bottom, then left-to-right'
+		);
 		expect(kitchenActionSubtitle('deduplicate-selection')).toMatch(/notes stay/i);
 		expect(kitchenActionSubtitle('combine-selection')).toMatch(/Undo or Unmash/i);
 		expect(kitchenActionSubtitle('shuffle-selection')).toMatch(/layout/i);

@@ -65,7 +65,6 @@ import {
 	layoutFlowSequence,
 	listFlowSequences
 } from '$lib/canvas-flow';
-import type { SnapZone } from '$lib/stores/editor-stage.svelte';
 import { cleanCanvasBowls, createBowlMembership, removeItemsFromBowls } from '$lib/canvas-bowls';
 import { COLLAPSED_CARD, EXPANDED_CARD } from '$lib/canvas-card-sizing';
 import { cloneCanvasElement, canvasElementBindsItem } from '$lib/canvas-elements';
@@ -183,8 +182,8 @@ export type CreateCanvasSessionOpts = {
 		notesAfter: Note[] | undefined,
 		direction: 'before' | 'after'
 	) => void | Promise<void>;
-	/** Open a note in the screen-space editor (preferred over sticky expand). */
-	openNoteInStage?: (noteId: string, zone?: SnapZone) => void;
+	/** Close transient chrome before revealing an in-desk editor. */
+	prepareCompactOpen?: () => void;
 };
 
 export function createCanvasSession(opts: CreateCanvasSessionOpts) {
@@ -589,7 +588,7 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 			canvasEdges.map((e) => ({ ...e }))
 		);
 		opts.flashToast(
-			toRemove.length === 1 ? 'Sequence unstitched' : `Unstitched ${toRemove.length} links`
+			toRemove.length === 1 ? 'Page order removed' : `Page order removed · ${toRemove.length} links`
 		);
 		return toRemove.length;
 	}
@@ -1270,6 +1269,22 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		}
 	}
 
+	async function handleCanvasAutoResize(itemId: string, w: number, h: number) {
+		const item = canvasItems.find((candidate) => candidate.id === itemId);
+		if (!item || (item.w === w && item.h === h)) return;
+		canvasLoadSeq++;
+		dirtyLayoutIds.add(itemId);
+		patchCanvasItems(new Map([[itemId, { w, h }]]));
+		try {
+			await updateCanvasItemPosition(itemId, { x: item.x, y: item.y, w, h });
+		} finally {
+			dirtyLayoutIds.delete(itemId);
+		}
+		if (expandedNoteId === item.noteId) {
+			await bumpNeighborsAround(itemId, { w, h });
+		}
+	}
+
 	function handleCanvasSelectNotes(noteIds: string[], selectOpts: { additive: boolean }) {
 		if (!selectOpts.additive) {
 			opts.setSelection([...noteIds], noteIds[0] ?? null);
@@ -1580,13 +1595,10 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		expandedNoteId = noteId;
 		const item = canvasItems.find((i) => i.noteId === noteId);
 		if (!item) return;
-		// Grow to at least expanded defaults; keep larger custom sizes.
+		// The display layer supplies expanded minimums without persisting a transient
+		// size. Manual resize and one-time content fitting persist intentionally.
 		const w = Math.max(item.w ?? 0, EXPANDED_CARD.w);
 		const h = Math.max(item.h ?? 0, EXPANDED_CARD.h);
-		if (w !== item.w || h !== item.h) {
-			patchCanvasItems(new Map([[item.id, { w, h }]]));
-			void updateCanvasItemPosition(item.id, { x: item.x, y: item.y, w, h });
-		}
 		void bumpNeighborsAround(item.id, { w, h });
 	}
 
@@ -1602,7 +1614,7 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		await Promise.all([restore, compactSticky(noteId)]);
 	}
 
-	/** Tray / search / peel: ensure note is on canvas, then open in the stage editor. */
+	/** Tray / search / peel: ensure note is on canvas, then expand it in place. */
 	async function openStickyFromTray(noteId: string) {
 		if (!activeCanvas) return;
 		// Supersede in-flight membership reloads so they cannot wipe this placement.
@@ -1627,9 +1639,9 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		} else {
 			canvasBoard?.ensureNoteVisible(noteId);
 		}
-		opts.selectNote(noteId, { keepSelection: true });
-		if (opts.openNoteInStage) opts.openNoteInStage(noteId, 'maximize');
-		else expandSticky(noteId, 'body');
+		opts.prepareCompactOpen?.();
+		expandSticky(noteId, 'body');
+		requestAnimationFrame(() => canvasBoard?.frameNoteForEditing?.(noteId));
 	}
 
 	function onTrayDragStart(e: DragEvent, noteId: string) {
@@ -1816,6 +1828,7 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		unmashCanvasItem,
 		handleCanvasResize,
 		handleCanvasResizeEnd,
+		handleCanvasAutoResize,
 		handleCanvasSelectNotes,
 		handleCanvasSelect,
 		createBowl,

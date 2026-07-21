@@ -121,7 +121,7 @@ test.describe('Set operators', () => {
 		await page.getByRole('button', { name: 'Transform' }).click();
 		await page.locator('[data-action-id="sequence-selection"]').click();
 		await expect(page.locator('.mash-flow-page-badge')).toHaveCount(3);
-		await expect(page.getByTestId('action-status')).toContainText('Sequenced 3 cards');
+		await expect(page.getByTestId('action-status')).toContainText('Sequence created · 3 pages');
 		await page.getByRole('button', { name: 'Undo', exact: true }).click();
 		await expect(page.locator('.mash-flow-page-badge')).toHaveCount(0);
 		await expect(page.getByTestId('action-status')).toHaveText('Undo Sequence');

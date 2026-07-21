@@ -154,7 +154,7 @@ test('clips an embedded Word image into a visual canvas note', async ({ page }) 
 	const returnToWord = page.locator('.mash-reader-return');
 	const canvasToolbar = page.locator('.mash-canvas-chrome-top');
 	await expect(returnToWord).toBeVisible();
-	await expect(canvasToolbar.getByRole('button', { name: 'Sequence' })).toBeVisible();
+	await expect(canvasToolbar.getByRole('button', { name: 'Set page order' })).toBeVisible();
 	const returnBox = await returnToWord.boundingBox();
 	const toolbarBox = await canvasToolbar.boundingBox();
 	expect(returnBox).not.toBeNull();

@@ -57,7 +57,7 @@ export function kitchenActionTitle(actionId: string, fullLabel: string): string 
 		'split-selection-lines': 'Split by lines',
 		'stack-selection': 'Stack',
 		'spread-selection': 'Spread',
-		'sequence-selection': 'Sequence',
+		'sequence-selection': 'Sequence selected',
 		'sort-selection-title': 'Sort by title',
 		'sort-selection-created': 'Sort by created',
 		'shuffle-selection': 'Shuffle',
@@ -81,10 +81,12 @@ export function kitchenActionSubtitle(actionId: string): string {
 	if (actionId === 'deduplicate-selection') {
 		return 'Removes duplicate cards · notes stay in library';
 	}
+	if (actionId === 'sequence-selection') {
+		return 'Orders cards top-to-bottom, then left-to-right';
+	}
 	if (
 		actionId === 'stack-selection' ||
 		actionId === 'spread-selection' ||
-		actionId === 'sequence-selection' ||
 		actionId.startsWith('sort-selection-') ||
 		actionId === 'shuffle-selection'
 	) {

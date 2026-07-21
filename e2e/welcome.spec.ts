@@ -10,6 +10,9 @@ test.describe('Mash team welcome', () => {
 		const row = peel.getByRole('option').filter({ hasText: "Hi — I'm Scoop" });
 		await expect(row.locator('img')).toBeVisible();
 		await row.dblclick();
+		const compact = page.locator('[data-system-welcome="true"][data-expanded="true"]');
+		await expect(compact).toBeVisible();
+		await compact.getByRole('button', { name: 'Open large editor' }).click();
 
 		const stage = page.locator('.mash-editor-stage.is-open, .mash-editor-pane').first();
 		const title = page.locator('.mash-editor-pane-titlebar input').first();

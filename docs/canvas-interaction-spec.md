@@ -16,8 +16,8 @@ future changes preserve the same fast and predictable feel.
    beneath the cursor fixed; button and keyboard zoom use the viewport center.
 5. Destructive-looking combinations explain their outcome and remain
    reversible through Unmash.
-6. Modes are explicit. Sequence mode changes card clicks from selection to
-   linking, advertises the next expected action, and exits with Escape or Done.
+6. Modes are explicit. Set page order changes card clicks from selection to
+   linking, advertises the next expected page, and exits with Escape or Done.
 
 ## Gesture priority
 
@@ -56,13 +56,14 @@ restored to the gesture's starting snapshot.
 ### Keyboard and focus
 
 - One selected card has `tabindex=0`; the rest use `-1`.
-- Enter opens the focused or primary selected card in the large editor.
+- Enter opens the focused or primary selected card as an in-desk sticky. The
+  sticky's explicit maximize control opens the large editor.
 - Arrow keys nudge the selection. Shift+arrow uses a 4x step.
 - In Snap mode, the nudge step is one grid unit (24 board pixels); otherwise it
   is one board pixel.
 - Command/Ctrl+A toggles all cards on the current board when the pointer is over
   the board.
-- Escape first cancels a pending sequence source, then exits Sequence mode.
+- Escape first cancels a pending page, then exits Set page order.
 
 ## Moving cards
 
@@ -123,6 +124,13 @@ restored to the gesture's starting snapshot.
 
 - New cards spawn near the visible center, on the Snap lattice, with a light
   cascade and overlap avoidance.
+- New notes, canvas double-click/Enter, Ingredients, and search all open the
+  same in-desk sticky editor. The large stage is reserved for explicit
+  maximize, split edit, or edge-snap gestures.
+- An opened sticky measures its rendered content once. Short notes keep the
+  compact 280×220 default; overflowing notes grow vertically, then widen up to
+  400×480 before retaining internal scroll. It does not resize continuously
+  while the user types.
 - External note drops are converted from client to board coordinates and obey
   the current Snap mode.
 - Organize snaps every card and resolves overlap in one undoable action.
@@ -133,22 +141,29 @@ restored to the gesture's starting snapshot.
 
 ## Page sequences
 
-- Entering Sequence mode clears ordinary selection so Mash/Align actions cannot
-  be confused with link creation.
-- Click the last page, then the next page. After a successful link, the new page
-  remains the source so repeated clicks keep chaining.
+- **Sequence selected** is an immediate selection action. It orders cards
+  top-to-bottom, then left-to-right, and creates one undoable sequence.
+- **Set page order** is the precise manual mode. Entering it clears ordinary
+  selection so Mash/Align actions cannot be confused with link creation.
+- The toolbar coach begins with **Choose the first page**. The first chosen card
+  receives a provisional `1` badge, then the coach advances to **Choose page 2**.
+- After a successful link, the new page remains the source, its committed badge
+  stays visible, and the coach advances to **Choose page N**.
+- Hovering or focusing a valid target previews the next badge before commit.
+- After page 2 exists, **Done** remains visible beside the live instruction.
 - Only linear chains are allowed: one predecessor, one successor, no self-link,
-  no cycle.
+  no cycle. Rejected targets explain the reason in the status surface.
 - While a link is being stored and laid out, the Sequence control reports
   “Linking…” and ignores duplicate card input.
 - Linking packs the affected sequence left-to-right using real card sizes and
   moves obstacles out of the sequence corridor.
-- Existing sequences repack on entry to Sequence mode.
-- Page badges show page order. Multiple independent sequences include a
-  sequence number.
-- End-of-sequence controls own Unstitch, PDF export, print, and outline copy.
-  Invalid stored graphs expose repair controls and cannot export as valid
-  sequences.
+- Existing sequences repack on entry to Set page order.
+- Page badges show `1`, `2`, `3` for one sequence. Multiple independent
+  sequences add the sequence prefix, such as `1.1`, `1.2`, and `2.1`.
+- The completed end cap identifies the object and its size, such as
+  **Sequence 1 · 4**, and offers Edit order, Select pages, export actions, and
+  Remove page order. Invalid stored graphs expose repair controls and cannot
+  export as valid sequences.
 - Linking, unlinking, unstitching, and sequence packing participate in layout
   undo/redo.
 
@@ -205,7 +220,7 @@ restored to the gesture's starting snapshot.
 - Wheel over a short card preview pans; wheel over a long preview scrolls until
   the boundary, then pans.
 - Zoom retains the cursor focal point and never exceeds 40%–200%.
-- Sequence mode rejects self, cycle, second predecessor, and second successor.
+- Set page order rejects self, cycle, second predecessor, and second successor.
 - First drag-mash confirms with titles; cancel separates cards; confirm can be
   reversed through Unmash.
 - 40+ card boards cull offscreen cards without unmounting active ones.

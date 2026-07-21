@@ -25,12 +25,16 @@ test.describe('Open desks', () => {
 		await wipeIndexedDb(page);
 
 		await createNamedNote(page, 'Space Alpha Note', 'Alpha body');
-		await page.getByRole('group', { name: 'Space Alpha Note' }).dblclick();
+		const alphaCard = page.getByRole('group', { name: 'Space Alpha Note' });
+		await alphaCard.dblclick();
+		await alphaCard.getByRole('button', { name: 'Open large editor' }).click();
 		await setNoteFolder(page, 'SpaceAlpha');
 		await page.getByRole('button', { name: 'Collapse to canvas' }).click();
 
 		await createNamedNote(page, 'Space Beta Note', 'Beta body');
-		await page.getByRole('group', { name: 'Space Beta Note' }).dblclick();
+		const betaCard = page.getByRole('group', { name: 'Space Beta Note' });
+		await betaCard.dblclick();
+		await betaCard.getByRole('button', { name: 'Open large editor' }).click();
 		await setNoteFolder(page, 'SpaceBeta');
 		await page.getByRole('button', { name: 'Collapse to canvas' }).click();
 

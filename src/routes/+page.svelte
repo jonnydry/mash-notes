@@ -714,8 +714,9 @@
 		},
 		applyNoteReceipt: (notesBefore, notesAfter, direction) =>
 			library.applyNoteReceipt(notesBefore, notesAfter, direction),
-		openNoteInStage: (noteId, zone) => {
-			openInStage(noteId, zone ?? 'maximize');
+		prepareCompactOpen: () => {
+			if (peel.peelOpen && peel.peelMode !== 'linked') peel.closePeel();
+			if (editorStage.open) editorStage.dismissAll();
 		}
 	});
 	canvasHolder.session = canvas;
@@ -2276,6 +2277,7 @@
 					onMoveEnd={canvas.handleCanvasMoveEnd}
 					onResize={canvas.handleCanvasResize}
 					onResizeEnd={canvas.handleCanvasResizeEnd}
+					onAutoResize={canvas.handleCanvasAutoResize}
 					onRemove={canvas.handleCanvasRemove}
 					onExpand={canvas.expandSticky}
 					onCollapse={canvas.collapseSticky}

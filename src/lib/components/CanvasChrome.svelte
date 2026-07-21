@@ -9,7 +9,8 @@
 		snapEnabled: boolean;
 		flowMode: boolean;
 		flowConnecting: boolean;
-		flowFromItemId: string | null;
+		flowPrompt: string;
+		flowCanFinish: boolean;
 		connectMode: boolean;
 		connectSaving: boolean;
 		connectDrawing: boolean;
@@ -41,7 +42,8 @@
 		snapEnabled,
 		flowMode,
 		flowConnecting,
-		flowFromItemId,
+		flowPrompt,
+		flowCanFinish,
 		connectMode,
 		connectSaving,
 		connectDrawing,
@@ -135,33 +137,46 @@
 				>↗</span
 			>
 		</button>
-		<button
-			type="button"
-			class="mash-board-chip mash-board-chip-btn mash-type-micro rounded-full px-2.5 py-1 {flowMode
-				? 'is-active'
-				: ''}"
-			onclick={(e) => {
-				e.stopPropagation();
-				setDesktopViewOpen(false);
-				toggleFlowMode();
-			}}
-			title={flowMode
-				? flowConnecting
-					? 'Linking pages…'
-					: 'Done — exit sequence mode'
-				: 'Link pages in order: click last page, then next (keeps chaining)'}
-			aria-pressed={flowMode}
-			aria-busy={flowConnecting}
-			data-testid="board-sequence"
-		>
-			{flowMode
-				? flowConnecting
-					? 'Linking…'
-					: flowFromItemId
-						? 'Pick next…'
-						: 'Done'
-				: 'Sequence'}
-		</button>
+		{#if flowMode}
+			<div
+				class="mash-board-chip mash-type-micro flex items-center gap-1 rounded-full p-0.5 pl-2.5"
+				role="group"
+				aria-label="Set page order"
+				aria-busy={flowConnecting}
+			>
+				<span data-testid="board-sequence-prompt" aria-live="polite">
+					{flowConnecting ? 'Linking pages…' : flowPrompt}
+				</span>
+				<button
+					type="button"
+					class="mash-board-chip-btn is-active rounded-full px-2.5 py-1"
+					onclick={(e) => {
+						e.stopPropagation();
+						setDesktopViewOpen(false);
+						toggleFlowMode();
+					}}
+					title={flowCanFinish ? 'Finish setting page order' : 'Cancel setting page order'}
+					data-testid="board-sequence-done"
+				>
+					{flowCanFinish ? 'Done' : 'Cancel'}
+				</button>
+			</div>
+		{:else}
+			<button
+				type="button"
+				class="mash-board-chip mash-board-chip-btn mash-type-micro rounded-full px-2.5 py-1"
+				onclick={(e) => {
+					e.stopPropagation();
+					setDesktopViewOpen(false);
+					toggleFlowMode();
+				}}
+				title="Choose cards one page at a time"
+				aria-pressed="false"
+				data-testid="board-sequence"
+			>
+				Set page order
+			</button>
+		{/if}
 		<button
 			type="button"
 			class="mash-board-chip mash-board-chip-btn mash-type-micro rounded-full px-2.5 py-1"
@@ -377,7 +392,7 @@
 				onclick={() => {
 					toggleFlowMode();
 					setMobileToolsOpen(false);
-				}}>{flowMode ? 'End sequence' : 'Sequence'}</button
+				}}>{flowMode ? 'Finish page order' : 'Set page order'}</button
 			>
 			<button
 				type="button"

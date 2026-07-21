@@ -293,6 +293,11 @@ test('backs up, restores, and recovers a storage-heavy workspace', async ({ page
 	const searchResults = page.getByRole('listbox', { name: 'Search results' });
 	await expect(searchResults.getByText(TARGET_TITLE)).toBeVisible({ timeout: 5_000 });
 	await search.press('Enter');
+	const targetCard = page
+		.getByRole('group', { name: TARGET_TITLE, exact: true })
+		.and(page.locator('[data-canvas-card][data-expanded="true"]'));
+	await expect(targetCard).toBeVisible({ timeout: 5_000 });
+	await targetCard.getByRole('button', { name: 'Open large editor' }).click();
 	const editorPane = page
 		.getByRole('region', { name: 'Note editor stage' })
 		.getByRole('region', { name: TARGET_TITLE });

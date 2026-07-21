@@ -58,12 +58,14 @@
 		type EmptyCanvasMascot
 	} from '$lib/empty-canvas-mascot';
 	import {
+		canLinkAsNextPage,
 		flowEdgePath,
 		flowOutlineMarkdown,
 		flowPageBadges,
 		invalidSequenceEdgeIds,
 		listFlowSequences
 	} from '$lib/canvas-flow';
+	import { sequenceGuidance } from '$lib/sequence-guidance';
 	import { printSequenceAsPdf } from '$lib/mash';
 	import {
 		detectFillOrSnapZone,
@@ -72,7 +74,7 @@
 		type SnapZone
 	} from '$lib/stores/editor-stage.svelte';
 	import { canvasBowlBounds } from '$lib/canvas-bowls';
-	import { COLLAPSED_CARD, EXPANDED_CARD } from '$lib/canvas-card-sizing';
+	import { autoExpandedCardSize, COLLAPSED_CARD, EXPANDED_CARD } from '$lib/canvas-card-sizing';
 	import { canvasArrowPath, canvasItemRects } from '$lib/canvas-element-geometry';
 
 	const NOTE_MIME = 'application/x-mash-notes';
@@ -153,7 +155,7 @@
 		onDisconnectFlow?: (edgeId: string) => void | Promise<void>;
 		/** Clear all links in a sequence (by index in listFlowSequences). */
 		onUnstitchSequence?: (seqIndex: number) => void | Promise<void>;
-		/** Re-pack sequences with the current flow gap (called when entering Sequence mode). */
+		/** Re-pack sequences with the current flow gap (called when entering Set page order). */
 		onRelayoutFlow?: () => boolean | Promise<boolean>;
 		onCreateArrow?: (
 			start: CanvasArrowEndpoint,
@@ -194,6 +196,8 @@
 		) => void;
 		onResize: (itemId: string, w: number, h: number) => void;
 		onResizeEnd?: (itemId: string, w: number, h: number, before?: { w: number; h: number }) => void;
+		/** Persist one automatic content-fit growth without adding a manual-resize undo step. */
+		onAutoResize?: (itemId: string, w: number, h: number) => void | Promise<void>;
 		onRemove: (itemId: string) => void;
 		onExpand: (noteId: string) => void;
 		onCollapse: () => void;
@@ -277,6 +281,7 @@
 		onMoveEnd,
 		onResize,
 		onResizeEnd,
+		onAutoResize,
 		onRemove,
 		onExpand,
 		onCollapse,
@@ -318,6 +323,7 @@
 	let arrowShortcutOwnsMode = $state(false);
 	let titleInputEl: HTMLInputElement | undefined = $state();
 	let focusedExpandId: string | null = null;
+	let autoSizedExpandId: string | null = null;
 	let focusedBodyExpandId: string | null = null;
 	let isPanning = $state(false);
 	let isExternalDragOver = $state(false);
@@ -380,6 +386,7 @@
 	});
 	let flowMode = $state(false);
 	let flowFromItemId = $state<string | null>(null);
+	let flowPreviewItemId = $state<string | null>(null);
 	let flowConnecting = $state(false);
 	let connectMode = $state(false);
 	type ConnectDragState = {
@@ -421,6 +428,7 @@
 
 	let flowBoard = $derived(listFlowSequences(items, edges));
 	let flowBadges = $derived(flowPageBadges(flowBoard.sequences));
+	let flowGuidance = $derived(sequenceGuidance(flowMode, flowFromItemId, flowBadges));
 	let invalidEdgeIds = $derived(invalidSequenceEdgeIds(flowBoard.sequences, edges));
 	let primaryFocusNoteId = $derived(
 		primarySelectedId && selectedIds.has(primarySelectedId)
@@ -555,6 +563,7 @@
 	function exitFlowMode() {
 		flowMode = false;
 		flowFromItemId = null;
+		flowPreviewItemId = null;
 		flowConnecting = false;
 	}
 
@@ -720,12 +729,69 @@
 		exitConnectMode();
 		flowMode = true;
 		flowFromItemId = null;
+		flowPreviewItemId = null;
+		requestAnimationFrame(() => {
+			boardEl?.querySelector<HTMLElement>('[data-canvas-card]')?.focus();
+		});
 		if (edges.length > 0) {
 			void (async () => {
 				const moved = await onRelayoutFlow?.();
 				if (moved) onToast?.('Sequences packed in order');
 			})();
 		}
+	}
+
+	function setFlowPreview(itemId: string | null) {
+		if (!itemId || !flowMode || !flowFromItemId || flowConnecting || itemId === flowFromItemId) {
+			flowPreviewItemId = null;
+			return;
+		}
+		flowPreviewItemId = canLinkAsNextPage(edges, flowFromItemId, itemId).ok ? itemId : null;
+	}
+
+	function chooseFlowPage(itemId: string) {
+		if (!flowMode || flowConnecting) return;
+		flowPreviewItemId = null;
+		if (!flowFromItemId) {
+			flowFromItemId = itemId;
+			return;
+		}
+		if (flowFromItemId === itemId) {
+			flowFromItemId = null;
+			return;
+		}
+
+		const from = flowFromItemId;
+		flowConnecting = true;
+		void (async () => {
+			try {
+				const ok = await onConnectFlow?.(from, itemId);
+				// Keep chaining from the new last page; on failure keep the source.
+				if (flowMode && ok === true) flowFromItemId = itemId;
+			} finally {
+				flowConnecting = false;
+			}
+		})();
+	}
+
+	function editFlowSequence(seqIndex: number) {
+		const sequence = flowBoard.sequences[seqIndex];
+		if (!sequence || sequence.invalid) return;
+		const last = sequence.pages[sequence.pages.length - 1];
+		if (!last) return;
+		onClearSelection?.();
+		exitConnectMode();
+		flowMode = true;
+		flowFromItemId = last.id;
+		flowPreviewItemId = null;
+		pinnedFlowMenuSeqId = null;
+		requestAnimationFrame(() => {
+			boardEl
+				?.querySelector<HTMLElement>(
+					`[data-canvas-card][data-canvas-item-id="${CSS.escape(last.id)}"]`
+				)
+				?.focus();
+		});
 	}
 
 	/** Prefer an explicit index; otherwise the first valid sequence. */
@@ -816,7 +882,7 @@
 		const hasInvalid = flowBoard.sequences.some((s) => s.invalid);
 		if (!hasInvalid || invalidExportToastShown) return;
 		invalidExportToastShown = true;
-		onToast?.('Fix or Unstitch broken sequences to export');
+		onToast?.('Fix or remove page order from broken sequences to export');
 	});
 
 	function cardSize(item: CanvasItem, noteId: string): { w: number; h: number } {
@@ -831,6 +897,33 @@
 			w: item.w ?? COLLAPSED_CARD.w,
 			h: item.h ?? COLLAPSED_CARD.h
 		};
+	}
+
+	function openCompactSticky(noteId: string) {
+		onExpand(noteId);
+		requestAnimationFrame(() => frameNoteForEditing(noteId));
+	}
+
+	function autoSizeExpandedSticky(noteId: string) {
+		if (expandedNoteId !== noteId || !onAutoResize || !boardEl) return;
+		const card = boardEl.querySelector<HTMLElement>(
+			`[data-canvas-card][data-note-id="${CSS.escape(noteId)}"]`
+		);
+		const content = card?.querySelector<HTMLElement>(
+			'textarea.mash-sticky-body, .mash-sticky-preview'
+		);
+		const item = items.find((candidate) => candidate.noteId === noteId);
+		if (!card || !content || !item) return;
+		const current = cardSize(item, noteId);
+		const next = autoExpandedCardSize({
+			w: current.w,
+			h: current.h,
+			contentScrollHeight: content.scrollHeight,
+			contentClientHeight: content.clientHeight
+		});
+		if (next.w === current.w && next.h === current.h) return;
+		void onAutoResize(item.id, next.w, next.h);
+		requestAnimationFrame(() => frameNoteForEditing(noteId));
 	}
 
 	let bowlViews = $derived(
@@ -1419,24 +1512,7 @@
 		if (flowMode) {
 			e.stopPropagation();
 			e.preventDefault();
-			if (flowConnecting) return;
-			if (!flowFromItemId) {
-				flowFromItemId = item.id;
-			} else if (flowFromItemId === item.id) {
-				flowFromItemId = null;
-			} else {
-				const from = flowFromItemId;
-				flowConnecting = true;
-				void (async () => {
-					try {
-						const ok = await onConnectFlow?.(from, item.id);
-						// Keep chaining from the new last page; on failure keep the source.
-						if (flowMode && ok === true) flowFromItemId = item.id;
-					} finally {
-						flowConnecting = false;
-					}
-				})();
-			}
+			chooseFlowPage(item.id);
 			return;
 		}
 		if (expandedNoteId === item.noteId && !target.closest('[data-drag-handle]')) {
@@ -1943,6 +2019,19 @@
 	});
 
 	$effect(() => {
+		const noteId = expandedNoteId;
+		if (!noteId) {
+			autoSizedExpandId = null;
+			return;
+		}
+		if (autoSizedExpandId === noteId) return;
+		autoSizedExpandId = noteId;
+		requestAnimationFrame(() => {
+			requestAnimationFrame(() => autoSizeExpandedSticky(noteId));
+		});
+	});
+
+	$effect(() => {
 		if (!expandedNoteId || expandFocus !== 'title') {
 			if (!expandedNoteId) focusedExpandId = null;
 			return;
@@ -2092,8 +2181,7 @@
 					onCard?.getAttribute('data-note-id') ?? primaryFocusNoteId ?? [...selectedIds][0] ?? null;
 				if (!noteId || flowMode) return;
 				e.preventDefault();
-				if (onOpenInStage) onOpenInStage(noteId, 'maximize');
-				else onExpand(noteId);
+				if (expandedNoteId !== noteId) openCompactSticky(noteId);
 				return;
 			}
 			if (e.key === 'ArrowLeft') {
@@ -2392,6 +2480,13 @@
 				{@const isPermanentWelcome = isPermanentMashWelcomeNote(note)}
 				{@const links = linkSummaries.get(note.id)!}
 				{@const pageBadge = flowBadges.get(item.id)}
+				{@const provisionalPage =
+					flowMode && flowFromItemId === item.id && !pageBadge
+						? 1
+						: flowMode && flowPreviewItemId === item.id
+							? flowGuidance.nextPage
+							: null}
+				{@const displayedPage = pageBadge?.page ?? provisionalPage}
 				{@const isPrimaryFocus = primaryFocusNoteId === note.id}
 				{@const endSeqId = flowEndItemToSeqId.get(item.id)}
 				<!-- Canvas cards are focus-managed composite widgets inside the application surface. -->
@@ -2404,9 +2499,11 @@
 					data-card-color={item.color ?? 'green'}
 					data-system-welcome={isPermanentWelcome ? 'true' : undefined}
 					role="group"
-					aria-label={`${note.title || 'Untitled'}${selected ? ', selected' : ''}`}
+					aria-label={`${note.title || 'Untitled'}${selected ? ', selected' : ''}${
+						displayedPage ? `, ${pageBadge ? '' : 'proposed '}page ${displayedPage}` : ''
+					}`}
 					aria-roledescription="canvas card"
-					tabindex={isPrimaryFocus ? 0 : -1}
+					tabindex={flowMode || isPrimaryFocus ? 0 : -1}
 					data-expanded={expanded ? 'true' : undefined}
 					class="mash-note-card absolute flex flex-col rounded-xl {selected
 						? 'is-selected'
@@ -2416,9 +2513,10 @@
 						? 'is-mash-confirming'
 						: ''} {isMash ? 'is-mash-result' : ''} {flowFromItemId === item.id
 						? 'is-flow-source'
-						: ''} {flowMode ? 'is-flow-mode' : ''} {connectMode
-						? 'is-connect-mode'
-						: ''} {connectStart?.type === 'item' && connectStart.itemId === item.id
+						: ''} {flowPreviewItemId === item.id ? 'is-flow-preview' : ''} {flowMode
+						? 'is-flow-mode'
+						: ''} {connectMode ? 'is-connect-mode' : ''} {connectStart?.type === 'item' &&
+					connectStart.itemId === item.id
 						? 'is-connect-source'
 						: ''} {connectTargetItemId === item.id ? 'is-connect-target' : ''}"
 					style="left: {item.x}px; top: {item.y}px; width: {size.w}px; height: {size.h}px;"
@@ -2426,46 +2524,63 @@
 					onpointerup={(e) => endCardDrag(e, item)}
 					onpointerenter={() => {
 						if (endSeqId) setHoveredFlowMenu(endSeqId);
+						setFlowPreview(item.id);
 					}}
 					onpointerleave={() => {
 						if (endSeqId) setHoveredFlowMenu(null);
+						if (flowPreviewItemId === item.id) setFlowPreview(null);
+					}}
+					onfocus={() => setFlowPreview(item.id)}
+					onblur={() => {
+						if (flowPreviewItemId === item.id) setFlowPreview(null);
 					}}
 					onkeydown={(e) => {
 						if (e.key !== 'Enter' || e.metaKey || e.ctrlKey || e.altKey) return;
+						const t = e.target as HTMLElement;
+						if (t !== e.currentTarget && t.closest('button, input, textarea, [contenteditable]'))
+							return;
 						if (connectMode) {
 							e.preventDefault();
 							e.stopPropagation();
 							void chooseConnectEndpoint({ type: 'item', itemId: item.id, anchor: 'auto' });
 							return;
 						}
-						if (flowMode || expanded) return;
-						const t = e.target as HTMLElement;
-						if (t !== e.currentTarget && t.closest('button, input, textarea, [contenteditable]'))
+						if (flowMode) {
+							e.preventDefault();
+							e.stopPropagation();
+							chooseFlowPage(item.id);
 							return;
+						}
+						if (expanded) return;
 						e.preventDefault();
 						e.stopPropagation();
-						if (onOpenInStage) onOpenInStage(note.id, 'maximize');
-						else onExpand(note.id);
+						openCompactSticky(note.id);
 					}}
 					ondblclick={(e) => {
 						e.stopPropagation();
 						if (flowMode) return;
 						if (!expanded) {
-							if (onOpenInStage) onOpenInStage(note.id, 'maximize');
-							else onExpand(note.id);
+							openCompactSticky(note.id);
 						}
 					}}
 				>
-					{#if pageBadge}
+					{#if displayedPage}
 						<span
 							class="mash-flow-page-badge"
-							title={flowBoard.sequences.length > 1
-								? `Sequence ${pageBadge.sequence}, page ${pageBadge.page}`
-								: `Page ${pageBadge.page}`}
+							class:is-provisional={!pageBadge}
+							data-page={displayedPage}
+							data-provisional={!pageBadge ? 'true' : undefined}
+							title={!pageBadge
+								? flowPreviewItemId === item.id
+									? `Proposed page ${displayedPage}`
+									: `Page ${displayedPage} selected; ${flowGuidance.prompt}`
+								: flowBoard.sequences.length > 1
+									? `Sequence ${pageBadge.sequence}, page ${pageBadge.page}`
+									: `Page ${pageBadge.page}`}
 						>
-							{flowBoard.sequences.length > 1
+							{pageBadge && flowBoard.sequences.length > 1
 								? `${pageBadge.sequence}.${pageBadge.page}`
-								: `p${pageBadge.page}`}
+								: displayedPage}
 						</span>
 					{/if}
 					{#if isMashTarget && !pendingMash}
@@ -3014,9 +3129,7 @@
 				class:is-invalid={menu.seq.invalid}
 				style="left: {menu.x}px; top: {menu.y}px;"
 				role="group"
-				aria-label={flowBoard.sequences.length > 1
-					? `Sequence ${menu.si + 1} options`
-					: 'Sequence options'}
+				aria-label={`Sequence ${menu.si + 1}, ${menu.seq.pages.length} pages, options`}
 				onpointerenter={() => {
 					setHoveredFlowMenu(menu.seq.id);
 				}}
@@ -3027,7 +3140,10 @@
 				<button
 					type="button"
 					class="mash-flow-end-menu-trigger"
-					title={menu.seq.invalid ? 'Broken sequence — open options' : 'Sequence options'}
+					title={menu.seq.invalid
+						? 'Broken sequence — open options'
+						: `Sequence ${menu.si + 1} · ${menu.seq.pages.length} pages`}
+					aria-label={`Sequence ${menu.si + 1}, ${menu.seq.pages.length} pages, options`}
 					aria-expanded={open}
 					aria-haspopup="true"
 					onclick={(e) => {
@@ -3035,11 +3151,24 @@
 						pinnedFlowMenuSeqId = pinnedFlowMenuSeqId === menu.seq.id ? null : menu.seq.id;
 					}}
 				>
-					{flowBoard.sequences.length > 1 ? `S${menu.si + 1}` : 'Seq'}
+					Sequence {menu.si + 1} · {menu.seq.pages.length}
 					{#if menu.seq.invalid}<span class="warn">!</span>{/if}
 				</button>
 				{#if open}
 					<div class="mash-flow-end-menu-panel">
+						{#if !menu.seq.invalid}
+							<button
+								type="button"
+								class="mash-board-chip-btn"
+								onclick={(e) => {
+									e.stopPropagation();
+									editFlowSequence(menu.si);
+								}}
+								title="Continue choosing pages from the end of this sequence"
+							>
+								Edit order
+							</button>
+						{/if}
 						{#if flowMode}
 							<button
 								type="button"
@@ -3065,7 +3194,7 @@
 							}}
 							title="Select cards in this sequence"
 						>
-							Select
+							Select pages
 						</button>
 						<button
 							type="button"
@@ -3077,7 +3206,7 @@
 							}}
 							title="Remove all links in this sequence"
 						>
-							Unstitch
+							Remove page order
 						</button>
 						{#if !menu.seq.invalid}
 							<button
@@ -3089,7 +3218,7 @@
 								}}
 								title="Download this sequence as PDF"
 							>
-								PDF
+								Export PDF
 							</button>
 							<button
 								type="button"
@@ -3100,7 +3229,7 @@
 								}}
 								title="Print this sequence"
 							>
-								Print
+								Print / save PDF
 							</button>
 							<button
 								type="button"
@@ -3111,10 +3240,10 @@
 								}}
 								title="Copy page outline"
 							>
-								Copy
+								Copy outline
 							</button>
 						{:else}
-							<span class="mash-flow-end-menu-hint">Fix links or Unstitch</span>
+							<span class="mash-flow-end-menu-hint">Fix links or remove page order</span>
 						{/if}
 					</div>
 				{/if}
@@ -3222,7 +3351,8 @@
 		{snapEnabled}
 		{flowMode}
 		{flowConnecting}
-		{flowFromItemId}
+		flowPrompt={flowGuidance.prompt}
+		flowCanFinish={flowGuidance.canFinish}
 		{connectMode}
 		{connectSaving}
 		connectDrawing={connectDrag !== null}

@@ -56,7 +56,7 @@ export const KEYBOARD_SHORTCUT_GROUPS: ShortcutGroup[] = [
 			{ keys: 'Alt + drag', label: 'Temporarily invert Snap' },
 			{ keys: 'Free / Snap', label: 'Placement preference (Snap = grid only)' },
 			{ keys: 'Organize', label: 'Snap all cards and clear overlaps' },
-			{ keys: 'Sequence', label: 'Link pages in order (click last → next)' },
+			{ keys: 'Set page order', label: 'Choose the first page, then each next page' },
 			{ keys: 'Drag to screen edge', label: 'Open note in half / full editor' }
 		]
 	},

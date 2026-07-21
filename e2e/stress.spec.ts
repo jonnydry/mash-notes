@@ -207,6 +207,8 @@ test('keeps a messy 5,000-note workspace usable', async ({ page }, testInfo) => 
 	await search.press('Enter');
 	const stressCard = page.locator('[data-canvas-card][data-note-id="stress-note-4999"]');
 	await expect(stressCard).toBeVisible({ timeout: 5_000 });
+	await expect(stressCard).toHaveAttribute('data-expanded', 'true');
+	await stressCard.getByRole('button', { name: 'Open large editor' }).click();
 	const editorPane = page
 		.getByRole('region', { name: 'Note editor stage' })
 		.getByRole('region', { name: `Messy note 4999 ${SEARCH_NEEDLE}` });

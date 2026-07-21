@@ -13,16 +13,17 @@ test.describe('Linked peel', () => {
 		await page.getByRole('button', { name: 'Preview' }).click();
 		await expect(page.locator('.mash-sticky-preview').first()).toBeVisible();
 
-		// Existing target: open Linked + stage, no create dialog.
+		// Existing target: open Linked + in-desk sticky, no create dialog.
 		await page.locator('.mash-wikilink').filter({ hasText: 'Link Target' }).click();
 		const peel = page.getByRole('complementary', { name: 'Ingredients' });
 		await expect(peel).toBeVisible();
 		await expect(peel.getByText('Outgoing', { exact: true })).toBeVisible();
 		await expect(peel.getByText('Backlinks')).toBeVisible();
-		await expect(page.locator('.mash-editor-pane-titlebar input').first()).toHaveValue(
-			'Link Target',
-			{ timeout: 10_000 }
-		);
+		const targetCard = page.locator('[data-canvas-card][data-expanded="true"]');
+		await expect(targetCard.locator('input[type="text"]').first()).toHaveValue('Link Target', {
+			timeout: 10_000
+		});
+		await expect(page.getByRole('region', { name: 'Note editor stage' })).toHaveCount(0);
 		await expect(page.getByRole('alertdialog')).toHaveCount(0);
 
 		// Re-open source and click missing wikilink → confirm create.
@@ -34,9 +35,9 @@ test.describe('Linked peel', () => {
 		await expect(dialog.getByRole('heading', { name: 'Create note?' })).toBeVisible();
 		await dialog.getByRole('button', { name: 'Create', exact: true }).click();
 		await expect(page.getByText(/Created “Brand New Idea”/)).toBeVisible({ timeout: 10_000 });
-		await expect(page.locator('.mash-editor-pane-titlebar input').first()).toHaveValue(
-			'Brand New Idea',
-			{ timeout: 10_000 }
-		);
+		const createdCard = page.locator('[data-canvas-card][data-expanded="true"]');
+		await expect(createdCard.locator('input[type="text"]').first()).toHaveValue('Brand New Idea', {
+			timeout: 10_000
+		});
 	});
 });

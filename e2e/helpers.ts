@@ -79,7 +79,7 @@ export async function createNamedNote(page: Page, title: string, body: string) {
 	await page.waitForTimeout(400);
 }
 
-/** Open a note from the peel into the stage editor. */
+/** Open a note from the peel, then explicitly maximize it into the stage editor. */
 export async function openNoteInStage(page: Page, title: string) {
 	await page
 		.getByRole('navigation', { name: 'Mash dock' })
@@ -89,11 +89,15 @@ export async function openNoteInStage(page: Page, title: string) {
 	await expect(peel).toBeVisible();
 	const row = peel.getByRole('option').filter({ hasText: title });
 	await row.dblclick();
+	const card = page.locator('[data-canvas-card][data-expanded="true"]').first();
+	await expect(card).toBeVisible({ timeout: 10_000 });
+	await expect(card.locator('input[type="text"]').first()).toHaveValue(title);
+	await card.getByRole('button', { name: 'Open large editor' }).click();
 	await expect(page.locator('.mash-editor-pane-titlebar input').first()).toBeVisible({
 		timeout: 10_000
 	});
 	await expect(page.locator('textarea.mash-sticky-body').first()).toBeVisible();
-	// Unpinned Desk peel dismisses when the stage opens so it doesn't cover the editor.
+	// Unpinned Desk peel dismisses when the in-desk editor opens so it cannot cover the note.
 	await expect(peel).toBeHidden({ timeout: 5_000 });
 }
 

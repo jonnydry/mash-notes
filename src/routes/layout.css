@@ -1400,7 +1400,6 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	font-size: var(--mash-type-micro);
 	font-weight: 700;
 	letter-spacing: 0.04em;
-	text-transform: uppercase;
 	backdrop-filter: blur(10px);
 	box-shadow: var(--mash-shadow-card);
 	opacity: 0.4;
@@ -1429,7 +1428,7 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	flex-wrap: wrap;
 	align-items: center;
 	gap: 2px;
-	max-width: 14rem;
+	max-width: 18rem;
 	padding: 3px;
 	border-radius: 10px;
 	border: 1px solid var(--mash-chrome-chip-border);
@@ -1478,6 +1477,18 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	text-align: center;
 	pointer-events: none;
 	box-shadow: var(--mash-shadow-card);
+}
+.mash-flow-page-badge.is-provisional {
+	border-style: dashed;
+	background: color-mix(in srgb, var(--mash-accent) 78%, var(--mash-panel));
+	box-shadow:
+		var(--mash-shadow-card),
+		0 0 0 3px color-mix(in srgb, var(--mash-accent) 14%, transparent);
+}
+.mash-note-card.is-flow-preview {
+	box-shadow:
+		var(--mash-shadow-lift),
+		0 0 0 3px color-mix(in srgb, var(--mash-accent) 28%, transparent);
 }
 .mash-note-card:has(.mash-flow-page-badge) > [data-drag-handle],
 .mash-note-card:has(.mash-flow-page-badge) > .mash-card-title-row {
