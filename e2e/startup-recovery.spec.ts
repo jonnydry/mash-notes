@@ -1,5 +1,9 @@
 import { test, expect } from '@playwright/test';
-import { DEFAULT_EMPTY_CANVAS_MASCOT } from '../src/lib/empty-canvas-mascot';
+import {
+	DEFAULT_EMPTY_CANVAS_MASCOT,
+	EMPTY_CANVAS_MASCOT_INDEX_KEY,
+	EMPTY_CANVAS_MASCOT_SEEN_KEY
+} from '../src/lib/empty-canvas-mascot';
 
 test('blocks unsafe interaction and retries after local storage startup fails', async ({
 	page
@@ -48,9 +52,10 @@ test('blocks unsafe interaction and retries after local storage startup fails', 
 });
 
 test('falls back to the core mascot when a rotating character is unavailable', async ({ page }) => {
-	await page.addInitScript(() => {
+	await page.addInitScript((seenKey) => {
+		localStorage.setItem(seenKey, '1');
 		Math.random = () => 0;
-	});
+	}, EMPTY_CANVAS_MASCOT_SEEN_KEY);
 	await page.route(/\/icons\/Rotating(?:%20| )Icons\//, (route) => route.abort());
 
 	await page.goto('/');
@@ -60,4 +65,7 @@ test('falls back to the core mascot when a rotating character is unavailable', a
 	await expect
 		.poll(() => mascot.evaluate((image: HTMLImageElement) => image.naturalWidth))
 		.toBeGreaterThan(0);
+	await expect
+		.poll(() => page.evaluate((key) => localStorage.getItem(key), EMPTY_CANVAS_MASCOT_INDEX_KEY))
+		.toBeNull();
 });

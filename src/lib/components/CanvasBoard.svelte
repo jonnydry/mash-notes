@@ -52,7 +52,11 @@
 	import TagSuggestField from '$lib/components/TagSuggestField.svelte';
 	import { buildLinkSummaryMap } from '$lib/links';
 	import { isPermanentMashWelcomeNote, MASH_SPOON_LOGO } from '$lib/canvas-empty-state';
-	import { DEFAULT_EMPTY_CANVAS_MASCOT, type EmptyCanvasMascot } from '$lib/empty-canvas-mascot';
+	import {
+		acknowledgeEmptyCanvasMascotDisplay,
+		DEFAULT_EMPTY_CANVAS_MASCOT,
+		type EmptyCanvasMascot
+	} from '$lib/empty-canvas-mascot';
 	import {
 		flowEdgePath,
 		flowOutlineMarkdown,
@@ -102,10 +106,26 @@
 		}
 	}
 
+	const fallbackMascotImages = new WeakSet<HTMLImageElement>();
+
+	function handleEmptyMascotLoad(event: Event) {
+		const image = event.currentTarget as HTMLImageElement;
+		const displayedMascot = fallbackMascotImages.has(image)
+			? DEFAULT_EMPTY_CANVAS_MASCOT
+			: emptyMascot;
+		acknowledgeEmptyCanvasMascotDisplay(displayedMascot);
+		fallbackMascotImages.delete(image);
+	}
+
 	function handleEmptyMascotError(event: Event) {
 		const image = event.currentTarget as HTMLImageElement;
-		if (image.dataset.fallbackMascot === 'true') return;
-		image.dataset.fallbackMascot = 'true';
+		if (
+			fallbackMascotImages.has(image) ||
+			image.getAttribute('src') === DEFAULT_EMPTY_CANVAS_MASCOT.src
+		) {
+			return;
+		}
+		fallbackMascotImages.add(image);
 		image.srcset = DEFAULT_EMPTY_CANVAS_MASCOT.srcset ?? '';
 		image.src = DEFAULT_EMPTY_CANVAS_MASCOT.src;
 	}
@@ -3117,6 +3137,7 @@
 					height={emptyMascot.height ?? 200}
 					class="mash-empty-mascot pointer-events-none h-40 w-auto select-none sm:h-44"
 					draggable="false"
+					onload={handleEmptyMascotLoad}
 					onerror={handleEmptyMascotError}
 				/>
 				<p

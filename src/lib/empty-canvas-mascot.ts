@@ -5,6 +5,8 @@ export interface EmptyCanvasMascot {
 	height?: number;
 	title: string;
 	copy: string;
+	/** Index in the later-visit rotation pool; absent for fixed-purpose mascots. */
+	rotationIndex?: number;
 }
 
 interface VisitStorage {
@@ -36,24 +38,25 @@ const CHARACTER_FILES = [
 	['Same character@2x.png', 512, 512],
 	['Tomato heart@2x.png', 512, 512],
 	['holding-trash-bag@2x.png', 512, 512],
-	['mash-empty-mascot.png', 116, 200],
 	['mash-screenplay-mascot.png', 256, 256],
 	['mash-settings-mascot.png', 256, 256]
 ] as const;
 
 export const EMPTY_CANVAS_MASCOTS: readonly EmptyCanvasMascot[] = CHARACTER_FILES.map(
-	([fileName, width, height]) => ({
+	([fileName, width, height], rotationIndex) => ({
 		// Preserve URL-safe filename characters such as "@"; SvelteKit's static preview
 		// decodes escaped spaces but treats an escaped @ as a different filename.
 		src: `${ROTATING_ICON_ROOT}${encodeURI(fileName)}`,
 		width,
 		height,
 		title: EMPTY_TITLE,
-		copy: EMPTY_COPY
+		copy: EMPTY_COPY,
+		rotationIndex
 	})
 );
 
 export const EMPTY_CANVAS_MASCOT_INDEX_KEY = 'mash.emptyCanvasMascotIndex';
+export const EMPTY_CANVAS_MASCOT_SEEN_KEY = 'mash.emptyCanvasMascotSeen';
 
 export const DEFAULT_EMPTY_CANVAS_MASCOT: EmptyCanvasMascot = {
 	src: '/icons/mash-empty-mascot@2x.png',
@@ -63,43 +66,77 @@ export const DEFAULT_EMPTY_CANVAS_MASCOT: EmptyCanvasMascot = {
 	copy: EMPTY_COPY
 };
 
-function browserSessionStorage(): VisitStorage | null {
+function browserLocalStorage(): VisitStorage | null {
 	try {
-		return typeof sessionStorage === 'undefined' ? null : sessionStorage;
+		return typeof localStorage === 'undefined' ? null : localStorage;
 	} catch {
 		return null;
 	}
 }
 
-/** Pick once at page initialization. Session storage prevents an immediate repeat after refresh. */
+/**
+ * Pick once at page initialization. The first successfully displayed empty-desk
+ * mascot is always the core potato; later visits rotate without an immediate repeat.
+ */
 export function chooseEmptyCanvasMascotForVisit({
 	random = Math.random,
-	storage = browserSessionStorage()
+	storage = browserLocalStorage()
 }: {
 	random?: () => number;
 	storage?: VisitStorage | null;
 } = {}): EmptyCanvasMascot {
+	let visitState: { hasSeenDefault: boolean; previousIndex: number };
+	try {
+		const storedIndex = storage?.getItem(EMPTY_CANVAS_MASCOT_INDEX_KEY);
+		visitState = {
+			hasSeenDefault: storage?.getItem(EMPTY_CANVAS_MASCOT_SEEN_KEY) === '1',
+			previousIndex: storedIndex == null ? Number.NaN : Number(storedIndex)
+		};
+	} catch {
+		// If durable state is unavailable, keep the safest deterministic first impression.
+		return DEFAULT_EMPTY_CANVAS_MASCOT;
+	}
+
+	if (!visitState.hasSeenDefault) return DEFAULT_EMPTY_CANVAS_MASCOT;
+
 	const randomValue = random();
 	const boundedRandom = Number.isFinite(randomValue)
 		? Math.min(0.999999999, Math.max(0, randomValue))
 		: 0;
 	let index = Math.floor(boundedRandom * EMPTY_CANVAS_MASCOTS.length);
 
-	try {
-		const storedIndex = storage?.getItem(EMPTY_CANVAS_MASCOT_INDEX_KEY);
-		const previousIndex = storedIndex == null ? Number.NaN : Number(storedIndex);
-		if (
-			Number.isInteger(previousIndex) &&
-			previousIndex >= 0 &&
-			previousIndex < EMPTY_CANVAS_MASCOTS.length &&
-			previousIndex === index
-		) {
-			index = (index + 1) % EMPTY_CANVAS_MASCOTS.length;
-		}
-		storage?.setItem(EMPTY_CANVAS_MASCOT_INDEX_KEY, String(index));
-	} catch {
-		// Storage can be disabled; random selection should still work.
+	if (
+		Number.isInteger(visitState.previousIndex) &&
+		visitState.previousIndex >= 0 &&
+		visitState.previousIndex < EMPTY_CANVAS_MASCOTS.length &&
+		visitState.previousIndex === index
+	) {
+		index = (index + 1) % EMPTY_CANVAS_MASCOTS.length;
 	}
 
 	return EMPTY_CANVAS_MASCOTS[index] ?? DEFAULT_EMPTY_CANVAS_MASCOT;
+}
+
+/** Advance first-show/rotation state only after the selected image actually displayed. */
+export function acknowledgeEmptyCanvasMascotDisplay(
+	mascot: EmptyCanvasMascot,
+	storage: VisitStorage | null = browserLocalStorage()
+): void {
+	try {
+		if (mascot.src === DEFAULT_EMPTY_CANVAS_MASCOT.src) {
+			storage?.setItem(EMPTY_CANVAS_MASCOT_SEEN_KEY, '1');
+			return;
+		}
+		const rotationIndex = mascot.rotationIndex;
+		if (
+			typeof rotationIndex === 'number' &&
+			Number.isInteger(rotationIndex) &&
+			rotationIndex >= 0 &&
+			rotationIndex < EMPTY_CANVAS_MASCOTS.length
+		) {
+			storage?.setItem(EMPTY_CANVAS_MASCOT_INDEX_KEY, String(rotationIndex));
+		}
+	} catch {
+		// Storage is optional; a displayed mascot should never destabilize the desk.
+	}
 }

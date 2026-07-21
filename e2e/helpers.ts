@@ -12,6 +12,8 @@ export async function wipeIndexedDb(page: Page) {
 			localStorage.removeItem('mash.openSpaces');
 			localStorage.removeItem('mash.syncHygiene');
 			localStorage.removeItem('mash.workspaceBackupRecord');
+			localStorage.removeItem('mash.emptyCanvasMascotSeen');
+			localStorage.removeItem('mash.emptyCanvasMascotIndex');
 			// Suppress the post-Keep persistence confirm so Finish/desks e2e aren't blocked
 			localStorage.setItem('mash.storagePersistencePrompted', '1');
 		} catch {
