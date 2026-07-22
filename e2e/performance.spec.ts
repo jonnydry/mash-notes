@@ -22,6 +22,11 @@ const deferredFeatureFiles = new Set(
 				'SpacesOverview',
 				'SessionPanel',
 				'FinishPanel',
+				'finish-session-ui',
+				'ExportSheet',
+				'presentation-export',
+				'presentation-pdf',
+				'presentation-docx',
 				'PasteChoiceDialog',
 				'GifExplodeDialog',
 				'sync-file'

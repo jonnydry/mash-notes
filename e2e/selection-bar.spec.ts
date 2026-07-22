@@ -40,5 +40,6 @@ test.describe('Selection bar primary verbs', () => {
 		await expect(more.getByRole('button', { name: /Copy/ })).toBeVisible();
 		await expect(more.getByRole('button', { name: /Download Markdown/ })).toBeVisible();
 		await expect(more.getByRole('button', { name: /Export PDF/ })).toBeVisible();
+		await expect(more.getByRole('button', { name: /Export Word/ })).toBeVisible();
 	});
 });

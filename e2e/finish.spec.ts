@@ -90,22 +90,17 @@ test.describe('Consolidated Finish takeaway', () => {
 		await wholeDeskScope.focus();
 		await wholeDeskScope.press('Space');
 		await expect(wholeDeskScope).toBeChecked();
-		await page.evaluate(() => {
-			const state = window as typeof window & { __mashPrintOpened?: boolean };
-			window.open = (() => {
-				state.__mashPrintOpened = true;
-				return { opener: null } as Window;
-			}) as typeof window.open;
-		});
-		await finish.getByRole('button', { name: /Print \/ save PDF/ }).click();
-		await expect
-			.poll(() =>
-				page.evaluate(() =>
-					Boolean((window as typeof window & { __mashPrintOpened?: boolean }).__mashPrintOpened)
-				)
-			)
-			.toBe(true);
-		await expect(finish.getByRole('status')).toContainText('for printing or PDF');
+		await finish.getByRole('button', { name: /Export PDF/ }).click();
+		const exportSheet = page.getByRole('dialog', { name: 'Export a polished document' });
+		await expect(exportSheet).toBeVisible();
+		await expect(exportSheet).toContainText('Whole desk · 4 cards');
+		await expect(exportSheet.getByRole('button', { name: 'Download PDF' })).toBeVisible();
+		await exportSheet.getByRole('button', { name: 'Close export sheet' }).click();
+
+		await page.getByRole('button', { name: 'Finish', exact: true }).click();
+		await expect(finish).toBeVisible();
+		await wholeDeskScope.focus();
+		await wholeDeskScope.press('Space');
 
 		const bundleDownload = page.waitForEvent('download');
 		await finish.getByRole('button', { name: /Desk bundle/ }).click();

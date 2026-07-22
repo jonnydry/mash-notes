@@ -72,8 +72,15 @@ test.describe('Set page order guidance', () => {
 		});
 		await expect(menu.getByRole('button', { name: 'Edit order' })).toBeVisible();
 		await expect(menu.getByRole('button', { name: 'Select pages' })).toBeVisible();
-		await expect(menu.getByRole('button', { name: 'Export PDF' })).toBeVisible();
+		const exportButton = menu.getByRole('button', { name: 'Export…' });
+		await expect(exportButton).toBeVisible();
 		await expect(menu.getByRole('button', { name: 'Remove page order' })).toBeVisible();
+
+		await exportButton.click();
+		const exportSheet = page.getByRole('dialog', { name: 'Export a polished document' });
+		await expect(exportSheet).toBeVisible();
+		await expect(exportSheet).toContainText('Sequence 1 · 3 pages');
+		await expect(exportSheet.getByRole('radio', { name: /Sticky deck/ })).toBeVisible();
 	});
 
 	test('supports choosing pages with card focus and Enter', async ({ page }) => {

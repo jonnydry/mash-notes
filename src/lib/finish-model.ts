@@ -2,7 +2,7 @@ import type { CanvasItem, Note, Operation } from './types';
 
 export type FinishScope = 'selected' | 'results' | 'desk';
 export type FinishExportKind =
-	'copy-markdown' | 'download-markdown' | 'pdf' | 'board-image' | 'bundle';
+	'copy-markdown' | 'download-markdown' | 'pdf' | 'docx' | 'board-image' | 'bundle';
 export type FinishDisposition = 'leave' | 'keep-desk' | 'clear';
 
 export type FinishDraft = {

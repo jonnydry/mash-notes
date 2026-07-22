@@ -31,7 +31,6 @@
 		LayoutGrid,
 		Columns2,
 		BookOpen,
-		FileDown,
 		Printer,
 		Bookmark,
 		MoreHorizontal,
@@ -58,7 +57,12 @@
 	import OperatorReceiptStrip from '$lib/components/OperatorReceiptStrip.svelte';
 
 	import { exportNotesJson, printSequenceAsPdf } from '$lib/mash';
-	import { createFinishSnapshot, type FinishSnapshot } from '$lib/finish-model';
+	import type {
+		FinishDraft,
+		FinishExportKind,
+		FinishScope,
+		FinishSnapshot
+	} from '$lib/finish-model';
 	import { clearCanvasViewport } from '$lib/viewport';
 	import { clearDismissedForCanvas } from '$lib/canvas-dismiss';
 	import { findBacklinks, findOutgoingNotes } from '$lib/links';
@@ -104,7 +108,7 @@
 		buildPdfClippingDraft,
 		withNoteId
 	} from '$lib/document-clipping';
-	import { createFinishSessionUi } from '$lib/finish-session-ui';
+	import type { FinishSessionUi } from '$lib/finish-session-ui';
 	import { buildBasePaletteActions, buildOperatorActions } from '$lib/command-palette';
 	import { createContentOperators } from '$lib/content-operators';
 	import { createAppKeydown } from '$lib/app-keyboard';
@@ -140,6 +144,7 @@
 	} from '$lib/backup-health';
 	import type { WorkspaceBackup, WorkspaceRestorePlan } from '$lib/workspace-backup';
 	import { CANVAS_COLORS, canvasElementBindsItem } from '$lib/canvas-elements';
+	import type { PresentationExportRequest, PresentationFormat } from '$lib/export-document';
 
 	let actionToast = $state('');
 	let srAnnouncement = $state('');
@@ -165,6 +170,7 @@
 	let sessionPanelOpen = $state(false);
 	let sessionPanelView = $state<'desks' | 'finish'>('desks');
 	let finishSnapshot = $state<FinishSnapshot | null>(null);
+	let presentationExportRequest = $state<PresentationExportRequest | null>(null);
 	let pasteAnalysis = $state<PasteAnalysis | null>(null);
 	let pasteDialogOpen = $state(false);
 	let delimitedPending = $state<{
@@ -642,19 +648,13 @@
 	/** Warm Session/Finish chunk before click (header hover). */
 	function preloadSessionPanel() {
 		void import('$lib/components/SessionPanel.svelte');
+		void import('$lib/finish-session-ui');
 	}
 
-	function openSessionPanel(view: 'desks' | 'finish' = 'desks') {
+	async function openSessionPanel(view: 'desks' | 'finish' = 'desks') {
 		if (view === 'desks') void refreshWorkspaceBackupHealth();
 		if (view === 'finish' && sessionManager.activeSession) {
-			finishSnapshot = createFinishSnapshot({
-				sessionId: sessionManager.activeSession.id,
-				canvasId: canvas.activeCanvas?.id ?? null,
-				notes: library.notes,
-				canvasItems: canvas.canvasItems,
-				selectedNoteIds: library.selectionIds,
-				operations: operationHistory
-			});
+			finishSnapshot = (await loadFinishSessionUi()).buildFinishSnapshot(view);
 		}
 		sessionPanelView = view;
 		sessionPanelOpen = true;
@@ -791,52 +791,80 @@
 		peel.clearFilter();
 	}
 
-	const finishSessionUi = createFinishSessionUi({
-		getFinishSnapshot: () => finishSnapshot,
-		setFinishSnapshot: (s) => {
-			finishSnapshot = s;
-		},
-		getActiveSession: () => sessionManager.activeSession,
-		getNotes: () => library.notes,
-		getNotesById: () => library.notesById,
-		getCanvasItems: () => canvas.canvasItems,
-		getCanvasEdges: () => canvas.canvasEdges,
-		getCanvasElements: () => canvas.canvasElements,
-		getSelectionIds: () => library.selectionIds,
-		getOperations: () => operationHistory,
-		flushPendingSaveAsync: () => library.flushPendingSaveAsync(),
-		getWriteError: () => library.writeError,
-		exportSyncBundle: () => exportSyncBundle(),
-		keepTakeaway: (ids) => sessionManager.keepTakeaway(ids),
-		keepActive: (now) => sessionManager.keepActive(now),
-		clearActive: () => sessionManager.clearActive(),
-		switchTo: (id) => sessionManager.switchTo(id),
-		restore: (id) => sessionManager.restore(id),
-		createScratch: () => sessionManager.createScratch(),
-		applyPromotedNotes: (notes) => library.applyPromotedNotes(notes),
-		setNotes: (notes) => {
-			library.notes = notes;
-		},
-		loadNotes: () => library.loadNotes(),
-		loadContextCanvas: (key, sessionId) => canvas.loadContextCanvas(key, sessionId),
-		getCanvasKey: () => peel.canvasKey,
-		prepareSessionSwitch,
-		setSessionPanelOpen: (open) => {
-			sessionPanelOpen = open;
-		},
-		flashToast,
-		askConfirm,
-		offerPersistentStorageOnce: () => offerPersistentStorageOnce(),
-		getTheme: () => (document.documentElement.dataset.theme === 'light' ? 'light' : 'dark')
-	});
+	let finishSessionUi: FinishSessionUi | null = null;
+	let finishSessionUiPromise: Promise<FinishSessionUi> | null = null;
 
-	const {
-		runFinishExport,
-		runFinishCommit,
-		activateSession,
-		createScratchSession,
-		restoreSession
-	} = finishSessionUi;
+	async function loadFinishSessionUi(): Promise<FinishSessionUi> {
+		if (finishSessionUi) return finishSessionUi;
+		finishSessionUiPromise ??= import('$lib/finish-session-ui').then(({ createFinishSessionUi }) =>
+			createFinishSessionUi({
+				getFinishSnapshot: () => finishSnapshot,
+				setFinishSnapshot: (s) => {
+					finishSnapshot = s;
+				},
+				getActiveSession: () => sessionManager.activeSession,
+				getNotes: () => library.notes,
+				getNotesById: () => library.notesById,
+				getCanvasItems: () => canvas.canvasItems,
+				getCanvasEdges: () => canvas.canvasEdges,
+				getCanvasElements: () => canvas.canvasElements,
+				getSelectionIds: () => library.selectionIds,
+				getOperations: () => operationHistory,
+				flushPendingSaveAsync: () => library.flushPendingSaveAsync(),
+				getWriteError: () => library.writeError,
+				exportSyncBundle: () => exportSyncBundle(),
+				keepTakeaway: (ids) => sessionManager.keepTakeaway(ids),
+				keepActive: (now) => sessionManager.keepActive(now),
+				clearActive: () => sessionManager.clearActive(),
+				switchTo: (id) => sessionManager.switchTo(id),
+				restore: (id) => sessionManager.restore(id),
+				createScratch: () => sessionManager.createScratch(),
+				applyPromotedNotes: (notes) => library.applyPromotedNotes(notes),
+				setNotes: (notes) => {
+					library.notes = notes;
+				},
+				loadNotes: () => library.loadNotes(),
+				loadContextCanvas: (key, sessionId) => canvas.loadContextCanvas(key, sessionId),
+				getCanvasKey: () => peel.canvasKey,
+				prepareSessionSwitch,
+				setSessionPanelOpen: (open) => {
+					sessionPanelOpen = open;
+				},
+				flashToast,
+				askConfirm,
+				offerPersistentStorageOnce: () => offerPersistentStorageOnce(),
+				getTheme: () => (document.documentElement.dataset.theme === 'light' ? 'light' : 'dark'),
+				openPresentationExport
+			})
+		);
+		try {
+			finishSessionUi = await finishSessionUiPromise;
+			return finishSessionUi;
+		} catch (error) {
+			finishSessionUiPromise = null;
+			throw error;
+		}
+	}
+
+	async function runFinishExport(kind: FinishExportKind, scope: FinishScope) {
+		return (await loadFinishSessionUi()).runFinishExport(kind, scope);
+	}
+
+	async function runFinishCommit(draft: FinishDraft) {
+		return (await loadFinishSessionUi()).runFinishCommit(draft);
+	}
+
+	async function activateSession(id: string) {
+		return (await loadFinishSessionUi()).activateSession(id);
+	}
+
+	async function createScratchSession() {
+		return (await loadFinishSessionUi()).createScratchSession();
+	}
+
+	async function restoreSession(id: string) {
+		return (await loadFinishSessionUi()).restoreSession(id);
+	}
 
 	const contentOps = createContentOperators({
 		flashToast,
@@ -1598,6 +1626,23 @@
 		return `Mash · ${notes.length} notes`;
 	}
 
+	function openPresentationExport(
+		notes: Note[],
+		title: string,
+		sourceLabel: string,
+		format: PresentationFormat = 'pdf'
+	) {
+		if (notes.length === 0) return;
+		library.bulkMenu = null;
+		sessionPanelOpen = false;
+		presentationExportRequest = {
+			notes: [...notes],
+			title: title.trim() || 'Mash export',
+			sourceLabel,
+			format
+		};
+	}
+
 	function onMashButtonClick() {
 		if (library.selectionIds.length < 2) {
 			flashToast('Select at least 2 cards to mash');
@@ -1617,23 +1662,26 @@
 		library.bulkMenu = library.bulkMenu === 'more' ? null : 'more';
 	}
 
-	async function exportSelectionPdf() {
+	function exportSelectionPdf() {
 		const notes = library.selectedNotes;
 		if (notes.length === 0) return;
-		library.bulkMenu = null;
-		try {
-			const { exportSequencePdf } = await import('$lib/sequence-pdf');
-			const title = selectionExportTitle(notes);
-			const ok = await exportSequencePdf(notes, title);
-			if (!ok) {
-				flashToast('Could not export PDF');
-				return;
-			}
-			flashToast(notes.length === 1 ? 'PDF downloaded' : `PDF downloaded · ${notes.length} notes`);
-		} catch (cause) {
-			console.error(cause);
-			flashToast('Could not export PDF');
-		}
+		openPresentationExport(
+			notes,
+			selectionExportTitle(notes),
+			`Selected · ${notes.length} card${notes.length === 1 ? '' : 's'}`,
+			'pdf'
+		);
+	}
+
+	function exportSelectionDocx() {
+		const notes = library.selectedNotes;
+		if (notes.length === 0) return;
+		openPresentationExport(
+			notes,
+			selectionExportTitle(notes),
+			`Selected · ${notes.length} card${notes.length === 1 ? '' : 's'}`,
+			'docx'
+		);
 	}
 
 	function printSelection() {
@@ -2050,7 +2098,7 @@
 				<button
 					type="button"
 					class="mash-btn mash-focus mash-type-caption inline-flex h-[38px] items-center rounded-[11px] px-3.5 font-semibold"
-					onclick={() => openSessionPanel('finish')}
+					onclick={() => void openSessionPanel('finish')}
 					onpointerenter={preloadSessionPanel}
 					onfocus={preloadSessionPanel}
 				>
@@ -2245,6 +2293,13 @@
 					onConnectFlow={(from, to) => canvas.connectFlowEdge(from, to)}
 					onDisconnectFlow={(id) => void canvas.disconnectFlowEdge(id)}
 					onUnstitchSequence={(i) => void canvas.unstitchSequence(i)}
+					onExportSequence={(notes, title, sequenceNumber) =>
+						openPresentationExport(
+							notes,
+							title,
+							`Sequence ${sequenceNumber} · ${notes.length} pages`,
+							'pdf'
+						)}
 					onRelayoutFlow={() => canvas.relayoutFlowSequences()}
 					onCreateArrow={(start, end) => canvas.createCanvasArrow(start, end)}
 					onPatchArrow={(id, patch, label) => canvas.patchCanvasArrow(id, patch, label)}
@@ -2413,7 +2468,7 @@
 				linkedOpen={peel.linkedFlyout}
 				{settingsOpen}
 				dockSelect={peel.handleDockAction}
-				openDesks={() => openSessionPanel('desks')}
+				openDesks={() => void openSessionPanel('desks')}
 			/>
 		</div>
 		{#if settingsOpen}
@@ -2701,12 +2756,22 @@
 						<button
 							type="button"
 							class="mash-btn-ghost mash-type-caption rounded-lg px-3 py-2 text-left"
-							onclick={() => void exportSelectionPdf()}
+							onclick={exportSelectionPdf}
 						>
 							<strong class="flex items-center gap-1.5"
-								><FileDown class="h-3.5 w-3.5" /> Export PDF</strong
+								><Download class="h-3.5 w-3.5" /> Export PDF</strong
 							>
-							<small style="color: var(--mash-ink-muted);">Quick export · or use Finish</small>
+							<small style="color: var(--mash-ink-muted);">Templates and live preview</small>
+						</button>
+						<button
+							type="button"
+							class="mash-btn-ghost mash-type-caption rounded-lg px-3 py-2 text-left"
+							onclick={exportSelectionDocx}
+						>
+							<strong class="flex items-center gap-1.5"
+								><BookOpen class="h-3.5 w-3.5" /> Export Word</strong
+							>
+							<small style="color: var(--mash-ink-muted);">Editable .docx with named styles</small>
 						</button>
 						<button
 							type="button"
@@ -3385,6 +3450,16 @@
 				onClose={() => {
 					pasteDialogOpen = false;
 					pasteAnalysis = null;
+				}}
+			/>
+		{/await}
+	{/if}
+	{#if presentationExportRequest}
+		{#await import('$lib/components/ExportSheet.svelte') then mod}
+			<mod.default
+				request={presentationExportRequest}
+				onClose={() => {
+					presentationExportRequest = null;
 				}}
 			/>
 		{/await}

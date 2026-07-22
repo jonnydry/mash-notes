@@ -1,12 +1,13 @@
 <script lang="ts">
+	import './finish-panel.css';
 	import {
 		Check,
 		Clock3,
 		Copy,
 		Download,
 		Image as ImageIcon,
+		FileText,
 		Package,
-		Printer,
 		Trash2
 	} from '@lucide/svelte';
 	import {
@@ -107,8 +108,7 @@
 			kind: 'copy-markdown',
 			label: 'Copy Markdown',
 			detail: 'Ready to paste anywhere',
-			icon: Copy,
-			primary: true
+			icon: Copy
 		},
 		{
 			kind: 'download-markdown',
@@ -118,9 +118,16 @@
 		},
 		{
 			kind: 'pdf',
-			label: 'Print / save PDF',
-			detail: 'One card per page',
-			icon: Printer
+			label: 'Export PDF',
+			detail: 'Elegant, ready-to-send document',
+			icon: Download,
+			primary: true
+		},
+		{
+			kind: 'docx',
+			label: 'Export Word (.docx)',
+			detail: 'Structured and easy to edit',
+			icon: FileText
 		},
 		{
 			kind: 'board-image',

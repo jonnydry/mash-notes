@@ -22,16 +22,20 @@ const deferredInitialEntryNames = new Set([
 	'SpacesOverview',
 	'SessionPanel',
 	'FinishPanel',
+	'finish-session-ui',
+	'ExportSheet',
+	'presentation-export',
+	'presentation-pdf',
+	'presentation-docx',
 	'PasteChoiceDialog',
 	'GifExplodeDialog',
 	'sync-file'
 ]);
 const budgets = {
-	// Direct arrow drawing, its keyboard fallback, and live targeting are core board behavior.
-	// Keep the allowance tight; deferred PDF/GIF/backup tooling must still stay out of graph.
-	javascript: 648 * 1024,
-	// Border palettes and zoom-independent arrow controls are intentional core canvas chrome.
-	css: 139 * 1024,
+	// Export scope handoff is core shell behavior; PDF/DOCX builders and the sheet stay deferred.
+	javascript: 652 * 1024,
+	// Keep core canvas chrome tight; presentation-preview CSS is measured only after its lazy load.
+	css: 140 * 1024,
 	fonts: 120 * 1024,
 	fontFiles: 5,
 	// Install/update cost: the shell, initial graph, core fonts, and brand chrome only.

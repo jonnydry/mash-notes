@@ -11,13 +11,8 @@ import {
 	type FinishScope,
 	type FinishSnapshot
 } from './finish-model';
-import {
-	combineNotes,
-	copyText,
-	exportNotesMarkdown,
-	printSequenceAsPdf,
-	slugifyFilename
-} from './mash';
+import { combineNotes, copyText, exportNotesMarkdown, slugifyFilename } from './mash';
+import type { PresentationFormat } from './export-document';
 import { sessionLifecycleLabel } from './session-lifecycle';
 
 export type FinishSessionUiDeps = {
@@ -57,6 +52,12 @@ export type FinishSessionUiDeps = {
 	}) => void;
 	offerPersistentStorageOnce: () => void | Promise<void>;
 	getTheme: () => 'light' | 'dark';
+	openPresentationExport: (
+		notes: Note[],
+		title: string,
+		sourceLabel: string,
+		format: PresentationFormat
+	) => void;
 };
 
 export function createFinishSessionUi(deps: FinishSessionUiDeps) {
@@ -85,14 +86,20 @@ export function createFinishSessionUi(deps: FinishSessionUiDeps) {
 				exportNotesMarkdown(notes, `${deskName}-${scope}.md`);
 				return { ok: true, message: `Downloaded ${countLabel} as Markdown.` };
 			}
-			if (kind === 'pdf') {
-				const opened = printSequenceAsPdf(
+			if (kind === 'pdf' || kind === 'docx') {
+				const format = kind as PresentationFormat;
+				const scopeLabel =
+					scope === 'selected' ? 'Selected' : scope === 'results' ? 'Results' : 'Whole desk';
+				deps.openPresentationExport(
 					notes,
-					`${deps.getActiveSession()?.title ?? 'MASH desk'} · ${countLabel}`
+					deps.getActiveSession()?.title ?? 'Mash desk',
+					`${scopeLabel} · ${countLabel}`,
+					format
 				);
-				return opened
-					? { ok: true, message: `Opened ${countLabel} for printing or PDF.` }
-					: { ok: false, message: 'Could not prepare the printable PDF.' };
+				return {
+					ok: true,
+					message: `Choose a ${format === 'pdf' ? 'PDF' : 'Word'} template.`
+				};
 			}
 			if (kind === 'board-image') {
 				const { loadBoardImageExporter } = await import('$lib/lazy-board-image');

@@ -1,0 +1,292 @@
+.mash-finish-header-brand {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	min-width: 0;
+}
+
+.mash-finish-header-logo {
+	width: 48px;
+	height: 48px;
+	flex-shrink: 0;
+	object-fit: contain;
+	pointer-events: none;
+	filter: drop-shadow(0 1px 2px color-mix(in srgb, var(--mash-bg) 50%, transparent));
+}
+
+.mash-finish {
+	display: flex;
+	min-height: 0;
+	flex: 1;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+.mash-finish-scroll {
+	min-height: 0;
+	flex: 1;
+	overflow-y: auto;
+	padding: 16px 18px 18px;
+}
+
+@media (min-width: 640px) {
+	.mash-finish-scroll {
+		padding: 18px 22px 20px;
+	}
+}
+
+.mash-finish-section + .mash-finish-section {
+	margin-top: 18px;
+	padding-top: 18px;
+	border-top: 1px solid var(--mash-divider);
+}
+
+.mash-finish-heading {
+	margin: 0;
+	font-size: var(--mash-type-micro);
+	font-weight: 600;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--mash-accent-bright);
+}
+
+.mash-finish-scope {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 3px;
+	margin-top: 12px;
+	padding: 3px;
+	border-radius: 11px;
+	border: 1px solid var(--mash-divider);
+	background: var(--mash-hover-fill-soft);
+}
+
+.mash-finish-choice {
+	position: relative;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 44px;
+	padding: 8px 10px;
+	border-radius: 9px;
+	border: 1px solid transparent;
+	cursor: pointer;
+	text-align: center;
+	font-size: var(--mash-type-caption);
+	font-weight: 600;
+	color: var(--mash-ink-muted);
+	transition:
+		background 150ms ease,
+		border-color 150ms ease,
+		color 150ms ease,
+		box-shadow 150ms ease;
+}
+
+.mash-finish-choice.is-selected {
+	background: var(--mash-accent-wash);
+	color: var(--mash-accent-bright);
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mash-accent) 30%, transparent);
+}
+
+.mash-finish-choice:has(input:focus-visible) {
+	outline: 2px solid var(--mash-accent-bright);
+	outline-offset: 2px;
+}
+
+.mash-finish-preview {
+	margin: 10px 0 0;
+	min-height: 1.25rem;
+	font-size: var(--mash-type-caption);
+	line-height: 1.4;
+	color: var(--mash-ink-muted);
+}
+
+.mash-finish-export-grid {
+	display: grid;
+	gap: 8px;
+	margin-top: 16px;
+}
+
+@media (min-width: 640px) {
+	.mash-finish-export-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+.mash-finish-export {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	min-height: 56px;
+	padding: 12px 14px;
+	border-radius: 11px;
+	text-align: left;
+	transition:
+		background 150ms ease,
+		border-color 150ms ease,
+		box-shadow 150ms ease,
+		transform 100ms ease;
+}
+
+.mash-finish-export--primary {
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.18),
+		0 2px 10px color-mix(in srgb, var(--mash-accent) 22%, transparent);
+}
+
+.mash-finish-export--secondary {
+	background: transparent;
+	color: var(--mash-ink);
+	border: 1px solid var(--mash-divider);
+}
+
+.mash-finish-export--secondary:hover:not(:disabled) {
+	background: var(--mash-hover-fill-soft);
+	border-color: color-mix(in srgb, var(--mash-ink-muted) 35%, var(--mash-divider));
+	color: var(--mash-ink);
+}
+
+.mash-finish-export:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+.mash-finish-status {
+	margin: 12px 0 0;
+	padding: 9px 12px;
+	border-radius: 9px;
+	font-size: var(--mash-type-caption);
+	line-height: 1.4;
+}
+
+.mash-finish-status.is-ok {
+	background: var(--mash-accent-wash);
+	color: var(--mash-accent-bright);
+}
+
+.mash-finish-status.is-error {
+	background: color-mix(in srgb, var(--mash-danger) 12%, transparent);
+	color: var(--mash-danger);
+}
+
+.mash-finish-disposition-grid {
+	display: grid;
+	gap: 8px;
+	margin-top: 12px;
+}
+
+@media (min-width: 640px) {
+	.mash-finish-disposition-grid {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
+}
+
+.mash-finish-disposition {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 56px;
+	padding: 10px 12px;
+	border-radius: 11px;
+	border: 1px solid var(--mash-divider);
+	cursor: pointer;
+	text-align: left;
+	font-size: var(--mash-type-caption);
+	line-height: 1.3;
+	transition:
+		background 150ms ease,
+		border-color 150ms ease;
+}
+
+.mash-finish-disposition.is-selected {
+	border-color: var(--mash-accent);
+	background: var(--mash-accent-wash);
+}
+
+.mash-finish-disposition.is-danger.is-selected {
+	border-color: var(--mash-danger);
+	background: color-mix(in srgb, var(--mash-danger) 10%, transparent);
+}
+
+.mash-finish-keep-takeaway {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	min-height: 48px;
+	margin-top: 12px;
+	padding: 10px 12px;
+	border-radius: 11px;
+	border: 1px solid var(--mash-divider);
+	background: var(--mash-hover-fill-soft);
+	cursor: pointer;
+	font-size: var(--mash-type-caption);
+	line-height: 1.35;
+}
+
+.mash-finish-footer {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 10px 12px;
+	flex-shrink: 0;
+	padding: 12px 18px;
+	padding-bottom: max(14px, env(safe-area-inset-bottom));
+	border-top: 1px solid var(--mash-divider);
+	background: var(--mash-panel-strong);
+}
+
+@media (min-width: 640px) {
+	.mash-finish-footer {
+		padding: 12px 22px 16px;
+	}
+}
+
+.mash-finish-footer-primary {
+	margin-left: auto;
+	min-height: 44px;
+	padding: 10px 20px;
+	border-radius: 11px;
+	font-size: var(--mash-type-caption);
+	font-weight: 600;
+}
+
+.mash-finish-footer-secondary {
+	min-height: 44px;
+	padding: 10px 16px;
+	border-radius: 11px;
+	font-size: var(--mash-type-caption);
+}
+
+.mash-finish-footer-link {
+	min-height: 44px;
+	width: 100%;
+	text-align: left;
+	font-size: var(--mash-type-caption);
+	color: var(--mash-ink-muted);
+	text-underline-offset: 4px;
+	transition: color 150ms ease;
+}
+
+.mash-finish-footer-link:hover {
+	color: var(--mash-ink);
+	text-decoration: underline;
+}
+
+@media (min-width: 640px) {
+	.mash-finish-footer-link {
+		width: auto;
+	}
+}
+
+@media (forced-colors: active) {
+	.mash-finish-choice,
+	.mash-finish-disposition {
+		border-color: CanvasText !important;
+		forced-color-adjust: auto;
+	}
+
+	.mash-finish-choice.is-selected,
+	.mash-finish-disposition.is-selected {
+		outline: 2px solid Highlight;
+	}
+}

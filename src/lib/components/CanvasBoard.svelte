@@ -155,6 +155,8 @@
 		onDisconnectFlow?: (edgeId: string) => void | Promise<void>;
 		/** Clear all links in a sequence (by index in listFlowSequences). */
 		onUnstitchSequence?: (seqIndex: number) => void | Promise<void>;
+		/** Open the shared presentation exporter for this ordered sequence. */
+		onExportSequence?: (notes: Note[], title: string, sequenceNumber: number) => void;
 		/** Re-pack sequences with the current flow gap (called when entering Set page order). */
 		onRelayoutFlow?: () => boolean | Promise<boolean>;
 		onCreateArrow?: (
@@ -261,6 +263,7 @@
 		onConnectFlow,
 		onDisconnectFlow,
 		onUnstitchSequence,
+		onExportSequence,
 		onRelayoutFlow,
 		onCreateArrow,
 		onPatchArrow,
@@ -731,6 +734,11 @@
 		flowFromItemId = null;
 		flowPreviewItemId = null;
 		requestAnimationFrame(() => {
+			if (!flowMode) return;
+			const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+			// Do not steal focus if the user already reached a card before this
+			// first-frame keyboard convenience runs.
+			if (active?.closest('[data-canvas-card]')) return;
 			boardEl?.querySelector<HTMLElement>('[data-canvas-card]')?.focus();
 		});
 		if (edges.length > 0) {
@@ -818,25 +826,14 @@
 		return { notes, title };
 	}
 
-	async function exportSequencePdf(seqIndex = 0) {
+	function openSequenceExport(seqIndex = 0) {
 		const idx = resolveExportSeqIndex(seqIndex);
 		if (idx < 0) return;
 		const payload = notesForSequence(idx);
 		if (!payload) return;
-		try {
-			const { exportSequencePdf: downloadSequencePdf } = await import('$lib/sequence-pdf');
-			const ok = await downloadSequencePdf(payload.notes, payload.title);
-			if (!ok) {
-				console.error('Export PDF failed');
-				onToast?.('Could not export PDF');
-				return;
-			}
-			onToast?.('PDF downloaded');
-			exitFlowMode();
-		} catch (e) {
-			console.error(e);
-			onToast?.('Could not export PDF');
-		}
+		onExportSequence?.(payload.notes, payload.title, idx + 1);
+		pinnedFlowMenuSeqId = null;
+		exitFlowMode();
 	}
 
 	function printSequence(seqIndex = 0) {
@@ -3214,11 +3211,11 @@
 								class="mash-board-chip-btn is-accent"
 								onclick={(e) => {
 									e.stopPropagation();
-									void exportSequencePdf(menu.si);
+									openSequenceExport(menu.si);
 								}}
-								title="Download this sequence as PDF"
+								title="Choose a presentation format and template"
 							>
-								Export PDF
+								Export…
 							</button>
 							<button
 								type="button"
