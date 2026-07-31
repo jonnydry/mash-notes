@@ -21,7 +21,7 @@ function note(title: string, body: string): Note {
 }
 
 function productionFonts(templateId: ExportTemplateId): PresentationPdfFontBytes | undefined {
-	if (templateId === 'editorial') return undefined;
+	if (templateId === 'journal' || templateId === 'monograph') return undefined;
 	const load = (weight: 400 | 700) =>
 		Uint8Array.from(
 			readFileSync(
@@ -32,7 +32,7 @@ function productionFonts(templateId: ExportTemplateId): PresentationPdfFontBytes
 }
 
 describe('presentation PDF', () => {
-	it.each(['clean', 'editorial', 'sticky-deck'] as const)(
+	it.each(['plain', 'classic', 'journal', 'swiss', 'monograph', 'studio', 'cards'] as const)(
 		'builds the %s template with metadata and pagination',
 		async (templateId) => {
 			const document = buildExportDocument(
@@ -54,7 +54,9 @@ describe('presentation PDF', () => {
 			}
 			const pdf = await PDFDocument.load(bytes);
 			expect(pdf.getTitle()).toBe('Project brief');
-			expect(pdf.getPageCount()).toBeGreaterThanOrEqual(templateId === 'sticky-deck' ? 3 : 2);
+			expect(pdf.getPageCount()).toBeGreaterThanOrEqual(
+				templateId === 'cards' || templateId === 'monograph' ? 3 : templateId === 'swiss' ? 1 : 2
+			);
 			expect(bytes.byteLength).toBeGreaterThan(1_000);
 		}
 	);

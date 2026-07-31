@@ -150,30 +150,6 @@
 					</fieldset>
 
 					<fieldset>
-						<legend>Template</legend>
-						<div class="mash-export-template-list">
-							{#each EXPORT_TEMPLATES as template (template.id)}
-								<label class:is-selected={options.templateId === template.id}>
-									<input
-										class="sr-only"
-										type="radio"
-										name="export-template"
-										value={template.id}
-										bind:group={options.templateId}
-									/>
-									<span class="mash-export-template-swatch" style:background={template.colors.wash}>
-										<i style:background={template.colors.accent}></i>
-									</span>
-									<span>
-										<strong>{template.name}</strong>
-										<small>{template.summary}</small>
-									</span>
-								</label>
-							{/each}
-						</div>
-					</fieldset>
-
-					<fieldset>
 						<legend>Document</legend>
 						<label class="mash-export-title-field">
 							<span>Title</span>
@@ -209,17 +185,62 @@
 				{/if}
 			</div>
 
-			<div class="mash-export-preview-shell">
-				<div class="mash-export-preview-label">
-					<strong>Preview</strong>
-					<span>First {Math.min(3, document.sections.length)} notes</span>
+			<div class="mash-export-workspace">
+				<fieldset class="mash-export-template-rail">
+					<div class="mash-export-template-heading">
+						<legend>Template</legend>
+						<p>
+							{EXPORT_TEMPLATES.find((template) => template.id === options.templateId)?.bestFor}
+						</p>
+					</div>
+					<div class="mash-export-template-list" data-testid="export-template-rail">
+						{#each EXPORT_TEMPLATES as template (template.id)}
+							<label class:is-selected={options.templateId === template.id}>
+								<input
+									class="sr-only"
+									type="radio"
+									name="export-template"
+									value={template.id}
+									bind:group={options.templateId}
+								/>
+								<span
+									class="mash-export-template-thumb {template.previewClass}"
+									style:--thumb-paper={template.colors.paper}
+									style:--thumb-ink={template.colors.ink}
+									style:--thumb-muted={template.colors.muted}
+									style:--thumb-accent={template.colors.accent}
+									style:--thumb-wash={template.colors.wash}
+									style:--thumb-border={template.colors.border}
+									aria-hidden="true"
+								>
+									<span class="mash-export-thumb-masthead">Mash</span>
+									<span class="mash-export-thumb-title">My existing MASH desk</span>
+									<span class="mash-export-thumb-number">01</span>
+									<span class="mash-export-thumb-section">Project north star</span>
+									<span class="mash-export-thumb-copy">A considered collection of notes.</span>
+								</span>
+								<span class="mash-export-template-name">
+									<strong>{template.name}</strong>
+									<small>{template.descriptor}</small>
+									<span class="sr-only">{template.summary}</span>
+								</span>
+							</label>
+						{/each}
+					</div>
+				</fieldset>
+
+				<div class="mash-export-preview-shell">
+					<div class="mash-export-preview-label">
+						<strong>Preview</strong>
+						<span>First {Math.min(3, document.sections.length)} notes</span>
+					</div>
+					<ExportDocumentPreview {document} {options} />
 				</div>
-				<ExportDocumentPreview {document} {options} />
 			</div>
 		</div>
 
 		<footer class="mash-export-sheet-footer">
-			<div aria-live="polite">
+			<div class="mash-export-footer-status" aria-live="polite">
 				{#if status}
 					<p class:is-error={!status.ok}>{status.message}</p>
 				{:else}
@@ -228,16 +249,29 @@
 					</p>
 				{/if}
 			</div>
-			<button type="button" class="mash-btn-ghost" onclick={onClose} disabled={exporting}
-				>Cancel</button
-			>
-			<button type="button" class="mash-btn" onclick={() => void runExport()} disabled={exporting}>
-				{exporting
-					? 'Building…'
-					: options.format === 'pdf'
-						? 'Download PDF'
-						: 'Download Word document'}
-			</button>
+			<div class="mash-export-footer-actions">
+				<button
+					type="button"
+					class="mash-btn-ghost mash-export-footer-button mash-export-footer-cancel"
+					onclick={onClose}
+					disabled={exporting}>Cancel</button
+				>
+				<button
+					type="button"
+					class="mash-btn mash-export-footer-button mash-export-footer-download"
+					onclick={() => void runExport()}
+					disabled={exporting}
+				>
+					<FileDown size={16} aria-hidden="true" />
+					<span>
+						{exporting
+							? 'Building…'
+							: options.format === 'pdf'
+								? 'Download PDF'
+								: 'Download Word document'}
+					</span>
+				</button>
+			</div>
 		</footer>
 	</div>
 </div>

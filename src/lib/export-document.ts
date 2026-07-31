@@ -2,7 +2,8 @@ import { markdownNodes, type MarkdownNode } from './markdown-nodes';
 import type { Note, NoteSource, TextAlign } from './types';
 
 export type PresentationFormat = 'pdf' | 'docx';
-export type ExportTemplateId = 'clean' | 'editorial' | 'sticky-deck';
+export type ExportTemplateId =
+	'plain' | 'classic' | 'journal' | 'swiss' | 'monograph' | 'studio' | 'cards';
 export type ExportPageSize = 'letter' | 'a4';
 
 export type PresentationExportOptions = {

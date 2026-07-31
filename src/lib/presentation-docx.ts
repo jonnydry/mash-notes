@@ -43,9 +43,10 @@ type DocxTheme = {
 
 function docxTheme(options: PresentationExportOptions): DocxTheme {
 	const template = exportTemplate(options.templateId);
+	const serif = options.templateId === 'journal' || options.templateId === 'monograph';
 	return {
-		bodyFont: options.templateId === 'editorial' ? 'Georgia' : 'Aptos',
-		displayFont: options.templateId === 'editorial' ? 'Georgia' : 'Aptos Display',
+		bodyFont: serif ? 'Georgia' : 'Aptos',
+		displayFont: options.templateId === 'plain' ? 'Aptos' : serif ? 'Georgia' : 'Aptos Display',
 		ink: template.colors.ink.slice(1),
 		muted: template.colors.muted.slice(1),
 		accent: template.colors.accent.slice(1),
@@ -262,8 +263,16 @@ async function sectionBlocks(
 	isFirst: boolean
 ): Promise<Array<Paragraph | Table>> {
 	const blocks: Array<Paragraph | Table> = [];
-	if (!isFirst && options.templateId === 'sticky-deck') {
+	if (!isFirst && exportTemplate(options.templateId).flow === 'page-per-note') {
 		blocks.push(new Paragraph({ children: [new PageBreak()] }));
+	}
+	if (options.templateId !== 'plain') {
+		blocks.push(
+			new Paragraph({
+				style: 'MashNoteNumber',
+				children: [new TextRun(String(section.position).padStart(2, '0'))]
+			})
+		);
 	}
 	blocks.push(
 		new Paragraph({
@@ -295,7 +304,24 @@ async function sectionBlocks(
 }
 
 function styles(options: PresentationExportOptions, theme: DocxTheme) {
-	const sticky = options.templateId === 'sticky-deck';
+	const cards = options.templateId === 'cards';
+	const swiss = options.templateId === 'swiss';
+	const studio = options.templateId === 'studio';
+	const monograph = options.templateId === 'monograph';
+	const journal = options.templateId === 'journal';
+	const plain = options.templateId === 'plain';
+	const titleBorder = swiss
+		? {
+				top: { style: BorderStyle.SINGLE, color: theme.ink, size: 14, space: 10 },
+				bottom: { style: BorderStyle.SINGLE, color: theme.ink, size: 14, space: 10 }
+			}
+		: cards
+			? { bottom: { style: BorderStyle.SINGLE, color: theme.accent, size: 16 } }
+			: studio
+				? { left: { style: BorderStyle.SINGLE, color: theme.accent, size: 42, space: 14 } }
+				: monograph
+					? { bottom: { style: BorderStyle.SINGLE, color: theme.ink, size: 10, space: 8 } }
+					: undefined;
 	return {
 		default: {
 			document: {
@@ -312,11 +338,46 @@ function styles(options: PresentationExportOptions, theme: DocxTheme) {
 				quickFormat: true,
 				run: {
 					font: theme.displayFont,
-					size: options.templateId === 'editorial' ? 76 : 68,
+					size: plain ? 60 : journal ? 76 : swiss || monograph ? 84 : 68,
 					bold: true,
 					color: theme.ink
 				},
 				paragraph: { spacing: { before: 240, after: 280 } }
+			},
+			{
+				id: 'MashEdition',
+				name: 'Mash Edition',
+				basedOn: 'Normal',
+				next: 'MashDocumentTitle',
+				quickFormat: true,
+				run: {
+					font: theme.bodyFont,
+					size: 17,
+					bold: true,
+					color: theme.accent,
+					allCaps: true,
+					characterSpacing: 24
+				},
+				paragraph: {
+					spacing: { before: 120, after: 160 },
+					border: swiss
+						? { bottom: { style: BorderStyle.SINGLE, color: theme.ink, size: 14, space: 8 } }
+						: undefined
+				}
+			},
+			{
+				id: 'MashNoteNumber',
+				name: 'Mash Note Number',
+				basedOn: 'Normal',
+				next: 'MashNoteTitle',
+				quickFormat: true,
+				run: {
+					font: theme.displayFont,
+					size: swiss ? 64 : monograph ? 50 : studio ? 26 : 18,
+					bold: true,
+					color: swiss || studio ? theme.accent : monograph ? theme.muted : theme.accent
+				},
+				paragraph: { spacing: { before: 220, after: swiss ? 80 : 30 } }
 			},
 			{
 				id: 'MashNoteTitle',
@@ -326,16 +387,14 @@ function styles(options: PresentationExportOptions, theme: DocxTheme) {
 				quickFormat: true,
 				run: {
 					font: theme.displayFont,
-					size: options.templateId === 'editorial' ? 48 : 42,
+					size: plain ? 36 : journal ? 48 : swiss || monograph ? 54 : studio ? 50 : 42,
 					bold: true,
 					color: theme.ink
 				},
 				paragraph: {
-					spacing: { before: 280, after: 100 },
-					shading: sticky ? { fill: theme.wash, type: ShadingType.CLEAR } : undefined,
-					border: sticky
-						? { bottom: { style: BorderStyle.SINGLE, color: theme.accent, size: 16 } }
-						: undefined
+					spacing: { before: plain ? 180 : 280, after: plain ? 80 : 100 },
+					shading: cards ? { fill: theme.wash, type: ShadingType.CLEAR } : undefined,
+					border: titleBorder
 				}
 			},
 			{
@@ -344,7 +403,12 @@ function styles(options: PresentationExportOptions, theme: DocxTheme) {
 				basedOn: 'Heading2',
 				next: 'MashBody',
 				quickFormat: true,
-				run: { font: theme.displayFont, size: 32, bold: true, color: theme.accent },
+				run: {
+					font: theme.displayFont,
+					size: plain ? 28 : 32,
+					bold: true,
+					color: theme.accent
+				},
 				paragraph: { spacing: { before: 220, after: 90 } }
 			},
 			{
@@ -353,7 +417,12 @@ function styles(options: PresentationExportOptions, theme: DocxTheme) {
 				basedOn: 'Heading3',
 				next: 'MashBody',
 				quickFormat: true,
-				run: { font: theme.displayFont, size: 26, bold: true, color: theme.accent },
+				run: {
+					font: theme.displayFont,
+					size: plain ? 24 : 26,
+					bold: true,
+					color: theme.accent
+				},
 				paragraph: { spacing: { before: 180, after: 70 } }
 			},
 			{
@@ -371,7 +440,12 @@ function styles(options: PresentationExportOptions, theme: DocxTheme) {
 				basedOn: 'Normal',
 				next: 'MashBody',
 				quickFormat: true,
-				run: { font: theme.bodyFont, size: 17, color: theme.muted, italics: true },
+				run: {
+					font: theme.bodyFont,
+					size: 17,
+					color: theme.muted,
+					italics: plain ? false : true
+				},
 				paragraph: { spacing: { after: 220 } }
 			},
 			{
@@ -409,6 +483,14 @@ export async function buildPresentationDocx(
 	const theme = docxTheme(options);
 	const children: Array<Paragraph | Table> = [];
 	if (options.includeCover) {
+		if (options.templateId !== 'plain') {
+			children.push(
+				new Paragraph({
+					style: 'MashEdition',
+					children: [new TextRun(`${exportTemplate(options.templateId).name} edition`)]
+				})
+			);
+		}
 		children.push(
 			new Paragraph({ style: 'MashDocumentTitle', children: [new TextRun(options.documentTitle)] }),
 			new Paragraph({
@@ -422,9 +504,11 @@ export async function buildPresentationDocx(
 						`${document.sections.length} note${document.sections.length === 1 ? '' : 's'} · ${exportDocumentWordCount(document)} words`
 					)
 				]
-			}),
-			new Paragraph({ children: [new PageBreak()] })
+			})
 		);
+		if (options.templateId !== 'swiss') {
+			children.push(new Paragraph({ children: [new PageBreak()] }));
+		}
 	}
 	for (let index = 0; index < document.sections.length; index++) {
 		children.push(...(await sectionBlocks(document.sections[index]!, options, theme, index === 0)));
@@ -447,13 +531,44 @@ export async function buildPresentationDocx(
 			})
 		: undefined;
 	const header = new Header({
-		children: [
-			new Paragraph({
-				children: [new TextRun({ text: options.documentTitle, color: theme.muted, size: 16 })]
-			})
-		]
+		children:
+			options.templateId === 'plain'
+				? []
+				: [
+						new Paragraph({
+							border:
+								options.templateId === 'swiss'
+									? {
+											bottom: {
+												style: BorderStyle.SINGLE,
+												color: theme.ink,
+												size: 12,
+												space: 6
+											}
+										}
+									: undefined,
+							children: [
+								new TextRun({
+									text: `${options.documentTitle}  ·  MASH`,
+									color: options.templateId === 'swiss' ? theme.accent : theme.muted,
+									size: 16,
+									bold: options.templateId === 'swiss'
+								})
+							]
+						})
+					]
 	});
 	const isA4 = options.pageSize === 'a4';
+	const margins =
+		options.templateId === 'plain'
+			? { top: 1, right: 1, bottom: 1, left: 1 }
+			: options.templateId === 'monograph'
+				? { top: 0.85, right: 0.85, bottom: 0.8, left: 0.85 }
+				: options.templateId === 'studio'
+					? { top: 0.7, right: 0.7, bottom: 0.7, left: 0.95 }
+					: options.templateId === 'swiss'
+						? { top: 0.65, right: 0.7, bottom: 0.65, left: 0.7 }
+						: { top: 0.7, right: 0.75, bottom: 0.7, left: 0.75 };
 	const file = new Document({
 		title: options.documentTitle,
 		subject: document.sourceLabel,
@@ -484,10 +599,10 @@ export async function buildPresentationDocx(
 							? { width: convertMillimetersToTwip(210), height: convertMillimetersToTwip(297) }
 							: { width: convertInchesToTwip(8.5), height: convertInchesToTwip(11) },
 						margin: {
-							top: convertInchesToTwip(0.7),
-							right: convertInchesToTwip(0.75),
-							bottom: convertInchesToTwip(0.7),
-							left: convertInchesToTwip(0.75)
+							top: convertInchesToTwip(margins.top),
+							right: convertInchesToTwip(margins.right),
+							bottom: convertInchesToTwip(margins.bottom),
+							left: convertInchesToTwip(margins.left)
 						}
 					}
 				},

@@ -37,14 +37,12 @@ test.describe('Polished document export', () => {
 		const wordFormat = sheet.getByRole('button', { name: /Word Easy to edit/ });
 		await expect(pdfFormat).toHaveAttribute('aria-pressed', 'true');
 		await expect(wordFormat).toHaveAttribute('aria-pressed', 'false');
-		await expect(sheet.getByTestId('export-scroll-cue')).toBeVisible();
-		await sheet.getByTestId('export-controls').evaluate((controls) => {
-			controls.scrollTop = controls.scrollHeight;
-		});
-		await expect(sheet.getByTestId('export-scroll-cue')).toBeHidden();
-		await expect(sheet.getByRole('radio', { name: /Clean/ })).toBeChecked();
-		await sheet.locator('label').filter({ hasText: 'Editorial' }).click();
-		await expect(sheet.getByTestId('export-preview')).toHaveClass(/is-editorial/);
+		await expect(sheet.getByTestId('export-template-rail').getByRole('radio')).toHaveCount(7);
+		await expect(sheet.getByRole('radio', { name: /Classic/ })).toBeChecked();
+		await sheet.locator('label').filter({ hasText: 'Plain' }).click();
+		await expect(sheet.getByTestId('export-preview')).toHaveClass(/is-plain/);
+		await sheet.locator('label').filter({ hasText: 'Swiss' }).click();
+		await expect(sheet.getByTestId('export-preview')).toHaveClass(/is-swiss/);
 		await sheet
 			.getByRole('textbox', { name: 'Title', exact: true })
 			.fill('A polished project brief');
@@ -59,14 +57,14 @@ test.describe('Polished document export', () => {
 		expect(pdfBytes.subarray(0, 5).toString()).toBe('%PDF-');
 		const pdf = await PDFDocument.load(pdfBytes);
 		expect(pdf.getTitle()).toBe('A polished project brief');
-		expect(pdf.getPageCount()).toBeGreaterThanOrEqual(2);
+		expect(pdf.getPageCount()).toBeGreaterThanOrEqual(1);
 		expect(pdfBytes.byteLength).toBeGreaterThan(2_000);
 
 		await wordFormat.click();
 		await expect(pdfFormat).toHaveAttribute('aria-pressed', 'false');
 		await expect(wordFormat).toHaveAttribute('aria-pressed', 'true');
-		await sheet.locator('label').filter({ hasText: 'Sticky deck' }).click();
-		await expect(sheet.getByTestId('export-preview')).toHaveClass(/is-sticky-deck/);
+		await sheet.locator('label').filter({ hasText: 'Cards' }).click();
+		await expect(sheet.getByTestId('export-preview')).toHaveClass(/is-cards/);
 		await sheet
 			.getByRole('textbox', { name: 'Title', exact: true })
 			.fill('An editable project brief');
@@ -79,6 +77,12 @@ test.describe('Polished document export', () => {
 		const docxBytes = fs.readFileSync(docxPath);
 		expect([...docxBytes.subarray(0, 2)]).toEqual([80, 75]);
 		expect(docxBytes.byteLength).toBeGreaterThan(5_000);
+
+		await page.setViewportSize({ width: 720, height: 800 });
+		await expect(sheet).toBeVisible();
+		await expect(sheet.getByRole('combobox', { name: 'Page size' })).toBeVisible();
+		await sheet.getByRole('radio', { name: /Cards/ }).scrollIntoViewIfNeeded();
+		await expect(sheet.getByRole('radio', { name: /Cards/ })).toBeVisible();
 
 		fs.unlinkSync(pdfPath);
 		fs.unlinkSync(docxPath);

@@ -16,7 +16,8 @@
 		"node": ">=22"
 	},
 	"overrides": {
-		"cookie": "^0.7.2"
+		"cookie": "^0.7.2",
+		"filelist": "^2.0.2"
 	},
 	"scripts": {
 		"dev": "node scripts/sync-pdfjs-assets.mjs && vite dev",

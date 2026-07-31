@@ -113,7 +113,7 @@ function decoratePage(layout: PdfLayout) {
 		height: pageHeight,
 		color: color(template.colors.paper)
 	});
-	if (template.id === 'editorial') {
+	if (template.id === 'journal') {
 		page.drawRectangle({
 			x: 0,
 			y: pageHeight - 9,
@@ -122,7 +122,35 @@ function decoratePage(layout: PdfLayout) {
 			color: layout.accent
 		});
 	}
-	if (template.id === 'sticky-deck') {
+	if (template.id === 'swiss') {
+		page.drawRectangle({
+			x: 0,
+			y: pageHeight - 5,
+			width: pageWidth,
+			height: 5,
+			color: layout.ink
+		});
+	}
+	if (template.id === 'monograph') {
+		page.drawRectangle({
+			x: 24,
+			y: 24,
+			width: pageWidth - 48,
+			height: pageHeight - 48,
+			borderColor: layout.ink,
+			borderWidth: 1.4
+		});
+	}
+	if (template.id === 'studio') {
+		page.drawRectangle({
+			x: 0,
+			y: 0,
+			width: 13,
+			height: pageHeight,
+			color: layout.accent
+		});
+	}
+	if (template.id === 'cards') {
 		page.drawRectangle({
 			x: 28,
 			y: 32,
@@ -136,11 +164,19 @@ function decoratePage(layout: PdfLayout) {
 }
 
 function contentBounds(template: ExportTemplate, pageWidth: number, pageHeight: number) {
-	if (template.id === 'sticky-deck') {
+	if (template.id === 'cards') {
 		return { left: 64, right: pageWidth - 64, top: pageHeight - 68, bottom: 70 };
 	}
-	const margin = template.id === 'editorial' ? 64 : 56;
-	return { left: margin, right: pageWidth - margin, top: pageHeight - margin, bottom: margin };
+	if (template.id === 'journal') {
+		return { left: 64, right: pageWidth - 64, top: pageHeight - 64, bottom: 64 };
+	}
+	if (template.id === 'monograph') {
+		return { left: 62, right: pageWidth - 62, top: pageHeight - 62, bottom: 62 };
+	}
+	if (template.id === 'studio') {
+		return { left: 72, right: pageWidth - 54, top: pageHeight - 58, bottom: 58 };
+	}
+	return { left: 56, right: pageWidth - 56, top: pageHeight - 56, bottom: 56 };
 }
 
 function addPage(layout: PdfLayout, continuation = false): void {
@@ -390,7 +426,7 @@ function sectionMeta(section: ExportDocumentSection): string {
 
 async function drawSection(layout: PdfLayout, section: ExportDocumentSection, isFirst: boolean) {
 	layout.section = section;
-	if (isFirst && layout.options.includeCover) {
+	if (isFirst && layout.options.includeCover && layout.template.id !== 'swiss') {
 		addPage(layout);
 	} else if (
 		!isFirst &&
@@ -399,25 +435,60 @@ async function drawSection(layout: PdfLayout, section: ExportDocumentSection, is
 		addPage(layout);
 	} else if (!isFirst) {
 		ensureSpace(layout, 70);
-		layout.page.drawLine({
-			start: { x: layout.left, y: layout.y - 4 },
-			end: { x: layout.left + 42, y: layout.y - 4 },
-			thickness: 2.5,
-			color: layout.accent
-		});
-		layout.y -= 28;
+		if (layout.template.id === 'plain') {
+			layout.y -= 24;
+		} else {
+			layout.page.drawLine({
+				start: { x: layout.left, y: layout.y - 4 },
+				end: { x: layout.left + 42, y: layout.y - 4 },
+				thickness: 2.5,
+				color: layout.accent
+			});
+			layout.y -= 28;
+		}
 	}
 
-	layout.page.drawText(String(section.position).padStart(2, '0'), {
-		x: layout.left,
-		y: layout.y - 7,
-		size: 8,
-		font: layout.fonts.bold,
-		color: layout.accent
-	});
-	layout.y -= 26;
-	const titleSize =
-		layout.template.id === 'editorial' ? 29 : layout.template.id === 'sticky-deck' ? 27 : 24;
+	const position = String(section.position).padStart(2, '0');
+	const isSwiss = layout.template.id === 'swiss';
+	const isPlain = layout.template.id === 'plain';
+	const originalLeft = layout.left;
+	if (isSwiss) {
+		layout.page.drawLine({
+			start: { x: layout.left, y: layout.y + 4 },
+			end: { x: layout.right, y: layout.y + 4 },
+			thickness: 1.8,
+			color: layout.ink
+		});
+		layout.page.drawText(position, {
+			x: layout.left,
+			y: layout.y - 42,
+			size: 42,
+			font: layout.fonts.bold,
+			color: layout.accent
+		});
+		layout.left += 92;
+	} else if (!isPlain) {
+		layout.page.drawText(position, {
+			x: layout.template.id === 'monograph' ? layout.right - 54 : layout.left,
+			y: layout.y - (layout.template.id === 'monograph' ? 34 : 7),
+			size: layout.template.id === 'monograph' ? 34 : layout.template.id === 'studio' ? 12 : 8,
+			font: layout.fonts.bold,
+			color: layout.template.id === 'monograph' ? layout.muted : layout.accent,
+			opacity: layout.template.id === 'monograph' ? 0.28 : 1
+		});
+		layout.y -= layout.template.id === 'monograph' ? 16 : 26;
+	}
+	const titleSize = isPlain
+		? 20
+		: layout.template.id === 'journal'
+			? 29
+			: layout.template.id === 'swiss'
+				? 31
+				: layout.template.id === 'monograph'
+					? 33
+					: layout.template.id === 'studio' || layout.template.id === 'cards'
+						? 27
+						: 24;
 	drawWrappedText(layout, section.title, {
 		font: layout.fonts.bold,
 		size: titleSize,
@@ -437,25 +508,74 @@ async function drawSection(layout: PdfLayout, section: ExportDocumentSection, is
 			});
 		}
 	}
+	if (isSwiss) {
+		layout.page.drawLine({
+			start: { x: layout.left, y: layout.y + 4 },
+			end: { x: layout.right, y: layout.y + 4 },
+			thickness: 1.2,
+			color: layout.ink
+		});
+		layout.y -= 12;
+	}
 	await drawBlocks(layout, section.blocks);
+	layout.left = originalLeft;
 }
 
 function drawCover(layout: PdfLayout, document: ExportDocument) {
 	addPage(layout);
 	const { page } = layout;
-	const accentWidth = layout.template.id === 'editorial' ? 104 : 78;
-	page.drawRectangle({
-		x: layout.left,
-		y: layout.pageHeight - 186,
-		width: accentWidth,
-		height: 8,
-		color: layout.accent
-	});
-	layout.y = layout.pageHeight - 230;
+	const isPlain = layout.template.id === 'plain';
+	if (layout.template.id === 'swiss') {
+		page.drawText('MASH', {
+			x: layout.right - 31,
+			y: layout.top - 9,
+			size: 8,
+			font: layout.fonts.bold,
+			color: layout.accent
+		});
+		page.drawLine({
+			start: { x: layout.left, y: layout.top - 18 },
+			end: { x: layout.right, y: layout.top - 18 },
+			thickness: 1.8,
+			color: layout.ink
+		});
+	}
+	const accentWidth =
+		layout.template.id === 'journal'
+			? 104
+			: layout.template.id === 'monograph'
+				? 180
+				: layout.template.id === 'studio'
+					? 48
+					: 78;
+	if (!isPlain) {
+		page.drawRectangle({
+			x: layout.left,
+			y: layout.template.id === 'swiss' ? layout.top - 72 : layout.pageHeight - 186,
+			width: accentWidth,
+			height: layout.template.id === 'studio' ? 20 : 8,
+			color: layout.accent
+		});
+	}
+	layout.y = isPlain
+		? layout.pageHeight - 170
+		: layout.template.id === 'swiss'
+			? layout.top - 112
+			: layout.pageHeight - 230;
 	drawWrappedText(layout, layout.options.documentTitle, {
 		font: layout.fonts.bold,
-		size: layout.template.id === 'editorial' ? 42 : 38,
-		leading: 46,
+		size: isPlain
+			? 30
+			: layout.template.id === 'journal'
+				? 42
+				: layout.template.id === 'swiss' || layout.template.id === 'monograph'
+					? 44
+					: 38,
+		leading: isPlain
+			? 36
+			: layout.template.id === 'swiss' || layout.template.id === 'monograph'
+				? 45
+				: 46,
 		paragraphGap: 22
 	});
 	if (document.sourceLabel) {
@@ -469,16 +589,18 @@ function drawCover(layout: PdfLayout, document: ExportDocument) {
 	drawWrappedText(
 		layout,
 		`${document.sections.length} note${document.sections.length === 1 ? '' : 's'} · ${exportDocumentWordCount(document)} words`,
-		{ size: 9, color: layout.accent }
+		{ size: 9, color: isPlain ? layout.muted : layout.accent }
 	);
-	page.drawText('M', {
-		x: layout.pageWidth - layout.right,
-		y: 58,
-		size: 44,
-		font: layout.fonts.bold,
-		color: layout.accent,
-		opacity: 0.18
-	});
+	if (layout.template.id !== 'swiss' && !isPlain) {
+		page.drawText('M', {
+			x: layout.pageWidth - layout.right,
+			y: 58,
+			size: 44,
+			font: layout.fonts.bold,
+			color: layout.accent,
+			opacity: 0.18
+		});
+	}
 }
 
 async function embedFonts(
@@ -497,7 +619,7 @@ async function embedFonts(
 			console.warn('Custom PDF font unavailable; using standard fonts', error);
 		}
 	}
-	if (templateId === 'editorial') {
+	if (templateId === 'journal' || templateId === 'monograph') {
 		return {
 			regular: await pdf.embedFont(StandardFonts.TimesRoman),
 			bold: await pdf.embedFont(StandardFonts.TimesRomanBold)
@@ -512,7 +634,7 @@ async function embedFonts(
 export async function loadPresentationPdfFonts(
 	templateId: PresentationExportOptions['templateId']
 ): Promise<PresentationPdfFontBytes | undefined> {
-	if (templateId === 'editorial') return undefined;
+	if (templateId === 'journal' || templateId === 'monograph') return undefined;
 	const urls = [liberationSansRegularUrl, liberationSansBoldUrl];
 	const [regular, bold] = await Promise.all(
 		urls.map((url) => fetch(url).then((response) => response.arrayBuffer()))

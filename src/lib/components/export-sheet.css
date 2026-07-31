@@ -1,13 +1,13 @@
 .mash-export-backdrop {
 	z-index: 90;
-	padding: clamp(10px, 3vw, 32px);
+	padding: clamp(10px, 2vw, 20px);
 }
 
 .mash-export-sheet {
 	display: flex;
 	flex-direction: column;
-	width: min(72rem, 100%);
-	max-height: min(90vh, 54rem);
+	width: min(72rem, 94vw);
+	max-height: min(95vh, 56rem);
 	padding: 0;
 	overflow: hidden;
 }
@@ -51,7 +51,7 @@
 
 .mash-export-sheet-body {
 	display: grid;
-	grid-template-columns: minmax(18rem, 24rem) minmax(20rem, 1fr);
+	grid-template-columns: minmax(17.5rem, 30%) minmax(20rem, 1fr);
 	min-height: 0;
 	flex: 1;
 	overflow: hidden;
@@ -59,12 +59,12 @@
 
 .mash-export-controls-shell,
 .mash-export-controls,
+.mash-export-workspace,
 .mash-export-preview-shell {
 	min-height: 0;
 }
 
-.mash-export-controls,
-.mash-export-preview-shell {
+.mash-export-controls {
 	overflow-y: auto;
 	overscroll-behavior: contain;
 }
@@ -154,69 +154,19 @@
 	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mash-accent) 18%, transparent);
 }
 
-.mash-export-format-switch span,
-.mash-export-template-list label > span:last-child {
+.mash-export-format-switch span {
 	display: flex;
 	min-width: 0;
 	flex-direction: column;
 }
 
-.mash-export-format-switch strong,
-.mash-export-template-list strong {
+.mash-export-format-switch strong {
 	font-size: var(--mash-type-control);
 }
 
 .mash-export-format-switch small {
 	font-size: var(--mash-type-micro);
 	opacity: 0.76;
-}
-
-.mash-export-template-list {
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-}
-
-.mash-export-template-list label {
-	display: grid;
-	grid-template-columns: 42px 1fr;
-	gap: 9px;
-	align-items: center;
-	padding: 8px;
-	border: 1px solid var(--mash-divider);
-	border-radius: 11px;
-	background: var(--mash-tray);
-	cursor: pointer;
-}
-
-.mash-export-template-swatch {
-	position: relative;
-	display: block;
-	width: 42px;
-	height: 34px;
-	border: 1px solid color-mix(in srgb, var(--mash-ink) 12%, transparent);
-	border-radius: 7px;
-	box-shadow: 0 2px 6px color-mix(in srgb, var(--mash-ink) 10%, transparent);
-}
-
-.mash-export-template-swatch i {
-	position: absolute;
-	left: 7px;
-	top: 8px;
-	display: block;
-	width: 20px;
-	height: 3px;
-	border-radius: 99px;
-}
-
-.mash-export-template-list strong {
-	color: var(--mash-ink);
-}
-
-.mash-export-template-list small {
-	font-size: var(--mash-type-micro);
-	line-height: 1.35;
-	color: var(--mash-ink-muted);
 }
 
 .mash-export-title-field,
@@ -262,19 +212,294 @@
 	color: var(--mash-ink);
 }
 
-.mash-export-preview-shell {
-	padding: 14px clamp(12px, 3vw, 26px) 26px;
+.mash-export-workspace {
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
 	background: color-mix(in srgb, var(--mash-bg) 88%, var(--mash-panel));
 }
 
-.mash-export-preview-label {
+.mash-export-template-rail {
+	flex: 0 0 auto;
+	margin: 0;
+	padding: 10px clamp(12px, 2vw, 22px) 8px;
+	border: 0;
+	border-bottom: 1px solid var(--mash-divider);
+	background: color-mix(in srgb, var(--mash-panel) 96%, var(--mash-bg));
+}
+
+.mash-export-template-heading {
 	display: flex;
 	align-items: baseline;
 	justify-content: space-between;
-	gap: 10px;
-	margin-bottom: 10px;
-	font-size: var(--mash-type-caption);
+	gap: 12px;
+	margin-bottom: 6px;
+}
+
+.mash-export-template-heading legend {
+	float: left;
+	padding: 0;
+	font-size: var(--mash-type-micro);
+	font-weight: 750;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
 	color: var(--mash-ink-muted);
+}
+
+.mash-export-template-heading p {
+	margin: 0;
+	font-size: var(--mash-type-micro);
+	color: var(--mash-ink-muted);
+}
+
+.mash-export-template-list {
+	display: grid;
+	grid-template-columns: repeat(7, minmax(78px, 1fr));
+	gap: 9px;
+}
+
+.mash-export-template-list label {
+	display: flex;
+	min-width: 0;
+	flex-direction: column;
+	gap: 7px;
+	padding: 4px;
+	border: 1px solid transparent;
+	border-radius: 10px;
+	cursor: pointer;
+	transition:
+		border-color 120ms ease,
+		background 120ms ease,
+		transform 120ms ease;
+}
+
+.mash-export-template-list label:hover {
+	transform: translateY(-1px);
+	background: color-mix(in srgb, var(--mash-tray) 88%, transparent);
+}
+
+.mash-export-template-list label.is-selected {
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mash-accent) 25%, transparent);
+}
+
+.mash-export-template-list label:focus-within {
+	outline: 2px solid var(--mash-accent-bright);
+	outline-offset: 2px;
+}
+
+.mash-export-template-name {
+	display: flex;
+	min-width: 0;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.mash-export-template-name strong {
+	font-size: var(--mash-type-caption);
+	line-height: 1.1;
+	color: var(--mash-ink);
+}
+
+.mash-export-template-list label.is-selected .mash-export-template-name strong {
+	color: var(--mash-accent-bright);
+}
+
+.mash-export-template-name small {
+	font-size: 0.58rem;
+	line-height: 1.25;
+	color: var(--mash-ink-muted);
+}
+
+.mash-export-template-thumb {
+	position: relative;
+	display: grid;
+	min-width: 0;
+	aspect-ratio: 0.74;
+	grid-template-rows: auto auto 1fr auto;
+	align-content: start;
+	gap: 5px;
+	overflow: hidden;
+	padding: 10px 9px;
+	border: 1px solid var(--thumb-border);
+	border-radius: 3px;
+	background: var(--thumb-paper);
+	box-shadow: 0 6px 15px color-mix(in srgb, var(--mash-ink) 14%, transparent);
+	color: var(--thumb-ink);
+}
+
+.mash-export-template-list label.is-selected .mash-export-template-thumb {
+	border-color: var(--thumb-accent);
+	box-shadow:
+		0 0 0 2px color-mix(in srgb, var(--mash-accent) 55%, transparent),
+		0 8px 18px color-mix(in srgb, var(--mash-ink) 18%, transparent);
+}
+
+.mash-export-thumb-masthead {
+	padding-bottom: 5px;
+	border-bottom: 1px solid var(--thumb-border);
+	font-size: 0.38rem;
+	font-weight: 800;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--thumb-accent);
+}
+
+.mash-export-thumb-title {
+	font-family: var(--mash-font-display, 'Newsreader', serif);
+	font-size: clamp(0.56rem, 1.05vw, 0.8rem);
+	font-weight: 700;
+	line-height: 0.95;
+	letter-spacing: -0.03em;
+}
+
+.mash-export-thumb-number {
+	align-self: end;
+	font-size: 0.72rem;
+	font-weight: 800;
+	color: var(--thumb-accent);
+}
+
+.mash-export-thumb-section {
+	padding-top: 4px;
+	border-top: 1px solid var(--thumb-border);
+	font-size: 0.37rem;
+	font-weight: 750;
+	line-height: 1;
+	text-transform: uppercase;
+}
+
+.mash-export-thumb-copy {
+	display: none;
+	font-size: 0.34rem;
+	line-height: 1.35;
+	color: var(--thumb-muted);
+}
+
+.mash-export-template-thumb.is-journal {
+	border-top: 5px solid var(--thumb-accent);
+}
+
+.mash-export-template-thumb.is-plain {
+	grid-template-rows: auto 1fr;
+	gap: 10px;
+	padding: 14px 11px;
+}
+
+.mash-export-template-thumb.is-plain
+	:is(.mash-export-thumb-masthead, .mash-export-thumb-number, .mash-export-thumb-copy) {
+	display: none;
+}
+
+.mash-export-template-thumb.is-plain .mash-export-thumb-title {
+	padding-bottom: 10px;
+	border-bottom: 1px solid var(--thumb-border);
+	font-family: Arial, Helvetica, sans-serif;
+	font-size: clamp(0.48rem, 0.85vw, 0.68rem);
+	font-weight: 600;
+	line-height: 1.15;
+	letter-spacing: 0;
+}
+
+.mash-export-template-thumb.is-plain .mash-export-thumb-section {
+	align-self: start;
+	padding: 0;
+	border: 0;
+	font-family: Arial, Helvetica, sans-serif;
+	font-size: 0.38rem;
+	font-weight: 400;
+	line-height: 1.35;
+	text-transform: none;
+	color: var(--thumb-muted);
+}
+
+.mash-export-template-thumb.is-journal :is(.mash-export-thumb-title, .mash-export-thumb-section) {
+	font-family: 'Literata', var(--mash-font-display, serif);
+}
+
+.mash-export-template-thumb.is-swiss {
+	grid-template-columns: 0.5fr 1fr;
+	grid-template-rows: auto auto 1fr;
+	gap: 5px 8px;
+}
+
+.mash-export-template-thumb.is-swiss .mash-export-thumb-masthead,
+.mash-export-template-thumb.is-swiss .mash-export-thumb-title {
+	grid-column: 1 / -1;
+	font-family: var(--mash-font-editor, sans-serif);
+	text-transform: uppercase;
+}
+
+.mash-export-template-thumb.is-swiss .mash-export-thumb-title {
+	padding-bottom: 6px;
+	border-bottom: 2px solid var(--thumb-ink);
+	font-size: clamp(0.52rem, 1vw, 0.76rem);
+}
+
+.mash-export-template-thumb.is-swiss .mash-export-thumb-number {
+	align-self: start;
+	font-size: clamp(1rem, 2vw, 1.65rem);
+	line-height: 0.8;
+}
+
+.mash-export-template-thumb.is-swiss .mash-export-thumb-section {
+	align-self: start;
+	padding-top: 0;
+	border-top: 0;
+}
+
+.mash-export-template-thumb.is-monograph {
+	border-color: var(--thumb-ink);
+	background: var(--thumb-paper);
+}
+
+.mash-export-template-thumb.is-monograph .mash-export-thumb-title {
+	font-size: clamp(0.68rem, 1.3vw, 1rem);
+	text-transform: uppercase;
+}
+
+.mash-export-template-thumb.is-monograph .mash-export-thumb-number {
+	font-family: var(--mash-font-display, serif);
+	font-size: 1.4rem;
+	color: var(--thumb-ink);
+	opacity: 0.16;
+}
+
+.mash-export-template-thumb.is-studio {
+	border-left: 7px solid var(--thumb-accent);
+}
+
+.mash-export-template-thumb.is-studio .mash-export-thumb-number {
+	width: fit-content;
+	padding: 4px 6px;
+	background: var(--thumb-wash);
+}
+
+.mash-export-template-thumb.is-cards {
+	margin: 5px;
+	aspect-ratio: 0.7;
+	border: 2px solid var(--thumb-border);
+	border-radius: 12px;
+	background: var(--thumb-wash);
+	transform: rotate(-1deg);
+}
+
+.mash-export-preview-shell {
+	position: relative;
+	flex: 1;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	padding: 8px clamp(12px, 3vw, 26px) 26px;
+	scrollbar-gutter: stable;
+	scrollbar-width: thin;
+}
+
+.mash-export-preview-label {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
 }
 
 .mash-export-preview {
@@ -299,7 +524,38 @@
 	display: flex;
 	min-height: 340px;
 	flex-direction: column;
+}
+
+.mash-export-preview-running-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	margin-bottom: 34px;
+	padding-bottom: 8px;
+	border-bottom: 1px solid var(--export-border);
+	font-size: 0.57rem;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--export-muted);
+}
+
+.mash-export-preview-running-head strong {
+	color: var(--export-accent);
+}
+
+.mash-export-preview-cover-copy {
+	display: flex;
+	min-height: 210px;
+	flex-direction: column;
 	justify-content: center;
+}
+
+.mash-export-preview-cover-copy > p {
+	margin: 0;
+	font-size: 0.72rem;
+	color: var(--export-muted);
 }
 
 .mash-export-preview-page h3 {
@@ -318,6 +574,16 @@
 	letter-spacing: 0.13em;
 	text-transform: uppercase;
 	color: var(--export-accent);
+}
+
+.mash-export-preview-note-layout {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 12px;
+}
+
+.mash-export-preview-note-copy {
+	min-width: 0;
 }
 
 .mash-export-preview-cover-mark {
@@ -379,19 +645,240 @@
 	color: var(--export-muted);
 }
 
-.mash-export-preview.is-editorial .mash-export-preview-page {
+.mash-export-preview.is-plain .mash-export-preview-running-head,
+.mash-export-preview.is-plain .mash-export-preview-kicker,
+.mash-export-preview.is-plain .mash-export-preview-note-number,
+.mash-export-preview.is-plain .mash-export-preview-cover-mark {
+	display: none;
+}
+
+.mash-export-preview.is-plain .mash-export-preview-page {
+	padding: clamp(28px, 4vw, 46px);
+	border-color: var(--export-border);
+	border-radius: 2px;
+}
+
+.mash-export-preview.is-plain .mash-export-preview-cover-copy {
+	min-height: 240px;
+}
+
+.mash-export-preview.is-plain .mash-export-preview-page h3 {
+	margin: 0 0 14px;
+	font-family: Arial, Helvetica, sans-serif;
+	font-size: clamp(1.35rem, 3vw, 2rem);
+	font-weight: 600;
+	line-height: 1.16;
+	letter-spacing: 0;
+}
+
+.mash-export-preview.is-plain .mash-export-preview-note-layout {
+	gap: 0;
+}
+
+.mash-export-preview.is-plain .mash-export-preview-body {
+	font-family: Arial, Helvetica, sans-serif;
+	font-size: 0.78rem;
+	line-height: 1.55;
+}
+
+.mash-export-preview.is-plain .mash-export-preview-body :is(h1, h2, h3, h4) {
+	color: var(--export-ink);
+}
+
+.mash-export-preview.is-plain .mash-export-preview-meta {
+	margin: -6px 0 18px;
+	font-style: normal;
+}
+
+.mash-export-preview.is-journal .mash-export-preview-page {
 	border-top: 6px solid var(--export-accent);
 }
 
-.mash-export-preview.is-editorial .mash-export-preview-body {
+.mash-export-preview.is-journal .mash-export-preview-body {
 	font-family: var(--mash-font-editor, 'Literata', serif);
 }
 
-.mash-export-preview.is-editorial .mash-export-preview-page h3 {
+.mash-export-preview.is-journal .mash-export-preview-page h3 {
 	font-family: 'Literata', var(--mash-font-display, serif);
 }
 
-.mash-export-preview.is-sticky-deck .mash-export-preview-page {
+.mash-export-preview.is-journal .mash-export-preview-running-head {
+	border-bottom: 0;
+	font-family: var(--mash-font-editor, 'Literata', serif);
+	font-style: italic;
+	text-transform: none;
+}
+
+.mash-export-preview.is-swiss .mash-export-preview-page {
+	padding: clamp(28px, 3.4vw, 40px);
+	border-color: var(--export-ink);
+	border-radius: 0;
+}
+
+.mash-export-preview.is-swiss .mash-export-preview-running-head {
+	margin-bottom: 18px;
+	border-bottom: 2px solid var(--export-ink);
+	font-family: var(--mash-font-editor, sans-serif);
+}
+
+.mash-export-preview.is-swiss .mash-export-preview-cover-copy {
+	display: grid;
+	min-height: 156px;
+	grid-template-columns: minmax(0, 1fr) auto;
+	grid-template-rows: auto 1fr;
+	gap: 8px 20px;
+	align-items: end;
+	padding-bottom: 24px;
+	border-bottom: 2px solid var(--export-ink);
+}
+
+.mash-export-preview.is-swiss .mash-export-preview-cover-copy .mash-export-preview-kicker {
+	grid-column: 1 / -1;
+	align-self: start;
+}
+
+.mash-export-preview.is-swiss .mash-export-preview-cover-copy h3 {
+	max-width: 10.5ch;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	font-size: clamp(2rem, 4.5vw, 3rem);
+}
+
+.mash-export-preview.is-swiss .mash-export-preview-cover-copy > p {
+	max-width: 74px;
+	padding-bottom: 4px;
+	font-weight: 700;
+	line-height: 1.25;
+	text-align: right;
+	text-transform: uppercase;
+}
+
+.mash-export-preview.is-swiss .mash-export-preview-page h3 {
+	margin-top: 0;
+	padding-bottom: 18px;
+	border-bottom: 2px solid var(--export-ink);
+	font-family: var(--mash-font-editor, sans-serif);
+	font-size: clamp(1.8rem, 5vw, 3.15rem);
+	font-weight: 800;
+	letter-spacing: -0.05em;
+	text-transform: uppercase;
+}
+
+.mash-export-preview.is-swiss .mash-export-preview-note-layout {
+	grid-template-columns: minmax(80px, 0.45fr) minmax(0, 1fr);
+	gap: clamp(18px, 5vw, 54px);
+}
+
+.mash-export-preview-swiss-cover-note {
+	display: grid;
+	grid-template-columns: minmax(80px, 0.45fr) minmax(0, 1fr);
+	gap: clamp(18px, 5vw, 54px);
+	padding-top: 26px;
+}
+
+.mash-export-preview-swiss-cover-note h4 {
+	margin: 0 0 8px;
+	padding-bottom: 8px;
+	border-bottom: 1px solid var(--export-border);
+	font-family: var(--mash-font-editor, sans-serif);
+	font-size: 0.9rem;
+	font-weight: 800;
+	line-height: 1.1;
+	text-transform: uppercase;
+}
+
+.mash-export-preview-swiss-cover-note .mash-export-preview-meta {
+	margin: 0 0 9px;
+	color: var(--export-accent);
+}
+
+.mash-export-preview-swiss-cover-note .mash-export-preview-body {
+	max-height: 92px;
+	overflow: hidden;
+}
+
+.mash-export-preview.is-swiss .mash-export-preview-cover-mark {
+	display: none;
+}
+
+.mash-export-preview.is-swiss .mash-export-preview-note-number {
+	font-family: var(--mash-font-editor, sans-serif);
+	font-size: clamp(2.8rem, 8vw, 5.3rem);
+	font-weight: 800;
+	line-height: 0.8;
+	letter-spacing: -0.08em;
+}
+
+.mash-export-preview.is-swiss .mash-export-preview-body {
+	font-family: var(--mash-font-editor, sans-serif);
+}
+
+.mash-export-preview.is-swiss .mash-export-preview-meta {
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+}
+
+.mash-export-preview.is-monograph .mash-export-preview-page {
+	border: 2px solid var(--export-ink);
+	border-radius: 0;
+}
+
+.mash-export-preview.is-monograph .mash-export-preview-running-head {
+	border-color: var(--export-ink);
+}
+
+.mash-export-preview.is-monograph .mash-export-preview-page h3 {
+	max-width: 88%;
+	font-size: clamp(2.15rem, 6vw, 4rem);
+	text-transform: uppercase;
+}
+
+.mash-export-preview.is-monograph .mash-export-preview-note-number {
+	position: absolute;
+	right: 28px;
+	top: 58px;
+	font-family: var(--mash-font-display, serif);
+	font-size: clamp(4rem, 12vw, 8rem);
+	letter-spacing: -0.08em;
+	color: var(--export-ink);
+	opacity: 0.09;
+}
+
+.mash-export-preview.is-monograph .mash-export-preview-body {
+	max-width: 78%;
+	font-family: 'Literata', var(--mash-font-display, serif);
+}
+
+.mash-export-preview.is-studio .mash-export-preview-page {
+	border-left: 12px solid var(--export-accent);
+}
+
+.mash-export-preview.is-studio .mash-export-preview-running-head {
+	border-bottom: 0;
+	color: var(--export-accent);
+}
+
+.mash-export-preview.is-studio .mash-export-preview-note-layout {
+	grid-template-columns: minmax(74px, 0.3fr) minmax(0, 1fr);
+	gap: clamp(16px, 5vw, 48px);
+}
+
+.mash-export-preview.is-studio .mash-export-preview-note-number {
+	width: fit-content;
+	height: fit-content;
+	padding: 8px 10px;
+	background: var(--export-wash);
+	font-size: 1rem;
+}
+
+.mash-export-preview.is-studio .mash-export-preview-page h3 {
+	font-family: var(--mash-font-editor, sans-serif);
+	font-size: clamp(1.9rem, 5vw, 3.35rem);
+	font-weight: 650;
+}
+
+.mash-export-preview.is-cards .mash-export-preview-page {
 	padding: clamp(18px, 4vw, 36px);
 	background: var(--export-wash);
 	border-radius: 22px;
@@ -399,11 +886,15 @@
 	transform: rotate(-0.25deg);
 }
 
-.mash-export-preview.is-sticky-deck .mash-export-preview-page:nth-child(even) {
+.mash-export-preview.is-cards .mash-export-preview-page:nth-child(even) {
 	transform: rotate(0.25deg);
 }
 
-.mash-export-preview.is-sticky-deck .mash-export-preview-page h3 {
+.mash-export-preview.is-cards .mash-export-preview-running-head {
+	border-color: var(--export-accent);
+}
+
+.mash-export-preview.is-cards .mash-export-preview-page h3 {
 	max-width: 84%;
 }
 
@@ -416,16 +907,71 @@
 
 .mash-export-sheet-footer {
 	justify-content: flex-end;
+	padding: 12px 16px;
 	border-top: 1px solid var(--mash-divider);
+	background: var(--mash-panel-strong);
 }
 
-.mash-export-sheet-footer > div {
+.mash-export-footer-status {
 	min-width: 0;
 	margin-right: auto;
 }
 
 .mash-export-sheet-footer p.is-error {
 	color: var(--mash-danger);
+}
+
+.mash-export-footer-actions {
+	display: flex;
+	flex-shrink: 0;
+	align-items: center;
+	gap: 8px;
+}
+
+.mash-export-footer-button {
+	display: inline-flex;
+	min-height: 40px;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	padding: 8px 16px;
+	border-radius: 10px;
+	font-size: var(--mash-type-caption);
+	font-weight: 650;
+	line-height: 1;
+	letter-spacing: 0.005em;
+	white-space: nowrap;
+}
+
+.mash-export-footer-cancel {
+	min-width: 82px;
+	border-color: color-mix(in srgb, var(--mash-ink-muted) 34%, transparent);
+	background: color-mix(in srgb, var(--mash-panel) 70%, transparent);
+}
+
+.mash-export-footer-download {
+	min-width: 142px;
+	border: 1px solid color-mix(in srgb, var(--mash-accent-bright) 36%, transparent);
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.2),
+		0 3px 10px color-mix(in srgb, var(--mash-accent-glow) 72%, transparent);
+}
+
+.mash-export-footer-download svg {
+	flex: 0 0 auto;
+	stroke-width: 2.1;
+}
+
+.mash-export-footer-button:focus-visible {
+	outline: 2px solid var(--mash-accent-bright);
+	outline-offset: 3px;
+}
+
+.mash-export-footer-button:disabled {
+	cursor: not-allowed;
+	opacity: 0.5;
+	transform: none;
+	box-shadow: none;
 }
 
 @media (max-width: 760px) {
@@ -439,6 +985,7 @@
 	}
 
 	.mash-export-controls,
+	.mash-export-workspace,
 	.mash-export-preview-shell {
 		overflow: visible;
 	}
@@ -460,5 +1007,44 @@
 
 	.mash-export-preview-page {
 		min-height: 240px;
+	}
+
+	.mash-export-template-list {
+		display: flex;
+		overflow-x: auto;
+		padding: 2px 2px 10px;
+		scroll-snap-type: x proximity;
+	}
+
+	.mash-export-template-list label {
+		width: 110px;
+		flex: 0 0 110px;
+		scroll-snap-align: start;
+	}
+
+	.mash-export-template-heading p {
+		display: none;
+	}
+
+	.mash-export-sheet-footer {
+		flex-wrap: wrap;
+	}
+
+	.mash-export-footer-status {
+		width: 100%;
+	}
+
+	.mash-export-footer-actions {
+		width: 100%;
+	}
+
+	.mash-export-footer-button {
+		flex: 1;
+	}
+
+	.mash-export-preview.is-swiss .mash-export-preview-note-layout,
+	.mash-export-preview-swiss-cover-note,
+	.mash-export-preview.is-studio .mash-export-preview-note-layout {
+		grid-template-columns: 1fr;
 	}
 }

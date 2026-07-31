@@ -44,14 +44,14 @@ describe('presentation DOCX', () => {
 		expect(blob.size).toBeGreaterThan(5_000);
 	});
 
-	it('uses real page breaks for Sticky deck notes', async () => {
+	it('uses real page breaks for Cards notes', async () => {
 		const document = buildExportDocument([note('One', 'First'), note('Two', 'Second')], {
 			title: 'Deck',
 			sourceLabel: 'Sequence 1 · 2 pages'
 		});
 		const options = {
 			...defaultPresentationExportOptions('docx', document.title, 2),
-			templateId: 'sticky-deck' as const,
+			templateId: 'cards' as const,
 			includeCover: false
 		};
 		const zip = await JSZip.loadAsync(
@@ -59,5 +59,26 @@ describe('presentation DOCX', () => {
 		);
 		const xml = await zip.file('word/document.xml')!.async('string');
 		expect(xml).toContain('w:type="page"');
+	});
+
+	it('keeps Plain output free of edition labels and running Mash headers', async () => {
+		const document = buildExportDocument([note('Simple note', 'Just the content.')], {
+			title: 'Plain document',
+			sourceLabel: 'Selected · 1 card'
+		});
+		const options = {
+			...defaultPresentationExportOptions('docx', document.title, 1),
+			templateId: 'plain' as const,
+			includeCover: true
+		};
+		const zip = await JSZip.loadAsync(
+			await (await buildPresentationDocx(document, options)).arrayBuffer()
+		);
+		const documentXml = await zip.file('word/document.xml')!.async('string');
+		const headerXml = await zip.file('word/header1.xml')!.async('string');
+		expect(documentXml).toContain('Plain document');
+		expect(documentXml).not.toContain('Plain edition');
+		expect(documentXml).not.toContain('MashNoteNumber');
+		expect(headerXml).not.toContain('MASH');
 	});
 });
