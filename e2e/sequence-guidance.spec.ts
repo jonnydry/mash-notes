@@ -80,7 +80,7 @@ test.describe('Set page order guidance', () => {
 		const exportSheet = page.getByRole('dialog', { name: 'Export a polished document' });
 		await expect(exportSheet).toBeVisible();
 		await expect(exportSheet).toContainText('Sequence 1 · 3 pages');
-		await expect(exportSheet.getByRole('radio', { name: /Sticky deck/ })).toBeVisible();
+		await expect(exportSheet.getByRole('radio', { name: /Cards/ })).toBeVisible();
 	});
 
 	test('supports choosing pages with card focus and Enter', async ({ page }) => {
