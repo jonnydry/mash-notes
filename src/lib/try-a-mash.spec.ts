@@ -90,8 +90,15 @@ describe('try-a-mash', () => {
 		expect(isTryAMashDemoNote(drafts[0]!)).toBe(true);
 		expect(isTryAMashDemoNote({ tags: ['other'] })).toBe(false);
 		expect(shouldStayOnDeskAfterMash(drafts)).toBe(true);
-		expect(shouldStayOnDeskAfterMash([{ tags: [TRY_A_MASH_TAG] }, { tags: [] }])).toBe(false);
+		// 0 / 1 sources never stay on the desk
+		expect(shouldStayOnDeskAfterMash([])).toBe(false);
 		expect(shouldStayOnDeskAfterMash([{ tags: [TRY_A_MASH_TAG] }])).toBe(false);
+		expect(shouldStayOnDeskAfterMash([{ tags: ['other'] }])).toBe(false);
+		expect(shouldStayOnDeskAfterMash([{}])).toBe(false);
+		// A mixed demo + real note is not "all demo" -> falls off
+		expect(shouldStayOnDeskAfterMash([{ tags: [TRY_A_MASH_TAG] }, { tags: ['work'] }])).toBe(false);
+		// Two ordinary real notes -> not a demo pair -> off
+		expect(shouldStayOnDeskAfterMash([{ tags: ['work'] }, { tags: ['ideas'] }])).toBe(false);
 	});
 
 	it('has short success and after-mash toasts', () => {

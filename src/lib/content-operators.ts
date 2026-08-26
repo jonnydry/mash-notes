@@ -3,7 +3,7 @@
  */
 import { createNote, createOperationRecord, db, replaceNoteSubset } from './db';
 import { extractWikilinks } from './markdown';
-import { combineNotes } from './mash';
+import { combineNotes, mashTitle } from './mash';
 import { formatContentOperatorToast } from './operator-kitchen';
 import { splitNoteFragments, type ContentSplitMode, type SplitFragment } from './split-content';
 import type { CanvasItem, Note } from './types';
@@ -132,10 +132,7 @@ export function createContentOperators(deps: ContentOperatorsDeps) {
 		}
 
 		const body = combineNotes(sourceNotes);
-		const title =
-			sourceNotes.length === 2
-				? `${sourceNotes[0].title} + ${sourceNotes[1].title}`.slice(0, 200)
-				: `Mash of ${sourceNotes.length} notes`;
+		const title = mashTitle(sourceNotes);
 
 		const xs = opts?.x;
 		const ys = opts?.y;

@@ -27,6 +27,18 @@ export function combineNotes(notes: Note[]): string {
 }
 
 /**
+ * Build a Mash sticky title from the source notes:
+ *  - two notes → "`A + B`" (capped at 200 chars)
+ *  - otherwise → `Mash of N notes`
+ */
+export function mashTitle(notes: Note[]): string {
+	if (notes.length !== 2) {
+		return `Mash of ${notes.length} notes`;
+	}
+	return `${notes[0].title} + ${notes[1].title}`.slice(0, 200);
+}
+
+/**
  * Serialize notes as pretty-printed JSON (full Note objects).
  */
 export function notesToJson(notes: Note[]): string {
