@@ -34,9 +34,9 @@ describe('action registry', () => {
 	});
 
 	it('throws when a punctuation-only label slugs to an empty id', () => {
-		expect(() =>
-			createActionRegistry([{ label: '!!!', action: () => undefined }])
-		).toThrow(/Duplicate or empty/);
+		expect(() => createActionRegistry([{ label: '!!!', action: () => undefined }])).toThrow(
+			/Duplicate or empty/
+		);
 	});
 
 	it('throws when an explicit id is empty even with a normal label', () => {

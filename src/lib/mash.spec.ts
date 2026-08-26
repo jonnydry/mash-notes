@@ -60,13 +60,17 @@ describe('mashTitle', () => {
 	});
 
 	it('joins two short notes as "A + B"', () => {
-		expect(mashTitle([note({ id: '1', title: 'Ideas' }), note({ id: '2', title: 'Goals' })])).toBe('Ideas + Goals');
+		expect(mashTitle([note({ id: '1', title: 'Ideas' }), note({ id: '2', title: 'Goals' })])).toBe(
+			'Ideas + Goals'
+		);
 	});
 
 	it('cuts "A + B" to 200 chars when too long', () => {
 		const big = 'x'.repeat(300);
 		const joined = `${big} + ${big}`;
-		expect(mashTitle([note({ id: '1', title: big }), note({ id: '2', title: big })])).toBe(joined.slice(0, 200));
+		expect(mashTitle([note({ id: '1', title: big }), note({ id: '2', title: big })])).toBe(
+			joined.slice(0, 200)
+		);
 	});
 
 	it("uses 'Mash of N notes' for other counts", () => {

@@ -56,7 +56,10 @@ describe('content splitting', () => {
 
 	it('splits headings on CRLF the same way it does on LF', () => {
 		expect(
-			splitNoteFragments(note('Context\r\n\r\n## Alpha\r\nFirst\r\n\r\n## Beta\r\nSecond'), 'headings')
+			splitNoteFragments(
+				note('Context\r\n\r\n## Alpha\r\nFirst\r\n\r\n## Beta\r\nSecond'),
+				'headings'
+			)
 		).toEqual([
 			{ title: 'Alpha', body: 'Context\n\nFirst' },
 			{ title: 'Beta', body: 'Second' }

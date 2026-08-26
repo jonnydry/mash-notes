@@ -27,7 +27,8 @@ describe('html-clipping', () => {
 	});
 
 	it('caps a long, terminator-less excerpt at 72 chars with trailing punctuation stripped', () => {
-		const noEnd = 'The quick brown fox jumps over the lazy dog and runs on across bright fields of sunflowers swaying in the warm afternoon breeze gently right now today forever';
+		const noEnd =
+			'The quick brown fox jumps over the lazy dog and runs on across bright fields of sunflowers swaying in the warm afternoon breeze gently right now today forever';
 		const result = htmlClippingTitle(noEnd);
 		expect(result).toHaveLength(72);
 		expect(result.startsWith('The quick')).toBe(true);
