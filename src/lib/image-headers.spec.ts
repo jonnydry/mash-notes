@@ -17,7 +17,10 @@ function pngHeader(width: number, height: number): Blob {
 
 function gifHeader(signature: 'GIF87a' | 'GIF89a', width: number, height: number): Blob {
 	const bytes = new Uint8Array(10);
-	bytes.set([...signature].map((character) => character.charCodeAt(0)), 0);
+	bytes.set(
+		[...signature].map((character) => character.charCodeAt(0)),
+		0
+	);
 	bytes[6] = width & 0xff;
 	bytes[7] = (width >> 8) & 0xff;
 	bytes[8] = height & 0xff;

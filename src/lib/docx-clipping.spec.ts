@@ -5,7 +5,7 @@ import {
 	docxImageClippingAlt,
 	docxImageClippingTitle,
 	normalizeDocxExcerpt,
-	normalizeDocxImageIndex,
+	normalizeDocxImageIndex
 } from './docx-clipping';
 
 describe('docx-clipping', () => {
