@@ -23,6 +23,13 @@ describe('PDF clipping helpers', () => {
 		expect(pdfClippingTitle(text)).toBe('A useful idea survives selection');
 	});
 
+	it('handles empty and whitespace-only excerpts', () => {
+		expect(pdfClippingTitle('')).toBe('PDF excerpt');
+		expect(pdfClippingTitle('   \n\t  ')).toBe('PDF excerpt');
+		expect(isPdfFile({ name: '  paper.pdf  ', type: '' })).toBe(true);
+		expect(isPdfFile({ name: '  notes.txt  ', type: '' })).toBe(false);
+	});
+
 	it('builds region clipping titles and markdown bodies', () => {
 		expect(pdfRegionClippingTitle('Scales-and-Modes.pdf', 12)).toBe('Scales-and-Modes · p. 12');
 		expect(pdfRegionClippingBody('data:image/png;base64,abc', 'Scales.pdf', 3)).toBe(

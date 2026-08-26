@@ -32,4 +32,35 @@ describe('action registry', () => {
 			])
 		).toThrow(/Duplicate/);
 	});
+
+	it('throws when a punctuation-only label slugs to an empty id', () => {
+		expect(() =>
+			createActionRegistry([{ label: '!!!', action: () => undefined }])
+		).toThrow(/Duplicate or empty/);
+	});
+
+	it('throws when an explicit id is empty even with a normal label', () => {
+		expect(() =>
+			createActionRegistry([{ id: '', label: 'Hello', action: () => undefined }])
+		).toThrow(/empty/i);
+	});
+
+	it('uses an explicit id over the derived slug', () => {
+		const actions = createActionRegistry([
+			{ id: 'custom-id', label: 'Hello World', action: () => undefined }
+		]);
+		expect(actions[0].id).toBe('custom-id');
+	});
+
+	it('lists a selection-only action when it is available', () => {
+		const actions = createActionRegistry([
+			{
+				label: 'Pick me',
+				surfaces: ['selection'],
+				available: () => true,
+				action: () => undefined
+			}
+		]);
+		expect(actionsForSurface(actions, 'selection').map((action) => action.id)).toEqual(['pick-me']);
+	});
 });

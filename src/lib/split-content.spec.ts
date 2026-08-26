@@ -38,4 +38,28 @@ describe('content splitting', () => {
 			{ title: 'Beta', body: '2. Beta' }
 		]);
 	});
+
+	it('returns an empty list for an empty body in every mode', () => {
+		const emptyNote = note('');
+		expect(splitNoteFragments(emptyNote, 'headings')).toEqual([]);
+		expect(splitNoteFragments(emptyNote, 'paragraphs')).toEqual([]);
+		expect(splitNoteFragments(emptyNote, 'lines')).toEqual([]);
+	});
+
+	it('returns an empty list for a whitespace-only body', () => {
+		expect(splitNoteFragments(note('  \n\t  '), 'paragraphs')).toEqual([]);
+	});
+
+	it('returns [] in headings mode when the body has no headings', () => {
+		expect(splitNoteFragments(note('Just prose\n\nMore prose'), 'headings')).toEqual([]);
+	});
+
+	it('splits headings on CRLF the same way it does on LF', () => {
+		expect(
+			splitNoteFragments(note('Context\r\n\r\n## Alpha\r\nFirst\r\n\r\n## Beta\r\nSecond'), 'headings')
+		).toEqual([
+			{ title: 'Alpha', body: 'Context\n\nFirst' },
+			{ title: 'Beta', body: 'Second' }
+		]);
+	});
 });
