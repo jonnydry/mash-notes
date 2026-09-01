@@ -32,6 +32,11 @@ test('reopens the cached desk and local notes while offline', async ({ page, con
 		await expect(page.getByRole('navigation', { name: 'Mash dock' })).toBeVisible({
 			timeout: 30_000
 		});
+		// Playwright 1.62 Chromium leaves navigator.onLine true after navigation
+		// in an already-offline context (microsoft/playwright#42174). Re-toggle
+		// on the live page so the offline flag matches the blocked network.
+		await context.setOffline(false);
+		await context.setOffline(true);
 		await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(false);
 
 		await page.getByRole('button', { name: 'Desk', exact: true }).click();
