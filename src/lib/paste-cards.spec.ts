@@ -1,5 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { analyzePastedText, draftsFromPastedText } from './paste-cards';
+import { combineNotes } from './mash';
+import { pasteChoiceCopy } from './paste-choice-copy';
+import { analyzePastedText, draftsFromPastedText, recognizePastedMashCards } from './paste-cards';
+import type { Note } from './types';
+
+function mashNote(id: string, title: string, body: string): Note {
+	return {
+		id,
+		title,
+		body,
+		folder: '',
+		tags: [],
+		created: 1,
+		modified: 1,
+		pinned: 0
+	};
+}
 
 describe('pasted text cards', () => {
 	it('captures a single line as one titled card', () => {
@@ -34,5 +50,59 @@ describe('pasted text cards', () => {
 	it('caps bulk paste at 200 cards', () => {
 		const text = Array.from({ length: 300 }, (_, index) => `Item ${index}`).join('\n');
 		expect(draftsFromPastedText(text, 'lines')).toHaveLength(200);
+	});
+
+	it('offers the cards that our own markdown copied', async () => {
+		const markdown = combineNotes([mashNote('1', 'Alpha', 'one'), mashNote('2', 'Beta', 'two')]);
+		const analysis = await recognizePastedMashCards(analyzePastedText(markdown));
+		expect(analysis.cardBreaksGone).toBe(false);
+		expect(analysis.suggestedMode).toBe('cards');
+		expect(analysis.cards).toEqual([
+			{ title: 'Alpha', body: 'one' },
+			{ title: 'Beta', body: 'two' }
+		]);
+		const copy = pasteChoiceCopy(analysis);
+		expect(copy.cardsLabel).toBe('2 cards: Alpha, Beta');
+		expect(copy.cardBreaksNotice).toBeNull();
+		expect(copy.linesLabel).toBe(`${analysis.lines.length} line cards`);
+		expect(copy.paragraphsLabel).toBe(`${analysis.paragraphs.length} paragraph cards`);
+	});
+
+	it('offers one copied card when the markdown is a single Mash card', async () => {
+		const markdown = combineNotes([mashNote('1', 'Hello', 'World')]);
+		const analysis = await recognizePastedMashCards(analyzePastedText(markdown));
+		expect(analysis.cards).toEqual([{ title: 'Hello', body: 'World' }]);
+		expect(analysis.suggestedMode).toBe('cards');
+		expect(pasteChoiceCopy(analysis).cardsLabel).toBe('1 card: Hello');
+		expect(pasteChoiceCopy(analysis).cardBreaksNotice).toBeNull();
+	});
+
+	it('says the card breaks are gone and counts lines and paragraphs, not cards', async () => {
+		const markdown = combineNotes([mashNote('1', 'Alpha', 'one'), mashNote('2', 'Beta', 'two')]);
+		const stripped = markdown.replaceAll('\n\n---\n\n', '\n\n');
+		const analysis = await recognizePastedMashCards(analyzePastedText(stripped));
+		expect(analysis.cards).toEqual([]);
+		expect(analysis.cardBreaksGone).toBe(true);
+		expect(analysis.suggestedMode).not.toBe('cards');
+		const copy = pasteChoiceCopy(analysis);
+		expect(copy.cardsLabel).toBeNull();
+		expect(copy.cardBreaksNotice).toBe('The card breaks are gone.');
+		expect(copy.linesLabel).toBe(`${analysis.lines.length} lines`);
+		expect(copy.paragraphsLabel).toBe(`${analysis.paragraphs.length} paragraphs`);
+		expect(copy.linesLabel.toLowerCase()).not.toContain('card');
+		expect(copy.paragraphsLabel.toLowerCase()).not.toContain('card');
+		expect(copy.linesLabel).not.toBe(`${analysis.lines.length} line cards`);
+		expect(copy.paragraphsLabel).not.toBe(`${analysis.paragraphs.length} paragraph cards`);
+	});
+
+	it('keeps line and paragraph card wording for ordinary paste', () => {
+		const analysis = analyzePastedText('- Alpha\n- Beta\n- Gamma');
+		expect(analysis.cardBreaksGone).toBe(false);
+		expect(analysis.cards).toEqual([]);
+		const copy = pasteChoiceCopy(analysis);
+		expect(copy.cardsLabel).toBeNull();
+		expect(copy.cardBreaksNotice).toBeNull();
+		expect(copy.linesLabel).toBe('3 line cards');
+		expect(copy.paragraphsLabel).toBe('1 paragraph cards');
 	});
 });

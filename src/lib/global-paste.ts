@@ -11,6 +11,7 @@ import {
 import {
 	analyzePastedText,
 	draftsFromPastedText,
+	recognizePastedMashCards,
 	type PasteAnalysis,
 	type PasteSplitMode
 } from './paste-cards';
@@ -42,7 +43,7 @@ export function isEditablePasteTarget(target: EventTarget | null): boolean {
 
 export function createGlobalPasteHandler(deps: GlobalPasteDeps) {
 	async function createCardsFromPaste(analysis: PasteAnalysis, mode: PasteSplitMode) {
-		const drafts = draftsFromPastedText(analysis.text, mode);
+		const drafts = mode === 'cards' ? analysis.cards : draftsFromPastedText(analysis.text, mode);
 		if (drafts.length === 0) return;
 		const createdNotes = await deps.placeNoteDraftsOnDesk(drafts);
 		deps.closePasteDialog();
@@ -145,8 +146,18 @@ export function createGlobalPasteHandler(deps: GlobalPasteDeps) {
 		const analysis = analyzePastedText(text);
 		if (!analysis.text) return;
 		event.preventDefault();
+		if (analysis.text.startsWith('# ')) {
+			void recognizePastedMashCards(analysis).then((recognized) => {
+				offerPastedText(recognized);
+			});
+			return;
+		}
+		offerPastedText(analysis);
+	}
+
+	function offerPastedText(analysis: PasteAnalysis) {
 		if (analysis.lines.length <= 1 && analysis.paragraphs.length <= 1) {
-			void createCardsFromPaste(analysis, 'single');
+			void createCardsFromPaste(analysis, analysis.cards.length === 1 ? 'cards' : 'single');
 			return;
 		}
 		deps.openPasteDialog(analysis);

@@ -226,6 +226,37 @@ describe('createGlobalPasteHandler routing', () => {
 		expect(deps.placeNoteDraftsOnDesk).not.toHaveBeenCalled();
 	});
 
+	it('offers copied Mash cards when our markdown is pasted', async () => {
+		const { handleGlobalPaste } = createGlobalPasteHandler(deps);
+		handleGlobalPaste(pasteEvent({ text: '# Alpha\n\none\n\n---\n\n# Beta\n\ntwo' }));
+		await vi.waitFor(() => expect(deps.openPasteDialog).toHaveBeenCalledOnce());
+		const analysis = deps.openPasteDialog.mock.calls[0]![0] as {
+			suggestedMode: string;
+			cards: Array<{ title: string; body: string }>;
+			cardBreaksGone: boolean;
+		};
+		expect(analysis.suggestedMode).toBe('cards');
+		expect(analysis.cardBreaksGone).toBe(false);
+		expect(analysis.cards).toEqual([
+			{ title: 'Alpha', body: 'one' },
+			{ title: 'Beta', body: 'two' }
+		]);
+	});
+
+	it('keeps card breaks that were removed from our markdown out of the card offer', async () => {
+		const { handleGlobalPaste } = createGlobalPasteHandler(deps);
+		handleGlobalPaste(pasteEvent({ text: '# Alpha\n\none\n\n# Beta\n\ntwo' }));
+		await vi.waitFor(() => expect(deps.openPasteDialog).toHaveBeenCalledOnce());
+		const analysis = deps.openPasteDialog.mock.calls[0]![0] as {
+			cards: unknown[];
+			cardBreaksGone: boolean;
+			suggestedMode: string;
+		};
+		expect(analysis.cardBreaksGone).toBe(true);
+		expect(analysis.cards).toEqual([]);
+		expect(analysis.suggestedMode).not.toBe('cards');
+	});
+
 	it('opens the paste dialog for multi-paragraph text', () => {
 		const { handleGlobalPaste } = createGlobalPasteHandler(deps);
 		handleGlobalPaste(pasteEvent({ text: 'First block\n\nSecond block' }));
@@ -249,6 +280,8 @@ describe('createGlobalPasteHandler routing', () => {
 			text: 'A\nB\nC',
 			lines: ['A', 'B', 'C'],
 			paragraphs: ['A\nB\nC'],
+			cards: [],
+			cardBreaksGone: false,
 			suggestedMode: 'lines' as const
 		};
 		await createCardsFromPaste(analysis, 'lines');

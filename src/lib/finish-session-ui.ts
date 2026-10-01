@@ -4,6 +4,7 @@
 import type { CanvasEdge, CanvasElement, CanvasItem, Note, Session } from './types';
 import {
 	createFinishSnapshot,
+	finishExportSourceLabel,
 	noteIdsForFinishScope,
 	notesForFinishScope,
 	type FinishDraft,
@@ -88,12 +89,10 @@ export function createFinishSessionUi(deps: FinishSessionUiDeps) {
 			}
 			if (kind === 'pdf' || kind === 'docx') {
 				const format = kind as PresentationFormat;
-				const scopeLabel =
-					scope === 'selected' ? 'Selected' : scope === 'results' ? 'Results' : 'Whole desk';
 				deps.openPresentationExport(
 					notes,
 					deps.getActiveSession()?.title ?? 'Mash desk',
-					`${scopeLabel} · ${countLabel}`,
+					finishExportSourceLabel(snapshot, scope, deps.getNotesById()),
 					format
 				);
 				return {

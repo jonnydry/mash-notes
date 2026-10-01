@@ -12,7 +12,10 @@
 	} from '@lucide/svelte';
 	import {
 		defaultFinishScope,
+		finishCanvasIsEmpty,
 		finishScopeOptions,
+		finishTakeawayAnnouncement,
+		finishTakeawayPreview,
 		type FinishDisposition,
 		type FinishDraft,
 		type FinishExportKind,
@@ -48,6 +51,15 @@
 	let options = $derived(snapshot ? finishScopeOptions(snapshot, notesById) : []);
 	let activeOption = $derived(options.find((option) => option.scope === scope) ?? options[0]);
 	let hasTakeaway = $derived((activeOption?.count ?? 0) > 0);
+	let canvasEmpty = $derived(snapshot ? finishCanvasIsEmpty(snapshot) : false);
+	let takeawayPreview = $derived(
+		snapshot
+			? finishTakeawayPreview(snapshot, activeOption)
+			: (activeOption?.preview ?? 'Add or import something first.')
+	);
+	let takeawayAnnouncement = $derived(
+		snapshot ? finishTakeawayAnnouncement(snapshot, activeOption) : 'No takeaway cards'
+	);
 
 	$effect(() => {
 		if (!snapshot) return;
@@ -149,47 +161,47 @@
 		<section class="mash-finish-section" aria-labelledby="mash-finish-takeaway-title">
 			<div class="flex items-center justify-between gap-3">
 				<h3 id="mash-finish-takeaway-title" class="mash-finish-heading">Takeaway</h3>
-				{#if activeOption}
+				{#if activeOption && !canvasEmpty}
 					<span class="mash-type-caption" style="color: var(--mash-ink-muted);">
-						{activeOption.count} card{activeOption.count === 1 ? '' : 's'}
+						{activeOption.countLabel}
 					</span>
 				{/if}
 			</div>
 
-			<fieldset class="mt-0 border-0 p-0">
-				<legend class="sr-only">Choose what to take with you</legend>
-				<div class="mash-finish-scope">
-					{#each options as option (option.scope)}
-						<label
-							class="mash-finish-choice"
-							class:is-selected={scope === option.scope}
-							class:opacity-45={!option.enabled}
-						>
-							<input
-								class="sr-only"
-								type="radio"
-								name="finish-scope"
-								value={option.scope}
-								bind:group={scope}
-								disabled={!option.enabled}
-								onchange={() => {
-									scope = option.scope;
-									actionStatus = null;
-								}}
-							/>
-							{option.label} · {option.count}
-						</label>
-					{/each}
-				</div>
-			</fieldset>
+			{#if !canvasEmpty}
+				<fieldset class="mt-0 border-0 p-0">
+					<legend class="sr-only">Choose what to take with you</legend>
+					<div class="mash-finish-scope">
+						{#each options as option (option.scope)}
+							<label
+								class="mash-finish-choice"
+								class:is-selected={scope === option.scope}
+								class:opacity-45={!option.enabled}
+							>
+								<input
+									class="sr-only"
+									type="radio"
+									name="finish-scope"
+									value={option.scope}
+									bind:group={scope}
+									disabled={!option.enabled}
+									onchange={() => {
+										scope = option.scope;
+										actionStatus = null;
+									}}
+								/>
+								{option.choiceLabel}
+							</label>
+						{/each}
+					</div>
+				</fieldset>
+			{/if}
 			<p class="sr-only" aria-live="polite" aria-atomic="true">
-				{activeOption
-					? `${activeOption.label} takeaway, ${activeOption.count} ${activeOption.count === 1 ? 'card' : 'cards'}`
-					: 'No takeaway cards'}
+				{takeawayAnnouncement}
 			</p>
 
-			<p class="mash-finish-preview truncate">
-				{activeOption?.preview || 'Add or import something first.'}
+			<p class="mash-finish-preview" class:truncate={!canvasEmpty && !activeOption?.namesExtras}>
+				{takeawayPreview}
 			</p>
 
 			<div class="mash-finish-export-grid">
