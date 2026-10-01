@@ -42,6 +42,11 @@ export type FinishScopeOption = {
 /** Visible Finish copy when nothing is placed on the canvas. */
 export const EMPTY_CANVAS_FINISH_COPY = 'The canvas is empty.';
 
+/** Section heading. An empty canvas is Canvas; a canvas with cards stays Takeaway. */
+export function finishSectionHeading(snapshot: FinishSnapshot): string {
+	return finishCanvasIsEmpty(snapshot) ? 'Canvas' : 'Takeaway';
+}
+
 type FinishSnapshotInput = {
 	sessionId: string;
 	canvasId: string | null;

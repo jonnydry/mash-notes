@@ -14,6 +14,7 @@
 		defaultFinishScope,
 		finishCanvasIsEmpty,
 		finishScopeOptions,
+		finishSectionHeading,
 		finishTakeawayAnnouncement,
 		finishTakeawayPreview,
 		type FinishDisposition,
@@ -160,7 +161,9 @@
 	<div data-testid="finish-scroll" class="mash-finish-scroll">
 		<section class="mash-finish-section" aria-labelledby="mash-finish-takeaway-title">
 			<div class="flex items-center justify-between gap-3">
-				<h3 id="mash-finish-takeaway-title" class="mash-finish-heading">Takeaway</h3>
+				<h3 id="mash-finish-takeaway-title" class="mash-finish-heading">
+					{snapshot ? finishSectionHeading(snapshot) : 'Takeaway'}
+				</h3>
 				{#if activeOption && !canvasEmpty}
 					<span class="mash-type-caption" style="color: var(--mash-ink-muted);">
 						{activeOption.countLabel}

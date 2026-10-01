@@ -5,6 +5,7 @@ import {
 	EMPTY_CANVAS_FINISH_COPY,
 	finishExportSourceLabel,
 	finishScopeOptions,
+	finishSectionHeading,
 	finishTakeawayAnnouncement,
 	finishTakeawayPreview,
 	notesForFinishScope,
@@ -166,6 +167,8 @@ describe('Finish snapshot', () => {
 			'takeaway'
 		);
 		expect(EMPTY_CANVAS_FINISH_COPY).toBe('The canvas is empty.');
+		expect(finishSectionHeading(snapshot)).toBe('Canvas');
+		expect(finishSectionHeading(snapshot)).not.toBe('Takeaway');
 	});
 
 	it('names the extra cards after Split by lines instead of a bare higher Whole desk count', () => {
