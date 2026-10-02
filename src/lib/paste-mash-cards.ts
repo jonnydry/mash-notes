@@ -15,11 +15,40 @@ function parseMashCardSection(section: string): PasteCardDraft | null {
 	return { title: title.slice(0, 200), body: section.slice(newline + 2) };
 }
 
+/** True when `section` is exactly one card as `combineNotes` writes it. */
+function isEmittedMashSection(section: string): boolean {
+	if (!section.startsWith('# ')) return false;
+	const newline = section.indexOf('\n');
+	const title = (newline === -1 ? section.slice(2) : section.slice(2, newline)).trim();
+	if (!title) return false;
+	const titleLine = newline === -1 ? section : section.slice(0, newline);
+	if (titleLine !== `# ${title}`) return false;
+	if (newline !== -1 && section[newline + 1] !== '\n') return false;
+	const body = newline === -1 ? '' : section.slice(newline + 2).trimEnd();
+	const emitted = body ? `# ${title}\n\n${body}` : `# ${title}`;
+	return emitted === section;
+}
+
+function h1Sections(text: string): string[] {
+	return text.split(/\n\n(?=# )/);
+}
+
+function sectionBody(section: string): string {
+	const newline = section.indexOf('\n');
+	if (newline === -1) return '';
+	return section.slice(newline + 2).trimEnd();
+}
+
+/**
+ * Heading, blank line, paragraph, blank line, another heading.
+ * Later headings may have paragraphs too. Title-only headings do not match.
+ */
 function mashCardBreaksGone(text: string): boolean {
 	if (text.includes(MASH_CARD_BREAK)) return false;
-	const sections = text.split(/\n\n(?=# )/);
+	const sections = h1Sections(text);
 	if (sections.length < 2) return false;
-	return sections.every((section) => parseMashCardSection(section) !== null);
+	if (!sections.every((section) => isEmittedMashSection(section))) return false;
+	return sections.slice(0, -1).some((section) => sectionBody(section) !== '');
 }
 
 export function readMashPaste(text: string): { cards: PasteCardDraft[]; cardBreaksGone: boolean } {
@@ -31,6 +60,12 @@ export function readMashPaste(text: string): { cards: PasteCardDraft[]; cardBrea
 		}
 	}
 	if (mashCardBreaksGone(text)) return { cards: [], cardBreaksGone: true };
+	// Heading blocks outside that exact shape. Do not offer them as copied
+	// cards, and do not use either card-break sentence.
+	const sections = h1Sections(text);
+	if (sections.length >= 2 && sections.every((section) => parseMashCardSection(section) !== null)) {
+		return { cards: [], cardBreaksGone: false };
+	}
 	const one = parseMashCardSection(text);
 	if (one) return { cards: [one], cardBreaksGone: false };
 	return { cards: [], cardBreaksGone: false };
