@@ -105,4 +105,23 @@ describe('pasted text cards', () => {
 		expect(copy.linesLabel).toBe('3 line cards');
 		expect(copy.paragraphsLabel).toBe('1 paragraph cards');
 	});
+
+	it('does not say the card breaks are gone for two ordinary headings that were never Mash cards', async () => {
+		const ordinaryHeadings = [
+			'# First heading\nA paragraph.\n\n# Second heading\nAnother paragraph.',
+			'# First heading\n\nA paragraph.\n\n\n# Second heading\n\nAnother paragraph.',
+			'#  First heading\n\nA paragraph.\n\n#  Second heading\n\nAnother paragraph.',
+			'# First heading \n\nA paragraph.\n\n# Second heading \n\nAnother paragraph.',
+			'# First heading\n\nA paragraph.\n\n## Second heading\n\nAnother paragraph.'
+		];
+		for (const markdown of ordinaryHeadings) {
+			const analysis = await recognizePastedMashCards(analyzePastedText(markdown));
+			const copy = pasteChoiceCopy(analysis);
+			expect(copy.cardBreaksNotice).not.toBe('The card breaks are gone.');
+			expect(copy.cardBreaksNotice).toBeNull();
+			expect(analysis.cardBreaksGone).toBe(false);
+			expect(copy.linesLabel).toBe(`${analysis.lines.length} line cards`);
+			expect(copy.paragraphsLabel).toBe(`${analysis.paragraphs.length} paragraph cards`);
+		}
+	});
 });

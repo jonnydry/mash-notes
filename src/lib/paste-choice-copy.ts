@@ -5,7 +5,7 @@ export type PasteChoiceCopy = {
 	cardsLabel: string | null;
 	linesLabel: string;
 	paragraphsLabel: string;
-	/** Set when the card breaks are gone. Counts then say lines and paragraphs, not cards. */
+	/** Set only when Mash's own card breaks were removed. Counts then say lines and paragraphs, not cards. */
 	cardBreaksNotice: string | null;
 };
 

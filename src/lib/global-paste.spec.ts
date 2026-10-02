@@ -243,6 +243,22 @@ describe('createGlobalPasteHandler routing', () => {
 		]);
 	});
 
+	it('does not say ordinary headings lost Mash card breaks', async () => {
+		const { handleGlobalPaste } = createGlobalPasteHandler(deps);
+		handleGlobalPaste(
+			pasteEvent({
+				text: '# First heading\n\nA paragraph.\n\n\n# Second heading\n\nAnother paragraph.'
+			})
+		);
+		await vi.waitFor(() => expect(deps.openPasteDialog).toHaveBeenCalledOnce());
+		const analysis = deps.openPasteDialog.mock.calls[0]![0] as {
+			cards: unknown[];
+			cardBreaksGone: boolean;
+		};
+		expect(analysis.cardBreaksGone).toBe(false);
+		expect(analysis.cards).toEqual([]);
+	});
+
 	it('keeps card breaks that were removed from our markdown out of the card offer', async () => {
 		const { handleGlobalPaste } = createGlobalPasteHandler(deps);
 		handleGlobalPaste(pasteEvent({ text: '# Alpha\n\none\n\n# Beta\n\ntwo' }));
