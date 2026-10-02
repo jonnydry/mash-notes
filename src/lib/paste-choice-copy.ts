@@ -5,7 +5,10 @@ export type PasteChoiceCopy = {
 	cardsLabel: string | null;
 	linesLabel: string;
 	paragraphsLabel: string;
-	/** Set only when Mash's own card breaks were removed. Counts then say lines and paragraphs, not cards. */
+	/**
+	 * Set for a heading, blank line, paragraph, blank line, and another heading.
+	 * That paste might never have been Mash cards. Counts then say lines and paragraphs, not cards.
+	 */
 	cardBreaksNotice: string | null;
 };
 
@@ -19,7 +22,7 @@ export function pasteChoiceCopy(analysis: PasteAnalysis): PasteChoiceCopy {
 			cardsLabel: null,
 			linesLabel: countNoun(analysis.lines.length, 'line', 'lines'),
 			paragraphsLabel: countNoun(analysis.paragraphs.length, 'paragraph', 'paragraphs'),
-			cardBreaksNotice: 'The card breaks are gone.'
+			cardBreaksNotice: 'No card breaks in this paste.'
 		};
 	}
 	return {

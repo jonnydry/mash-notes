@@ -33,11 +33,22 @@ function h1Sections(text: string): string[] {
 	return text.split(/\n\n(?=# )/);
 }
 
+function sectionBody(section: string): string {
+	const newline = section.indexOf('\n');
+	if (newline === -1) return '';
+	return section.slice(newline + 2).trimEnd();
+}
+
+/**
+ * Heading, blank line, paragraph, blank line, another heading.
+ * Later headings may have paragraphs too. Title-only headings do not match.
+ */
 function mashCardBreaksGone(text: string): boolean {
 	if (text.includes(MASH_CARD_BREAK)) return false;
 	const sections = h1Sections(text);
 	if (sections.length < 2) return false;
-	return sections.every((section) => isEmittedMashSection(section));
+	if (!sections.every((section) => isEmittedMashSection(section))) return false;
+	return sections.slice(0, -1).some((section) => sectionBody(section) !== '');
 }
 
 export function readMashPaste(text: string): { cards: PasteCardDraft[]; cardBreaksGone: boolean } {
@@ -49,8 +60,8 @@ export function readMashPaste(text: string): { cards: PasteCardDraft[]; cardBrea
 		}
 	}
 	if (mashCardBreaksGone(text)) return { cards: [], cardBreaksGone: true };
-	// Heading blocks that are not Mash's own cards. Do not offer them as one
-	// copied card, and do not say the card breaks are gone.
+	// Heading blocks outside that exact shape. Do not offer them as copied
+	// cards, and do not use either card-break sentence.
 	const sections = h1Sections(text);
 	if (sections.length >= 2 && sections.every((section) => parseMashCardSection(section) !== null)) {
 		return { cards: [], cardBreaksGone: false };

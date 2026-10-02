@@ -11,7 +11,10 @@ export type PasteAnalysis = {
 	paragraphs: string[];
 	/** Cards recovered from Mash's own copied markdown, when the card breaks are intact. */
 	cards: PasteCardDraft[];
-	/** True when Mash's own `---` card breaks were removed. Ordinary headings stay false. */
+	/**
+	 * True for a heading, blank line, paragraph, blank line, and another heading.
+	 * Ordinary headings that differ stay false.
+	 */
 	cardBreaksGone: boolean;
 	suggestedMode: PasteSplitMode;
 };

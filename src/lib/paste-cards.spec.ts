@@ -77,22 +77,31 @@ describe('pasted text cards', () => {
 		expect(pasteChoiceCopy(analysis).cardBreaksNotice).toBeNull();
 	});
 
-	it('says the card breaks are gone and counts lines and paragraphs, not cards', async () => {
-		const markdown = combineNotes([mashNote('1', 'Alpha', 'one'), mashNote('2', 'Beta', 'two')]);
-		const stripped = markdown.replaceAll('\n\n---\n\n', '\n\n');
-		const analysis = await recognizePastedMashCards(analyzePastedText(stripped));
-		expect(analysis.cards).toEqual([]);
-		expect(analysis.cardBreaksGone).toBe(true);
-		expect(analysis.suggestedMode).not.toBe('cards');
-		const copy = pasteChoiceCopy(analysis);
-		expect(copy.cardsLabel).toBeNull();
-		expect(copy.cardBreaksNotice).toBe('The card breaks are gone.');
-		expect(copy.linesLabel).toBe(`${analysis.lines.length} lines`);
-		expect(copy.paragraphsLabel).toBe(`${analysis.paragraphs.length} paragraphs`);
-		expect(copy.linesLabel.toLowerCase()).not.toContain('card');
-		expect(copy.paragraphsLabel.toLowerCase()).not.toContain('card');
-		expect(copy.linesLabel).not.toBe(`${analysis.lines.length} line cards`);
-		expect(copy.paragraphsLabel).not.toBe(`${analysis.paragraphs.length} paragraph cards`);
+	it('says there are no card breaks for a heading, blank line, paragraph, blank line, and another heading', async () => {
+		const exactShapes = [
+			'# First heading\n\nA paragraph.\n\n# Second heading',
+			'# First heading\n\nA paragraph.\n\n# Second heading\n\nAnother paragraph.',
+			combineNotes([mashNote('1', 'Alpha', 'one'), mashNote('2', 'Beta', 'two')]).replaceAll(
+				'\n\n---\n\n',
+				'\n\n'
+			)
+		];
+		for (const markdown of exactShapes) {
+			const analysis = await recognizePastedMashCards(analyzePastedText(markdown));
+			expect(analysis.cards).toEqual([]);
+			expect(analysis.cardBreaksGone).toBe(true);
+			expect(analysis.suggestedMode).not.toBe('cards');
+			const copy = pasteChoiceCopy(analysis);
+			expect(copy.cardsLabel).toBeNull();
+			expect(copy.cardBreaksNotice).toBe('No card breaks in this paste.');
+			expect(copy.cardBreaksNotice).not.toBe('The card breaks are gone.');
+			expect(copy.linesLabel).toBe(`${analysis.lines.length} lines`);
+			expect(copy.paragraphsLabel).toBe(`${analysis.paragraphs.length} paragraphs`);
+			expect(copy.linesLabel.toLowerCase()).not.toContain('card');
+			expect(copy.paragraphsLabel.toLowerCase()).not.toContain('card');
+			expect(copy.linesLabel).not.toBe(`${analysis.lines.length} line cards`);
+			expect(copy.paragraphsLabel).not.toBe(`${analysis.paragraphs.length} paragraph cards`);
+		}
 	});
 
 	it('keeps line and paragraph card wording for ordinary paste', () => {
@@ -112,12 +121,14 @@ describe('pasted text cards', () => {
 			'# First heading\n\nA paragraph.\n\n\n# Second heading\n\nAnother paragraph.',
 			'#  First heading\n\nA paragraph.\n\n#  Second heading\n\nAnother paragraph.',
 			'# First heading \n\nA paragraph.\n\n# Second heading \n\nAnother paragraph.',
-			'# First heading\n\nA paragraph.\n\n## Second heading\n\nAnother paragraph.'
+			'# First heading\n\nA paragraph.\n\n## Second heading\n\nAnother paragraph.',
+			'# First heading\n\n# Second heading'
 		];
 		for (const markdown of ordinaryHeadings) {
 			const analysis = await recognizePastedMashCards(analyzePastedText(markdown));
 			const copy = pasteChoiceCopy(analysis);
 			expect(copy.cardBreaksNotice).not.toBe('The card breaks are gone.');
+			expect(copy.cardBreaksNotice).not.toBe('No card breaks in this paste.');
 			expect(copy.cardBreaksNotice).toBeNull();
 			expect(analysis.cardBreaksGone).toBe(false);
 			expect(copy.linesLabel).toBe(`${analysis.lines.length} line cards`);
