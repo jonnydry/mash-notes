@@ -72,6 +72,8 @@
 	border: 1px solid transparent;
 	cursor: pointer;
 	text-align: center;
+	line-height: 1.3;
+	overflow-wrap: anywhere;
 	font-size: var(--mash-type-caption);
 	font-weight: 600;
 	color: var(--mash-ink-muted);

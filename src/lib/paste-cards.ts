@@ -1,4 +1,4 @@
-export type PasteSplitMode = 'single' | 'lines' | 'paragraphs';
+export type PasteSplitMode = 'single' | 'lines' | 'paragraphs' | 'cards';
 
 export type PasteCardDraft = {
 	title: string;
@@ -9,6 +9,10 @@ export type PasteAnalysis = {
 	text: string;
 	lines: string[];
 	paragraphs: string[];
+	/** Cards recovered from Mash's own copied markdown, when the card breaks are intact. */
+	cards: PasteCardDraft[];
+	/** True when this looks like Mash markdown whose `---` card breaks were removed. */
+	cardBreaksGone: boolean;
 	suggestedMode: PasteSplitMode;
 };
 
@@ -45,12 +49,26 @@ export function analyzePastedText(raw: string): PasteAnalysis {
 		: listLike || lines.length > 1
 			? 'lines'
 			: 'single';
-	return { text, lines, paragraphs, suggestedMode };
+	return { text, lines, paragraphs, cards: [], cardBreaksGone: false, suggestedMode };
+}
+
+/** Recover Mash's own copied cards. Loaded only when the paste starts like our markdown. */
+export async function recognizePastedMashCards(analysis: PasteAnalysis): Promise<PasteAnalysis> {
+	if (!analysis.text.startsWith('# ')) return analysis;
+	const { readMashPaste } = await import('./paste-mash-cards');
+	const mash = readMashPaste(analysis.text);
+	if (mash.cards.length === 0 && !mash.cardBreaksGone) return analysis;
+	return {
+		...analysis,
+		cards: mash.cards,
+		cardBreaksGone: mash.cardBreaksGone,
+		suggestedMode: mash.cards.length > 0 ? 'cards' : analysis.suggestedMode
+	};
 }
 
 export function draftsFromPastedText(raw: string, mode: PasteSplitMode): PasteCardDraft[] {
 	const analysis = analyzePastedText(raw);
-	if (!analysis.text) return [];
+	if (!analysis.text || mode === 'cards') return [];
 
 	if (mode === 'single') {
 		return [

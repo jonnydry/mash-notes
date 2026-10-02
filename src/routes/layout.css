@@ -2552,10 +2552,20 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 	white-space: pre-wrap;
 	scrollbar-width: thin;
 }
+.mash-paste-break-notice {
+	margin: 0.85rem 0 0;
+	font-size: var(--mash-type-caption);
+	line-height: 1.45;
+	color: var(--mash-ink);
+}
 .mash-paste-choices {
 	display: grid;
 	gap: 0.5rem;
 	margin-top: 0.9rem;
+}
+.mash-paste-choice.is-copied-cards {
+	grid-column: 1 / -1;
+	min-height: 0;
 }
 @media (min-width: 640px) {
 	.mash-paste-choices {

@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { ClipboardPaste, Pilcrow, Rows3, X } from '@lucide/svelte';
+	import { ClipboardPaste, FileText, Pilcrow, Rows3, X } from '@lucide/svelte';
+	import { pasteChoiceCopy } from '$lib/paste-choice-copy';
 	import type { PasteAnalysis, PasteSplitMode } from '$lib/paste-cards';
 	import { focusTrap } from '$lib/focus-trap';
 
@@ -11,6 +12,7 @@
 	}
 
 	let { open, analysis, onChoose, onClose }: Props = $props();
+	let copy = $derived(analysis ? pasteChoiceCopy(analysis) : null);
 	$effect(() => {
 		if (!open) return;
 		function onKey(event: KeyboardEvent) {
@@ -68,8 +70,26 @@
 
 			<div class="mash-paste-body">
 				<pre class="mash-paste-preview">{previewText()}</pre>
+				{#if copy?.cardBreaksNotice}
+					<p class="mash-paste-break-notice">{copy.cardBreaksNotice}</p>
+				{/if}
 
 				<div class="mash-paste-choices">
+					{#if copy?.cardsLabel && analysis}
+						<button
+							type="button"
+							class="mash-btn-ghost mash-paste-choice is-copied-cards"
+							class:is-suggested={analysis.suggestedMode === 'cards'}
+							onclick={() => onChoose('cards')}
+						>
+							<FileText class="h-5 w-5 text-[var(--mash-accent-bright)]" />
+							<strong>{copy.cardsLabel}</strong>
+							<small>The cards that were copied</small>
+							{#if analysis.suggestedMode === 'cards'}
+								<span class="mash-paste-suggested">Suggested</span>
+							{/if}
+						</button>
+					{/if}
 					<button
 						type="button"
 						class="mash-btn-ghost mash-paste-choice"
@@ -92,7 +112,7 @@
 						onclick={() => onChoose('lines')}
 					>
 						<Rows3 class="h-5 w-5 text-[var(--mash-accent-bright)]" />
-						<strong>{analysis.lines.length} line cards</strong>
+						<strong>{copy?.linesLabel}</strong>
 						<small>Great for lists and options</small>
 						{#if analysis.suggestedMode === 'lines'}
 							<span class="mash-paste-suggested">Suggested</span>
@@ -107,7 +127,7 @@
 						onclick={() => onChoose('paragraphs')}
 					>
 						<Pilcrow class="h-5 w-5 text-[var(--mash-accent-bright)]" />
-						<strong>{analysis.paragraphs.length} paragraph cards</strong>
+						<strong>{copy?.paragraphsLabel}</strong>
 						<small>Keep related context together</small>
 						{#if analysis.suggestedMode === 'paragraphs'}
 							<span class="mash-paste-suggested">Suggested</span>
