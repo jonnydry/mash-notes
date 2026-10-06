@@ -18,7 +18,7 @@ This directory is the maintained source for verifying Mash from the user's point
 - Prefer the accessible names in the feature file. Use a test id only where the file names one.
 - Run one feature command at a time. Each command uses its own profile.
 - A phone width is not a small desk. At 375 and 390 the app shows the desktop notice and hides the dock.
-- Leave files in `/opt/cursor/artifacts/verify-mash-notes/`. Cleanup removes `/tmp/verify-mash-notes` only.
+- Leave files in `.cursor/skills/verify-mash-notes/runs/`, or in `VERIFY_MASH_NOTES_EVIDENCE_DIR` when that variable is set. Cleanup removes `/tmp/verify-mash-notes` only.
 
 ## Proof and skip reporting
 

@@ -6,13 +6,13 @@ import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import {
 	APP_SCAN_PATHS,
-	EVIDENCE_DIR,
 	ORIGIN_ENV_KEYS,
 	SECRET_ENV_KEYS,
 	childEnvForLaunch,
 	collectEnvNames,
 	deletionTarget,
 	envNamesInSource,
+	evidenceDir,
 	isOriginEnvName,
 	isSecretEnvName,
 	localOrigin,
@@ -117,12 +117,42 @@ describe('request host gate', () => {
 	});
 });
 
+describe('evidence directory', () => {
+	const defaultRuns = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../runs');
+
+	it('defaults to runs next to the skill and ignores the cwd', () => {
+		const previous = process.cwd();
+		process.chdir('/tmp');
+		try {
+			assert.equal(evidenceDir({}), defaultRuns);
+			assert.equal(evidenceDir({ VERIFY_MASH_NOTES_EVIDENCE_DIR: '   ' }), defaultRuns);
+		} finally {
+			process.chdir(previous);
+		}
+	});
+
+	it('uses VERIFY_MASH_NOTES_EVIDENCE_DIR when it is set', () => {
+		assert.equal(
+			evidenceDir({ VERIFY_MASH_NOTES_EVIDENCE_DIR: '/opt/cursor/artifacts/verify-mash-notes' }),
+			'/opt/cursor/artifacts/verify-mash-notes'
+		);
+	});
+});
+
 describe('cleanup fence', () => {
 	it('deletes scratch under /tmp and refuses the evidence directory', () => {
+		const runs = evidenceDir({});
 		assert.equal(deletionTarget('/tmp/verify-mash-notes/profile').ok, true);
-		assert.equal(deletionTarget(EVIDENCE_DIR).ok, false);
-		assert.equal(deletionTarget(`${EVIDENCE_DIR}/create-note-saved.png`).reason, 'evidence');
-		assert.equal(deletionTarget('/workspace').reason, 'outside-tmp');
-		assert.equal(deletionTarget('/tmp').reason, 'outside-tmp');
+		assert.equal(deletionTarget(runs, runs).reason, 'evidence');
+		assert.equal(deletionTarget(`${runs}/create-note-saved.png`, runs).reason, 'evidence');
+		assert.equal(
+			deletionTarget(
+				'/opt/cursor/artifacts/verify-mash-notes',
+				'/opt/cursor/artifacts/verify-mash-notes'
+			).reason,
+			'evidence'
+		);
+		assert.equal(deletionTarget('/workspace', runs).reason, 'outside-tmp');
+		assert.equal(deletionTarget('/tmp', runs).reason, 'outside-tmp');
 	});
 });

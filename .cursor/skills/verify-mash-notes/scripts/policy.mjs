@@ -1,5 +1,6 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export const SECRET_ENV_KEYS = [];
 
@@ -15,7 +16,13 @@ export const APP_SCAN_PATHS = [
 
 export const LOCAL_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
 
-export const EVIDENCE_DIR = '/opt/cursor/artifacts/verify-mash-notes';
+const SKILL_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+
+export function evidenceDir(env = process.env) {
+	const override = env.VERIFY_MASH_NOTES_EVIDENCE_DIR;
+	if (typeof override === 'string' && override.trim() !== '') return path.resolve(override);
+	return path.join(SKILL_ROOT, 'runs');
+}
 
 export const DEFAULT_STATE_DIR = '/tmp/verify-mash-notes';
 
@@ -143,9 +150,9 @@ export function requestDecision(rawUrl) {
 	return { ok: false, host: url.hostname, reason: 'non-local-host' };
 }
 
-export function deletionTarget(target, evidenceDir = EVIDENCE_DIR) {
+export function deletionTarget(target, evidenceRoot = evidenceDir()) {
 	const resolved = path.resolve(target);
-	const evidence = path.resolve(evidenceDir);
+	const evidence = path.resolve(evidenceRoot);
 	if (resolved === evidence || resolved.startsWith(`${evidence}${path.sep}`)) {
 		return { ok: false, reason: 'evidence' };
 	}

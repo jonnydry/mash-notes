@@ -89,7 +89,7 @@ node .cursor/skills/verify-mash-notes/scripts/drive.mjs --feature finish
 node .cursor/skills/verify-mash-notes/scripts/drive.mjs --feature mobile
 ```
 
-The driver aborts any request whose host is not `127.0.0.1`, `localhost`, `::1`, or `[::1]`. `data:`, `blob:`, and `about:` are allowed. An unparseable URL is aborted. The aborted URL, host, and reason are stored on the feature report. After the screenshots, the driver navigates to `https://example.com/verify-mash-notes-probe`. That navigation must appear in the aborted list. A page `fetch` would not, because the app CSP sets `connect-src 'self'` and the browser drops it before a request exists. Any other aborted host fails the drive.
+The driver aborts any request whose host is not `127.0.0.1`, `localhost`, `::1`, or `[::1]`. `data:`, `blob:`, and `about:` are allowed. An unparseable URL is aborted. The aborted URL, host, and reason are stored on the feature report. After the screenshots, the driver navigates to `https://example.com/verify-mash-notes-probe`. That navigation must appear in the aborted list. A page `fetch` would not, because the app CSP sets `connect-src 'self'` and the browser drops it before a request exists. Any other aborted host fails the drive. The browser context sets `serviceWorkers` to `block`. The console line `Mash offline support could not start` is that block, and the drive does not count it as a failure.
 
 Desktop drives use a 1280 by 800 viewport. `New note` must sit inside that viewport and measure at least 44 by 44 CSS pixels before the click.
 
@@ -97,7 +97,7 @@ Desktop drives use a 1280 by 800 viewport. `New note` must sit inside that viewp
 
 ## Evidence
 
-The drive writes `/opt/cursor/artifacts/verify-mash-notes/`. Cleanup does not delete that directory.
+The drive writes `.cursor/skills/verify-mash-notes/runs/`. That path is resolved from the script file, not the shell working directory. Set `VERIFY_MASH_NOTES_EVIDENCE_DIR` to write somewhere else. The drive creates the directory. `runs/` is gitignored and excluded from Prettier. Cleanup does not delete the evidence directory.
 
 - `create-note-boot.png`, `create-note-saved.png`, and `create-note-reloaded.png` show the desk, the new card, and the same card after reload.
 - `search-scoop.png` and `search-empty.png` show a match and the empty copy.
@@ -114,7 +114,7 @@ A passing drive has empty `consoleErrors`, `pageErrors`, and `networkErrors`. Th
 node .cursor/skills/verify-mash-notes/scripts/cleanup.mjs
 ```
 
-Cleanup sends `SIGTERM` to the pid in `state.json`, then `SIGKILL` if it is still alive. It kills that pid only when `/proc/<pid>/cmdline` contains `serve-static.mjs`. It then deletes the state directory. The state directory must resolve under `/tmp` and must not be the evidence directory. After cleanup, the png and json files in `/opt/cursor/artifacts/verify-mash-notes/` must still be there.
+Cleanup sends `SIGTERM` to the pid in `state.json`, then `SIGKILL` if it is still alive. It kills that pid only when `/proc/<pid>/cmdline` contains `serve-static.mjs`. It then deletes the state directory. The state directory must resolve under `/tmp` and must not be the evidence directory. After cleanup, the png and json files in the evidence directory must still be there.
 
 Run cleanup after a failed launch too, so a later run does not inherit a dead pid file.
 

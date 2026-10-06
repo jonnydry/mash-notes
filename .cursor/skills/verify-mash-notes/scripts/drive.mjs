@@ -2,7 +2,7 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { chromium } from 'playwright';
-import { DEFAULT_STATE_DIR, EVIDENCE_DIR, deletionTarget, requestDecision } from './policy.mjs';
+import { DEFAULT_STATE_DIR, deletionTarget, evidenceDir, requestDecision } from './policy.mjs';
 
 const PROBE_URL = 'https://example.com/verify-mash-notes-probe';
 const DESKTOP = { width: 1280, height: 800 };
@@ -79,12 +79,16 @@ async function notesInPage(page) {
 
 async function waitForStoredNote(page, title, body) {
 	const deadline = Date.now() + 8_000;
+	let notes = [];
 	while (Date.now() < deadline) {
-		const notes = await notesInPage(page);
+		notes = await notesInPage(page);
 		if (notes.some((note) => note.title === title && note.body === body)) return notes;
 		await page.waitForTimeout(100);
 	}
-	throw new Error(`IndexedDB mashdb-notes-v1 has no note ${JSON.stringify({ title, body })}`);
+	const stored = notes.map((note) => note.title).join(', ') || '(empty)';
+	throw new Error(
+		`IndexedDB mashdb-notes-v1 has no note ${JSON.stringify({ title, body })}. Stored titles: ${stored}`
+	);
 }
 
 async function bootDesk(page, origin) {
@@ -113,19 +117,36 @@ async function createNamedNote(page, title, body) {
 	) {
 		throw new Error('New note is outside the desktop viewport');
 	}
-	await newNote.click();
-	const card = page
+	const before = await page
 		.locator('[data-canvas-card]')
-		.filter({ has: page.locator('textarea.mash-sticky-body') })
-		.first();
-	await card.waitFor({ timeout: 10_000 });
+		.evaluateAll((elements) =>
+			elements
+				.map((element) => element.getAttribute('data-note-id'))
+				.filter((id) => typeof id === 'string' && id !== '')
+		);
+	await newNote.click();
+	const noteIdHandle = await page.waitForFunction(
+		(previous) => {
+			const known = new Set(previous);
+			const cards = document.querySelectorAll('[data-canvas-card][data-expanded="true"]');
+			for (const candidate of cards) {
+				const id = candidate.getAttribute('data-note-id');
+				if (id && !known.has(id)) return id;
+			}
+			return null;
+		},
+		before,
+		{ timeout: 10_000 }
+	);
+	const noteId = await noteIdHandle.jsonValue();
+	const card = page.locator(`[data-canvas-card][data-note-id="${noteId}"]`);
 	await card.locator('input[type="text"]').first().fill(title);
 	const bodyField = card.locator('textarea.mash-sticky-body');
 	await bodyField.fill(body);
 	await bodyField.blur();
 	await waitForStoredNote(page, title, body);
 	await card.getByRole('button', { name: 'Collapse sticky' }).click();
-	await page.getByRole('group', { name: title }).waitFor({ timeout: 5_000 });
+	await card.locator('textarea.mash-sticky-body').waitFor({ state: 'detached', timeout: 5_000 });
 }
 
 async function selectNotes(page, titles) {
@@ -211,14 +232,18 @@ async function probe(page, bag) {
 	throw new Error('probe request to example.com was not aborted');
 }
 
+function unexpectedConsoleErrors(messages) {
+	return messages.filter((message) => !message.startsWith('Mash offline support could not start'));
+}
+
 function assertAppQuiet(bag) {
 	const appAborted = bag.aborted.filter((entry) => !entry.url.startsWith(PROBE_URL));
 	if (appAborted.length > 0) {
 		throw new Error(`app requested a non-local host: ${JSON.stringify(appAborted)}`);
 	}
 	if (bag.pageErrors.length > 0) throw new Error(`page errors: ${bag.pageErrors.join(' | ')}`);
-	if (bag.consoleErrors.length > 0)
-		throw new Error(`console errors: ${bag.consoleErrors.join(' | ')}`);
+	const consoleErrors = unexpectedConsoleErrors(bag.consoleErrors);
+	if (consoleErrors.length > 0) throw new Error(`console errors: ${consoleErrors.join(' | ')}`);
 	if (bag.networkErrors.length > 0) {
 		throw new Error(`network errors: ${JSON.stringify(bag.networkErrors)}`);
 	}
@@ -228,7 +253,8 @@ async function withContext(profile, options, run) {
 	await mkdir(profile, { recursive: true });
 	const context = await chromium.launchPersistentContext(profile, {
 		headless: true,
-		...options
+		...options,
+		serviceWorkers: 'block'
 	});
 	const bag = emptyBag();
 	try {
@@ -395,7 +421,7 @@ async function driveMobile(origin, evidenceDir, scratch) {
 		viewports.push({
 			...result,
 			aborted: bag.aborted.map(({ url, host, reason }) => ({ url, host, reason })),
-			consoleErrors: [...bag.consoleErrors],
+			consoleErrors: unexpectedConsoleErrors(bag.consoleErrors),
 			pageErrors: [...bag.pageErrors],
 			networkErrors: [...bag.networkErrors]
 		});
@@ -410,13 +436,14 @@ async function main() {
 		throw new Error(`Unknown feature ${feature}. Use ${[...FEATURES].join(', ')}.`);
 	}
 	const scratch = stateDir();
+	const evidence = evidenceDir();
 	const state = JSON.parse(await readFile(path.join(scratch, 'state.json'), 'utf8'));
-	await mkdir(EVIDENCE_DIR, { recursive: true });
-	const reportPath = path.join(EVIDENCE_DIR, `${feature}.json`);
+	await mkdir(evidence, { recursive: true });
+	const reportPath = path.join(evidence, `${feature}.json`);
 	const report = { feature, ok: false, origin: state.origin };
 	try {
 		if (feature === 'mobile') {
-			report.detail = await driveMobile(state.origin, EVIDENCE_DIR, scratch);
+			report.detail = await driveMobile(state.origin, evidence, scratch);
 		} else {
 			const profile = path.join(scratch, 'profiles', `${feature}-${Date.now()}`);
 			const runners = {
@@ -428,11 +455,11 @@ async function main() {
 			const { result, bag } = await withContext(
 				profile,
 				{ viewport: DESKTOP, deviceScaleFactor: 1 },
-				async (page) => runners[feature](page, state.origin, EVIDENCE_DIR)
+				async (page) => runners[feature](page, state.origin, evidence)
 			);
 			report.detail = result;
 			report.aborted = bag.aborted.map(({ url, host, reason }) => ({ url, host, reason }));
-			report.consoleErrors = bag.consoleErrors;
+			report.consoleErrors = unexpectedConsoleErrors(bag.consoleErrors);
 			report.pageErrors = bag.pageErrors;
 			report.networkErrors = bag.networkErrors;
 		}

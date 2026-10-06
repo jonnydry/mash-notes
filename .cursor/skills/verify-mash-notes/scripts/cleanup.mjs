@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
-import { DEFAULT_STATE_DIR, deletionTarget } from './policy.mjs';
+import { DEFAULT_STATE_DIR, deletionTarget, evidenceDir } from './policy.mjs';
 
 function stateDir() {
 	return process.env.VERIFY_MASH_NOTES_STATE || DEFAULT_STATE_DIR;
@@ -52,7 +52,7 @@ async function main() {
 	await rm(decision.path, { recursive: true, force: true });
 	console.log('cleanup ok');
 	console.log(`removed ${decision.path}`);
-	console.log('evidence kept /opt/cursor/artifacts/verify-mash-notes');
+	console.log(`evidence kept ${evidenceDir()}`);
 }
 
 main().catch((error) => {
