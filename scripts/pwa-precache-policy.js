@@ -76,19 +76,59 @@ export function collectInitialManifestFiles(/** @type {ViteManifest} */ manifest
 	return files;
 }
 
-/** Keep the application shell, initial graph, and small core static assets only. */
+/** Lazy chunks that must work offline after one successful visit. */
+const PRECACHED_LAZY_ENTRY_NAMES = new Set(['sync-file']);
+
+/**
+ * Files the desk-bundle import chunk needs that are not already in the initial graph.
+ * Precache them so a later offline import does not fetch the chunk again.
+ * They stay out of the first-load JavaScript budget.
+ */
+export function collectPrecachedLazyFiles(
+	/** @type {ViteManifest} */ manifest,
+	entryNames = PRECACHED_LAZY_ENTRY_NAMES
+) {
+	const initialFiles = collectInitialManifestFiles(manifest);
+	const byName = new Map(
+		Object.entries(manifest)
+			.filter(([, entry]) => entry.name)
+			.map(([key, entry]) => [entry.name, key])
+	);
+	/** @type {Set<string>} */
+	const files = new Set();
+	const seen = new Set();
+
+	function visit(/** @type {string | undefined} */ key) {
+		if (!key || seen.has(key)) return;
+		seen.add(key);
+		const entry = manifest[key];
+		if (!entry) return;
+		for (const file of [entry.file, ...(entry.css ?? []), ...(entry.assets ?? [])]) {
+			const normalized = normalizePrecacheUrl(file);
+			if (!initialFiles.has(normalized)) files.add(normalized);
+		}
+		for (const imported of entry.imports ?? []) visit(imported);
+	}
+
+	for (const name of entryNames) visit(byName.get(name));
+	return files;
+}
+
+/** Keep the application shell, initial graph, precached import chunk, and small core static assets. */
 export function prunePrecacheEntries(
 	/** @type {PrecacheEntry[]} */ entries,
 	/** @type {ViteManifest} */ manifest
 ) {
 	const initialFiles = collectInitialManifestFiles(manifest);
+	const lazyFiles = collectPrecachedLazyFiles(manifest);
 	return entries.filter((entry) => {
 		const file = normalizePrecacheUrl(entry.url);
 		// The PWA plugin appends its generated manifest after transforms. Remove the
 		// globbed copy here so the final service worker has one canonical revision.
 		if (file === 'manifest.webmanifest') return false;
 		if (isExcludedFromPrecache(file)) return false;
-		if (file.startsWith('_app/immutable/') && !initialFiles.has(file)) return false;
+		if (file.startsWith('_app/immutable/') && !initialFiles.has(file) && !lazyFiles.has(file))
+			return false;
 		return true;
 	});
 }

@@ -33,6 +33,7 @@ import {
 import { SYNC_BUNDLE_MAX_CHARS } from '$lib/sync-limits';
 import type { SyncConflict } from '$lib/sync-model';
 import { isStaleSyncBundle, recordSyncImport } from '$lib/sync-hygiene';
+import { DESK_BUNDLE_IMPORT_OFFLINE_MESSAGE } from '$lib/desk-bundle-import';
 import {
 	ensureMashTeamWelcomeNote,
 	isMashTeamWelcomeCandidate,
@@ -620,13 +621,22 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 				opts.flashToast(message);
 				return { ok: false, message };
 			}
+			let syncFile: SyncFileModule;
+			try {
+				syncFile = await loadSyncFile();
+			} catch {
+				const message = DESK_BUNDLE_IMPORT_OFFLINE_MESSAGE;
+				opts.flashToast(message);
+				return { ok: false, message };
+			}
 			const {
 				parseSyncBundle,
 				mergeSyncBundle,
 				persistMergedSync,
 				formatConflictSummary,
-				readStoredSyncNotes
-			} = await loadSyncFile();
+				readStoredSyncNotes,
+				assignImportedNoteSessions
+			} = syncFile;
 			const parsed = parseSyncBundle(text);
 			if (!parsed.ok) {
 				opts.flashToast(parsed.error);
@@ -650,43 +660,18 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 			await flushPendingSaveAsync();
 
 			const storedNotes = await readStoredSyncNotes(parsed.bundle);
-			const storedById = new Map(storedNotes.map((note) => [note.id, note]));
 			const { notes: mergedNotes, summary } = mergeSyncBundle(notes, parsed.bundle, storedNotes);
 			const sessionId = opts.getActiveSessionId?.() ?? undefined;
 			const defaultScope: NonNullable<Note['scope']> =
 				opts.getActiveSessionMode?.() === 'kept' ? 'kept' : 'session';
-			const localById = new Map(notes.map((n) => [n.id, n]));
 			// Dexie can't structured-clone Svelte $state proxies — always put plain objects.
-			// Preserve kept pantry ownership: do not demote durable kept notes onto this scratch.
-			// Session id is assigned only for notes that were not already stored.
-			const plainNotes = mergedNotes.map((n) => {
-				const local = localById.get(n.id);
-				const stored = storedById.get(n.id);
-				const isKept =
-					n.scope === 'kept' ||
-					local?.scope === 'kept' ||
-					stored?.scope === 'kept' ||
-					Boolean(n.keptAt) ||
-					Boolean(local?.keptAt) ||
-					Boolean(stored?.keptAt);
-				const plain = {
-					...n,
-					scope: isKept ? 'kept' : (n.scope ?? defaultScope),
-					keptAt: isKept ? (n.keptAt ?? stored?.keptAt ?? local?.keptAt) : n.keptAt,
-					tags: [...n.tags],
-					...(n.links ? { links: [...n.links] } : {}),
-					...(n.mashedFrom ? { mashedFrom: [...n.mashedFrom] } : {})
-				};
-				if (stored) {
-					if (stored.sessionId !== undefined) plain.sessionId = stored.sessionId;
-					else delete plain.sessionId;
-				} else {
-					plain.sessionId = isKept
-						? (n.sessionId ?? local?.sessionId ?? sessionId)
-						: (sessionId ?? n.sessionId);
-				}
-				return plain;
-			});
+			const plainNotes = assignImportedNoteSessions(
+				mergedNotes,
+				notes,
+				storedNotes,
+				sessionId,
+				defaultScope
+			);
 			const knownNoteIds = new Set(plainNotes.map((n) => n.id));
 
 			const persisted = await persistMergedSync(

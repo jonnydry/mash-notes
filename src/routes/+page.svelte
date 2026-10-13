@@ -129,6 +129,7 @@
 	import { type HtmlClipPayload } from '$lib/html-clipping';
 	import { type PasteAnalysis } from '$lib/paste-cards';
 	import { DESK_IMAGE_MAX_PER_ACTION } from '$lib/desk-image';
+	import { createDeskBundleImport } from '$lib/desk-bundle-import';
 	import type { GifExplodeMode } from '$lib/gif-explode';
 	import { keepableNoteIds } from '$lib/keep-selection';
 	import {
@@ -248,6 +249,7 @@
 	let importInputEl: HTMLInputElement | undefined = $state();
 	let markdownImportInputEl: HTMLInputElement | undefined = $state();
 	let syncInputEl: HTMLInputElement | undefined = $state();
+	let deskImportBusy = $state(false);
 	let pdfInputEl: HTMLInputElement | undefined = $state();
 	let docxInputEl: HTMLInputElement | undefined = $state();
 	let htmlInputEl: HTMLInputElement | undefined = $state();
@@ -255,6 +257,22 @@
 	let delimitedInputEl: HTMLInputElement | undefined = $state();
 	let workspaceRestoreInputEl: HTMLInputElement | undefined = $state();
 	// documentReaders + selectionOps initialized after canvas (below)
+
+	const beginDeskBundleImport = createDeskBundleImport({
+		loadChunk: () => import('$lib/sync-file'),
+		onBusy: () => {
+			deskImportBusy = true;
+		},
+		onIdle: () => {
+			deskImportBusy = false;
+		},
+		onOffline: (message) => {
+			flashToast(message);
+		},
+		onReady: () => {
+			syncInputEl?.click();
+		}
+	});
 
 	function flashToast(msg: string, ms = 1600) {
 		actionToast = msg;
@@ -1749,7 +1767,7 @@
 		clickWorkspaceRestoreInput: () => workspaceRestoreInputEl?.click(),
 		clickImportInput: () => importInputEl?.click(),
 		clickMarkdownImportInput: () => markdownImportInputEl?.click(),
-		clickSyncInput: () => syncInputEl?.click(),
+		clickSyncInput: () => void beginDeskBundleImport(),
 		showSpacesOverview,
 		openSettings: () => {
 			peel.closePeel(true);
@@ -2482,6 +2500,7 @@
 						lastImportAt={syncHygiene.lastImportAt}
 						workspaceBackupStatus={workspaceBackupHealth.label}
 						{workspaceBackupBusy}
+						{deskImportBusy}
 						onClose={() => (settingsOpen = false)}
 						onSnapChange={setSnapEnabled}
 						onOrganize={() => canvas.canvasBoard?.organizeToSnap?.()}
@@ -2492,7 +2511,7 @@
 						onImportMarkdown={() => markdownImportInputEl?.click()}
 						onImportJson={() => importInputEl?.click()}
 						onExportJson={() => exportNotesJson(library.notes, 'mash-notes-export.json')}
-						onImportSync={() => syncInputEl?.click()}
+						onImportSync={() => void beginDeskBundleImport()}
 						onExportSync={() => {
 							void exportSyncBundle();
 						}}

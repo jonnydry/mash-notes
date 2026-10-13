@@ -18,7 +18,7 @@ import type {
 import { mergeNotesLww, hasConflicts, type MergeResult, type SyncConflict } from './sync-model';
 import { SYNC_BUNDLE_MAX_CHARS } from './sync-limits';
 import { normalizeImportedNote } from './import-notes';
-import { db, getSyncTombstoneNotes, newId, purgeExpiredDeskDeletions } from './db';
+import { db, newId } from './db';
 import { exportAllDismissed, importDismissedMap, type DismissedByCanvas } from './canvas-dismiss';
 import {
 	canvasElementDeletionKey,
@@ -63,6 +63,22 @@ const MAX_CANVAS_ELEMENT_LABEL_CHARS = 200;
 
 /** Keep soft-delete tombstones in sync exports for this long. */
 export const TOMBSTONE_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
+
+/** Drop expired canvas delete markers. Import and export only — not first-load work. */
+async function purgeExpiredDeskDeletions(now = Date.now()): Promise<void> {
+	const expired = await db.deskDeletions
+		.filter((row) => deletionExpired(row.deletedAt, now))
+		.toArray();
+	if (expired.length === 0) return;
+	await db.deskDeletions.bulkDelete(expired.map((row) => row.id));
+}
+
+/** Soft-deleted notes still inside the tombstone window. Used when building a bundle. */
+async function getSyncTombstoneNotes(maxAgeMs: number): Promise<Note[]> {
+	const cutoff = Date.now() - maxAgeMs;
+	const all = await db.notes.toArray();
+	return all.filter((n) => typeof n.deletedAt === 'number' && n.deletedAt >= cutoff);
+}
 
 export type SyncTombstone = {
 	id: string;
@@ -830,6 +846,49 @@ export async function readStoredSyncNotes(bundle: SyncBundle): Promise<Note[]> {
 	if (ids.length === 0) return [];
 	const rows = await db.notes.bulkGet(ids);
 	return rows.filter((note): note is Note => note != null);
+}
+
+/**
+ * Plain notes ready to persist. Session id is copied from IndexedDB when the
+ * note was already stored, and assigned only for notes this desk has never seen.
+ */
+export function assignImportedNoteSessions(
+	mergedNotes: Note[],
+	localNotes: readonly Note[],
+	storedNotes: readonly Note[],
+	sessionId: string | undefined,
+	defaultScope: NonNullable<Note['scope']>
+): Note[] {
+	const storedById = new Map(storedNotes.map((note) => [note.id, note]));
+	const localById = new Map(localNotes.map((note) => [note.id, note]));
+	return mergedNotes.map((n) => {
+		const local = localById.get(n.id);
+		const stored = storedById.get(n.id);
+		const isKept =
+			n.scope === 'kept' ||
+			local?.scope === 'kept' ||
+			stored?.scope === 'kept' ||
+			Boolean(n.keptAt) ||
+			Boolean(local?.keptAt) ||
+			Boolean(stored?.keptAt);
+		const plain: Note = {
+			...n,
+			scope: isKept ? 'kept' : (n.scope ?? defaultScope),
+			keptAt: isKept ? (n.keptAt ?? stored?.keptAt ?? local?.keptAt) : n.keptAt,
+			tags: [...n.tags],
+			...(n.links ? { links: [...n.links] } : {}),
+			...(n.mashedFrom ? { mashedFrom: [...n.mashedFrom] } : {})
+		};
+		if (stored) {
+			if (stored.sessionId !== undefined) plain.sessionId = stored.sessionId;
+			else delete plain.sessionId;
+		} else {
+			plain.sessionId = isKept
+				? (n.sessionId ?? local?.sessionId ?? sessionId)
+				: (sessionId ?? n.sessionId);
+		}
+		return plain;
+	});
 }
 
 export function mergeSyncBundle(

@@ -28,8 +28,8 @@ const deferredFeatureFiles = new Set(
 				'presentation-pdf',
 				'presentation-docx',
 				'PasteChoiceDialog',
-				'GifExplodeDialog',
-				'sync-file'
+				'GifExplodeDialog'
+				// sync-file is precached for offline import and is not part of this first-paint list.
 			].includes(entry.name ?? '')
 		)
 		.flatMap((entry) => [entry.file, ...(entry.css ?? []), ...(entry.assets ?? [])])

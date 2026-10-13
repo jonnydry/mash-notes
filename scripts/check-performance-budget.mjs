@@ -2,6 +2,7 @@ import { readFile, stat } from 'node:fs/promises';
 import {
 	collectInitialManifestFiles,
 	collectInitialManifestKeys,
+	collectPrecachedLazyFiles,
 	isExcludedFromPrecache,
 	normalizePrecacheUrl
 } from './pwa-precache-policy.js';
@@ -32,9 +33,10 @@ const deferredInitialEntryNames = new Set([
 	'sync-file'
 ]);
 const budgets = {
-	// Export scope handoff and canvas delete markers are core shell behavior;
-	// PDF/DOCX builders and the sheet stay deferred.
-	javascript: 660 * 1024,
+	// Main's shell is 651.9 KiB. Delete markers are written on every canvas
+	// mutation, so they stay in this first-load graph (measured 655.8 KiB).
+	// Desk-bundle merge is the precached sync-file chunk and is not counted here.
+	javascript: 656 * 1024,
 	// Keep core canvas chrome tight; presentation-preview CSS is measured only after its lazy load.
 	css: 140 * 1024,
 	fonts: 120 * 1024,
@@ -44,6 +46,7 @@ const budgets = {
 };
 
 const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+const precachedLazyFiles = collectPrecachedLazyFiles(manifest);
 const byName = new Map(
 	Object.entries(manifest)
 		.filter(([, entry]) => entry.name)
@@ -107,7 +110,11 @@ const duplicatePrecacheFiles = new Set(
 for (const file of duplicatePrecacheFiles) errors.push(`PWA precache lists ${file} more than once`);
 for (const file of precacheFiles) {
 	if (isExcludedFromPrecache(file)) errors.push(`${file} leaked into the PWA precache`);
-	if (file.startsWith('_app/immutable/') && !initialFiles.has(file)) {
+	if (
+		file.startsWith('_app/immutable/') &&
+		!initialFiles.has(file) &&
+		!precachedLazyFiles.has(file)
+	) {
 		errors.push(`${file} is not in the initial graph but leaked into the PWA precache`);
 	}
 	try {
@@ -120,6 +127,15 @@ if (precache > budgets.precache) {
 	errors.push(`PWA precache is ${format(precache)} (budget ${format(budgets.precache)})`);
 }
 
+const importChunk = byName.get('sync-file');
+if (!importChunk) {
+	errors.push('Desk bundle import chunk is missing from the build');
+} else if (initialKeys.has(importChunk.key)) {
+	errors.push('Desk bundle import chunk leaked into the initial JavaScript graph');
+} else if (!precacheFiles.includes(normalizePrecacheUrl(importChunk.file))) {
+	errors.push('Desk bundle import chunk is not in the PWA precache');
+}
+
 console.log(`Initial JavaScript  ${format(javascript)} / ${format(budgets.javascript)}`);
 console.log(`Initial CSS         ${format(css)} / ${format(budgets.css)}`);
 console.log(
@@ -128,7 +144,7 @@ console.log(
 console.log(
 	`PWA precache        ${format(precache)} / ${format(budgets.precache)} (${precacheFiles.length} files)`
 );
-console.log('Deferred features   excluded from the initial graph and PWA precache');
+console.log('Deferred features   excluded from the initial graph; desk import is precached');
 
 if (errors.length) {
 	console.error(`\nPerformance budget failed:\n- ${errors.join('\n- ')}`);

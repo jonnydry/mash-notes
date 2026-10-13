@@ -174,7 +174,8 @@ class MashDB extends Dexie {
 			noteBlobs: 'id, created, mime'
 		});
 		// Non-note canvas marks (arrows in v1; shapes/freehand can extend the union later).
-		this.version(10).stores({
+		// Version 11 adds delete markers. The shared index strings stay one copy in the shell.
+		const shellStores = {
 			notes: 'id, modified, folder, pinned, deletedAt, sessionId, scope, operationId, *tags',
 			sessions: 'id, mode, status, modified, lastMeaningfulActivityAt, expiresAt, recoveryUntil',
 			canvases: 'id, sessionId, folder, modified, &[sessionId+folder]',
@@ -183,18 +184,10 @@ class MashDB extends Dexie {
 			canvasElements: 'id, canvasId, kind, modified',
 			operations: 'id, sessionId, type, created, revertedAt, *inputNoteIds, *outputNoteIds',
 			noteBlobs: 'id, created, mime'
-		});
-		// Delete markers for cards, links, and arrows. Kept 90 days so a newer bundle
-		// can remove them, and an older bundle cannot put them back.
+		};
+		this.version(10).stores({ ...shellStores });
 		this.version(11).stores({
-			notes: 'id, modified, folder, pinned, deletedAt, sessionId, scope, operationId, *tags',
-			sessions: 'id, mode, status, modified, lastMeaningfulActivityAt, expiresAt, recoveryUntil',
-			canvases: 'id, sessionId, folder, modified, &[sessionId+folder]',
-			canvasItems: 'id, canvasId, noteId, &[canvasId+noteId]',
-			canvasEdges: 'id, canvasId, fromItemId, toItemId, &[canvasId+fromItemId+toItemId]',
-			canvasElements: 'id, canvasId, kind, modified',
-			operations: 'id, sessionId, type, created, revertedAt, *inputNoteIds, *outputNoteIds',
-			noteBlobs: 'id, created, mime',
+			...shellStores,
 			deskDeletions: 'id, canvasId, kind, deletedAt'
 		});
 	}
@@ -221,14 +214,6 @@ export async function forgetDeskDeletion(
 	const id = deskDeletionId(marker);
 	if (!id) return;
 	await db.deskDeletions.delete(id);
-}
-
-export async function purgeExpiredDeskDeletions(now = Date.now()): Promise<void> {
-	const expired = await db.deskDeletions
-		.filter((row) => deletionExpired(row.deletedAt, now))
-		.toArray();
-	if (expired.length === 0) return;
-	await db.deskDeletions.bulkDelete(expired.map((row) => row.id));
 }
 
 async function noteIdsForItems(itemIds: string[]): Promise<Map<string, string>> {
@@ -586,15 +571,6 @@ export async function deleteNote(id: string): Promise<void> {
 		const { gcBlobsAfterNoteDelete } = await import('./note-blobs');
 		await gcBlobsAfterNoteDelete(existing.body);
 	}
-}
-
-/**
- * Soft-deleted notes still within the sync tombstone retention window.
- */
-export async function getSyncTombstoneNotes(maxAgeMs: number): Promise<Note[]> {
-	const cutoff = Date.now() - maxAgeMs;
-	const all = await db.notes.toArray();
-	return all.filter((n) => typeof n.deletedAt === 'number' && n.deletedAt >= cutoff);
 }
 
 /**

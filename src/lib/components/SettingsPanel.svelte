@@ -9,6 +9,10 @@
 	import { flatShortcutRows } from '$lib/keyboard-shortcuts';
 	import { formatNoteTimestamp } from '$lib/format';
 	import { syncBackupHint } from '$lib/sync-hygiene';
+	import {
+		DESK_BUNDLE_IMPORT_BUSY_LABEL,
+		DESK_BUNDLE_IMPORT_IDLE_LABEL
+	} from '$lib/desk-bundle-import';
 	import { MASH_APP_VERSION } from '$lib/app-version';
 
 	interface Props {
@@ -17,6 +21,7 @@
 		lastImportAt?: number | null;
 		workspaceBackupStatus?: string;
 		workspaceBackupBusy?: boolean;
+		deskImportBusy?: boolean;
 		onClose: () => void;
 		onSnapChange: (on: boolean) => void;
 		onOrganize: () => void;
@@ -42,6 +47,7 @@
 		lastImportAt = null,
 		workspaceBackupStatus = 'Backup status unavailable',
 		workspaceBackupBusy = false,
+		deskImportBusy = false,
 		onClose,
 		onSnapChange,
 		onOrganize,
@@ -344,8 +350,14 @@
 				<button type="button" class="mash-settings-action" onclick={onExportJson}>
 					Export all as JSON
 				</button>
-				<button type="button" class="mash-settings-action" onclick={onImportSync}>
-					Import desk bundle…
+				<button
+					type="button"
+					class="mash-settings-action"
+					data-testid="settings-import-desk"
+					disabled={deskImportBusy}
+					onclick={onImportSync}
+				>
+					{deskImportBusy ? DESK_BUNDLE_IMPORT_BUSY_LABEL : DESK_BUNDLE_IMPORT_IDLE_LABEL}
 				</button>
 				<button type="button" class="mash-settings-action" onclick={onExportSync}>
 					Export desk bundle…
