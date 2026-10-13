@@ -47,6 +47,50 @@ export async function rememberItem(
 	await rememberDeskDeletion({ kind: 'item', canvasId, noteId, deletedAt });
 }
 
+/** Edit time strictly after a deletion, even when undo lands in the same millisecond. */
+export function restoredEditTime(deletedAt: number, now = Date.now()): number {
+	return Math.max(now, deletedAt + 1);
+}
+
+async function forgetStored(
+	marker: Pick<
+		DeskDeletionMarker,
+		'kind' | 'canvasId' | 'noteId' | 'fromNoteId' | 'toNoteId' | 'elementKey'
+	>
+): Promise<number | null> {
+	const id = deskDeletionId(marker);
+	if (!id) return null;
+	const existing = await db.deskDeletions.get(id);
+	if (!existing) return null;
+	await db.deskDeletions.delete(id);
+	if (marker.kind === 'item' && marker.noteId) {
+		const another = await db.deskDeletions
+			.filter((row) => row.kind === 'item' && row.noteId === marker.noteId)
+			.first();
+		if (!another) notesWithItemMarkers.delete(marker.noteId);
+	}
+	return existing.deletedAt;
+}
+
+export async function forgetItem(canvasId: string, noteId: string): Promise<number | null> {
+	return forgetStored({ kind: 'item', canvasId, noteId });
+}
+
+export async function forgetEdgeDeletion(edge: CanvasEdge): Promise<number | null> {
+	const notes = await noteIdsForItems([edge.fromItemId, edge.toItemId]);
+	const fromNoteId = notes.get(edge.fromItemId);
+	const toNoteId = notes.get(edge.toItemId);
+	if (!fromNoteId || !toNoteId) return null;
+	return forgetStored({ kind: 'edge', canvasId: edge.canvasId, fromNoteId, toNoteId });
+}
+
+export async function forgetElementDeletion(element: CanvasElement): Promise<number | null> {
+	const notes = await noteIdsForItems(canvasElementItemIds(element));
+	const elementKey = canvasElementDeletionKey(element, notes);
+	if (!elementKey) return null;
+	return forgetStored({ kind: 'element', canvasId: element.canvasId, elementKey });
+}
+
 export async function rememberEdgeDeletion(
 	edge: CanvasEdge,
 	deletedAt = Date.now()

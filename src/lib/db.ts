@@ -26,9 +26,13 @@ import {
 } from './canvas-elements';
 import type { StoredDeskDeletion } from './desk-deletions';
 import {
+	forgetEdgeDeletion,
+	forgetElementDeletion,
+	forgetItem,
 	rememberEdgeDeletion,
 	rememberElementDeletion,
-	rememberItem
+	rememberItem,
+	restoredEditTime
 } from './desk-deletion-record';
 
 // =============================================================================
@@ -725,9 +729,21 @@ export async function replaceCanvasItemSubset(
 	for (const item of removedItems) {
 		if (item) await rememberItem(item.canvasId, item.noteId);
 	}
+	const restoredItems: CanvasItem[] = [];
+	let restoredAt = Date.now();
+	for (const item of desiredItems) {
+		const deletedAt = await forgetItem(item.canvasId, item.noteId);
+		if (deletedAt == null) {
+			restoredItems.push(item);
+			continue;
+		}
+		const modified = restoredEditTime(deletedAt);
+		restoredAt = Math.max(restoredAt, modified);
+		restoredItems.push({ ...item, modified });
+	}
 	await db.transaction('rw', db.canvasItems, db.canvasElements, db.canvases, async () => {
 		if (affectedIds.length > 0) await db.canvasItems.bulkDelete(affectedIds);
-		if (desiredItems.length > 0) await db.canvasItems.bulkPut(desiredItems);
+		if (restoredItems.length > 0) await db.canvasItems.bulkPut(restoredItems);
 		const gone = new Set(removedIds);
 		if (gone.size > 0) {
 			const elements = await db.canvasElements.where('canvasId').equals(canvasId).toArray();
@@ -736,7 +752,7 @@ export async function replaceCanvasItemSubset(
 				.map((element) => element.id);
 			if (orphanIds.length > 0) await db.canvasElements.bulkDelete(orphanIds);
 		}
-		await db.canvases.update(canvasId, { modified: Date.now() });
+		await db.canvases.update(canvasId, { modified: restoredAt });
 	});
 }
 
@@ -819,11 +835,23 @@ export async function replaceCanvasEdges(canvasId: string, edges: CanvasEdge[]):
 	for (const edge of existing) {
 		if (!nextIds.has(edge.id)) await rememberEdgeDeletion(edge);
 	}
+	const next: CanvasEdge[] = [];
+	let restoredAt = Date.now();
+	for (const edge of edges) {
+		if (edge.canvasId !== canvasId) continue;
+		const deletedAt = await forgetEdgeDeletion(edge);
+		if (deletedAt != null && edge.created <= deletedAt) {
+			const created = restoredEditTime(deletedAt);
+			restoredAt = Math.max(restoredAt, created);
+			next.push({ ...edge, created });
+		} else {
+			next.push(edge);
+		}
+	}
 	await db.transaction('rw', db.canvasEdges, db.canvases, async () => {
 		if (existing.length > 0) await db.canvasEdges.bulkDelete(existing.map((edge) => edge.id));
-		const next = edges.filter((edge) => edge.canvasId === canvasId);
 		if (next.length > 0) await db.canvasEdges.bulkAdd(next);
-		await db.canvases.update(canvasId, { modified: Date.now() });
+		await db.canvases.update(canvasId, { modified: restoredAt });
 	});
 }
 
@@ -913,14 +941,23 @@ export async function replaceCanvasElements(
 	for (const element of existing) {
 		if (!nextIds.has(element.id)) await rememberElementDeletion(element);
 	}
+	const next: CanvasElement[] = [];
+	let restoredAt = Date.now();
+	for (const element of elements) {
+		if (element.canvasId !== canvasId) continue;
+		const deletedAt = await forgetElementDeletion(element);
+		const row = cloneCanvasElement(element);
+		if (deletedAt != null && row.modified <= deletedAt) {
+			row.modified = restoredEditTime(deletedAt);
+			restoredAt = Math.max(restoredAt, row.modified);
+		}
+		next.push(row);
+	}
 	await db.transaction('rw', db.canvasElements, db.canvases, db.canvasItems, async () => {
 		await db.canvasElements.where('canvasId').equals(canvasId).delete();
-		const next = elements
-			.filter((element) => element.canvasId === canvasId)
-			.map(cloneCanvasElement);
 		for (const element of next) await assertCanvasElementReferences(element);
 		if (next.length > 0) await db.canvasElements.bulkAdd(next);
-		await db.canvases.update(canvasId, { modified: Date.now() });
+		await db.canvases.update(canvasId, { modified: restoredAt });
 	});
 }
 

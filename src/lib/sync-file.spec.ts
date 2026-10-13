@@ -11,7 +11,20 @@ import {
 	SYNC_BUNDLE_MAX_CHARS,
 	SYNC_BUNDLE_VERSION
 } from './sync-file';
-import { db } from './db';
+import {
+	addCanvasEdge,
+	addCanvasElement,
+	addNoteToCanvas,
+	createNote,
+	db,
+	getOrCreateFolderCanvas,
+	removeCanvasEdge,
+	removeCanvasElement,
+	removeCanvasItem,
+	replaceCanvasEdges,
+	replaceCanvasElements,
+	replaceCanvasItemSubset
+} from './db';
 import type { Note } from './types';
 import { dismissNoteFromCanvas, getDismissedNoteIds } from './canvas-dismiss';
 
@@ -1059,5 +1072,70 @@ describe('desk bundle delete markers', () => {
 			['recent-card']
 		);
 		expect(await db.canvasItems.where('noteId').equals('recent-card').count()).toBe(1);
+	});
+
+	async function seedRemovedDesk() {
+		const noteA = await createNote({ title: 'A', body: 'card' });
+		const noteB = await createNote({ title: 'B', body: 'kept' });
+		const canvas = await getOrCreateFolderCanvas('');
+		const itemA = await addNoteToCanvas(canvas.id, noteA.id, { x: 4, y: 6 });
+		const itemB = await addNoteToCanvas(canvas.id, noteB.id, { x: 240, y: 6 });
+		const edge = await addCanvasEdge(canvas.id, itemA.id, itemB.id);
+		const arrow = await addCanvasElement({
+			id: 'arrow-undo',
+			canvasId: canvas.id,
+			version: 1,
+			kind: 'arrow',
+			start: { type: 'item', itemId: itemB.id, anchor: 'right' },
+			end: { type: 'point', x: 12, y: 24 },
+			zIndex: 1,
+			created: 1,
+			modified: 1
+		});
+		await removeCanvasEdge(edge.id);
+		await removeCanvasElement(arrow.id);
+		await removeCanvasItem(itemA.id);
+		return { noteA, noteB, canvas, itemA, itemB, edge, arrow };
+	}
+
+	/** Same persistence undo uses: restore the card, then the link, then the arrow. */
+	async function undoRemovedDesk(seed: Awaited<ReturnType<typeof seedRemovedDesk>>) {
+		await replaceCanvasItemSubset(seed.canvas.id, [seed.itemA.id], [{ ...seed.itemA }]);
+		await replaceCanvasEdges(seed.canvas.id, [{ ...seed.edge }]);
+		await replaceCanvasElements(seed.canvas.id, [{ ...seed.arrow }]);
+	}
+
+	async function expectRestored(seed: Awaited<ReturnType<typeof seedRemovedDesk>>) {
+		expect(await db.canvasItems.where('noteId').equals(seed.noteA.id).count()).toBe(1);
+		expect(await db.canvasEdges.where('canvasId').equals(seed.canvas.id).count()).toBe(1);
+		expect(await db.canvasElements.where('canvasId').equals(seed.canvas.id).count()).toBe(1);
+	}
+
+	it('keeps an undone card, link, and arrow after export and import', async () => {
+		const seed = await seedRemovedDesk();
+		await undoRemovedDesk(seed);
+		const exported = await buildSyncBundle([seed.noteA, seed.noteB]);
+		expect(exported.desk?.deletions ?? []).toEqual([]);
+		await importDesk(JSON.stringify(exported), [seed.noteA.id, seed.noteB.id]);
+		await expectRestored(seed);
+	});
+
+	it('keeps an undone card, link, and arrow when an older deletion bundle is imported', async () => {
+		const seed = await seedRemovedDesk();
+		const older = JSON.stringify(await buildSyncBundle([seed.noteA, seed.noteB]));
+		expect(JSON.parse(older).desk.deletions).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ kind: 'item', noteId: seed.noteA.id }),
+				expect.objectContaining({
+					kind: 'edge',
+					fromNoteId: seed.noteA.id,
+					toNoteId: seed.noteB.id
+				}),
+				expect.objectContaining({ kind: 'element' })
+			])
+		);
+		await undoRemovedDesk(seed);
+		await importDesk(older, [seed.noteA.id, seed.noteB.id]);
+		await expectRestored(seed);
 	});
 });
