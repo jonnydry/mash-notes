@@ -1,6 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import JSZip from 'jszip';
 import { buildExportDocument } from './export-document';
+import { preloadMarked } from './markdown-nodes';
+
+beforeAll(async () => {
+	await preloadMarked();
+});
 import { defaultPresentationExportOptions } from './export-templates';
 import { buildPresentationDocx } from './presentation-docx';
 import type { Note } from './types';
