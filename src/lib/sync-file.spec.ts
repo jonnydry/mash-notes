@@ -1175,4 +1175,20 @@ describe('desk bundle delete markers', () => {
 		await importDesk(older, [seed.noteA.id, seed.noteB.id]);
 		await expectRestored(seed);
 	});
+
+	it('keeps an undone card when the post-undo bundle is imported into a wiped database', async () => {
+		const seed = await seedRemovedDesk();
+		await undoRemovedDesk(seed);
+		const exported = JSON.stringify(await buildSyncBundle([seed.noteA, seed.noteB]));
+		expect(JSON.parse(exported).desk.deletions).toEqual([]);
+
+		await db.delete();
+		await db.open();
+		localStorage.clear();
+		await importDesk(exported, [seed.noteA.id, seed.noteB.id]);
+
+		expect(await db.canvasItems.where('noteId').equals(seed.noteA.id).count()).toBe(1);
+		expect(await db.canvasEdges.count()).toBe(1);
+		expect(await db.canvasElements.count()).toBe(1);
+	});
 });
