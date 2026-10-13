@@ -924,6 +924,51 @@ describe('desk bundle delete markers', () => {
 		]);
 	});
 
+	it('keeps a removed card removed when an old v6 desk re-exports without deletions', async () => {
+		const now = Date.now();
+		const deletedAt = now - 2 * DAY_MS;
+		await db.canvases.put({
+			id: 'canvas-v6',
+			folder: 'v6-reexport',
+			title: 'Desk',
+			created: 1,
+			modified: now - 10 * DAY_MS
+		});
+		await db.canvasItems.put({
+			id: 'card-v6-item',
+			canvasId: 'canvas-v6',
+			noteId: 'card-v6',
+			x: 4,
+			y: 6
+		});
+		await importDesk(
+			deskBundle({
+				folder: 'v6-reexport',
+				canvasId: 'remote-v6',
+				canvasModified: deletedAt,
+				items: [],
+				deletions: [{ kind: 'item', canvasId: 'remote-v6', noteId: 'card-v6', deletedAt }]
+			}),
+			['card-v6']
+		);
+		expect(await db.canvasItems.where('canvasId').equals('canvas-v6').count()).toBe(0);
+
+		// An old v6 desk still has the card and does not emit deletion markers.
+		const oldDeskExport = deskBundle({
+			version: 6,
+			folder: 'v6-reexport',
+			canvasId: 'remote-v6',
+			canvasModified: deletedAt - DAY_MS,
+			items: [{ id: 'old-v6', canvasId: 'remote-v6', noteId: 'card-v6', x: 8, y: 9 }]
+		});
+		const oldDesk = JSON.parse(oldDeskExport) as { version: number; desk: Record<string, unknown> };
+		expect(oldDesk.version).toBe(6);
+		expect(oldDesk.desk).not.toHaveProperty('deletions');
+
+		await importDesk(oldDeskExport, ['card-v6']);
+		expect(await db.canvasItems.where('canvasId').equals('canvas-v6').count()).toBe(0);
+	});
+
 	it('replaces the removed-from-board set when a newer marked bundle wins', async () => {
 		const now = Date.now();
 		await db.canvases.put({

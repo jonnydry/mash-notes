@@ -129,7 +129,6 @@
 	import { type HtmlClipPayload } from '$lib/html-clipping';
 	import { type PasteAnalysis } from '$lib/paste-cards';
 	import { DESK_IMAGE_MAX_PER_ACTION } from '$lib/desk-image';
-	import { createDeskBundleImport } from '$lib/desk-bundle-import';
 	import type { GifExplodeMode } from '$lib/gif-explode';
 	import { keepableNoteIds } from '$lib/keep-selection';
 	import {
@@ -258,21 +257,18 @@
 	let workspaceRestoreInputEl: HTMLInputElement | undefined = $state();
 	// documentReaders + selectionOps initialized after canvas (below)
 
-	const beginDeskBundleImport = createDeskBundleImport({
-		loadChunk: () => import('$lib/sync-file'),
-		onBusy: () => {
-			deskImportBusy = true;
-		},
-		onIdle: () => {
-			deskImportBusy = false;
-		},
-		onOffline: (message) => {
-			flashToast(message);
-		},
-		onReady: () => {
+	async function beginDeskBundleImport() {
+		if (deskImportBusy) return;
+		deskImportBusy = true;
+		try {
+			await import('$lib/sync-file');
 			syncInputEl?.click();
+		} catch {
+			flashToast('Import needs a connection the first time');
+		} finally {
+			deskImportBusy = false;
 		}
-	});
+	}
 
 	function flashToast(msg: string, ms = 1600) {
 		actionToast = msg;

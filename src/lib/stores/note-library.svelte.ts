@@ -33,12 +33,14 @@ import {
 import { SYNC_BUNDLE_MAX_CHARS } from '$lib/sync-limits';
 import type { SyncConflict } from '$lib/sync-model';
 import { isStaleSyncBundle, recordSyncImport } from '$lib/sync-hygiene';
-import { DESK_BUNDLE_IMPORT_OFFLINE_MESSAGE } from '$lib/desk-bundle-import';
 import {
 	ensureMashTeamWelcomeNote,
 	isMashTeamWelcomeCandidate,
 	isMashTeamWelcomeNote
 } from '$lib/system-notes';
+
+/** Same wording as DESK_BUNDLE_IMPORT_OFFLINE_MESSAGE. Kept here so the string stays in the shell. */
+const DESK_BUNDLE_IMPORT_OFFLINE_MESSAGE = 'Import needs a connection the first time';
 
 type SyncFileModule = typeof import('$lib/sync-file');
 type ConflictFormatter = SyncFileModule['formatConflictSummary'];

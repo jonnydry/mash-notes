@@ -33,10 +33,8 @@ const deferredInitialEntryNames = new Set([
 	'sync-file'
 ]);
 const budgets = {
-	// Main's shell is 651.9 KiB. Delete markers are written on every canvas
-	// mutation, so they stay in this first-load graph (measured 655.8 KiB).
-	// Desk-bundle merge is the precached sync-file chunk and is not counted here.
-	javascript: 656 * 1024,
+	// Export scope handoff is core shell behavior; PDF/DOCX builders and the sheet stay deferred.
+	javascript: 652 * 1024,
 	// Keep core canvas chrome tight; presentation-preview CSS is measured only after its lazy load.
 	css: 140 * 1024,
 	fonts: 120 * 1024,

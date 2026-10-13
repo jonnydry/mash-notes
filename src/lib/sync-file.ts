@@ -19,7 +19,12 @@ import { mergeNotesLww, hasConflicts, type MergeResult, type SyncConflict } from
 import { SYNC_BUNDLE_MAX_CHARS } from './sync-limits';
 import { normalizeImportedNote } from './import-notes';
 import { db, newId } from './db';
-import { exportAllDismissed, importDismissedMap, type DismissedByCanvas } from './canvas-dismiss';
+import {
+	clearDismissedForCanvas,
+	dismissNoteFromCanvas,
+	exportAllDismissed,
+	type DismissedByCanvas
+} from './canvas-dismiss';
 import {
 	canvasElementDeletionKey,
 	deletionExpired,
@@ -1433,6 +1438,17 @@ async function applyDeskIdbSnapshot(
 	};
 }
 
+/** Replace each listed canvas dismissal set, including an empty list. */
+function replaceImportedDismissals(map: DismissedByCanvas): void {
+	for (const [canvasId, noteIds] of Object.entries(map)) {
+		if (!canvasId || !Array.isArray(noteIds)) continue;
+		clearDismissedForCanvas(canvasId);
+		for (const noteId of noteIds) {
+			if (typeof noteId === 'string' && noteId) dismissNoteFromCanvas(canvasId, noteId);
+		}
+	}
+}
+
 /**
  * Apply remote desk onto local IndexedDB, then merge dismissals into localStorage.
  */
@@ -1446,7 +1462,7 @@ export async function applyDeskSnapshot(
 		knownNoteIds,
 		sessionId
 	);
-	if (dismissedMode === 'replace') importDismissedMap(remappedDismissed, 'replace');
+	if (dismissedMode === 'replace') replaceImportedDismissals(remappedDismissed);
 	return summary;
 }
 
@@ -1562,7 +1578,7 @@ export async function persistMergedSync(
 	);
 
 	if (dismissal.mode === 'replace') {
-		importDismissedMap(dismissal.map, 'replace');
+		replaceImportedDismissals(dismissal.map);
 	}
 
 	return { desk: deskSummary, operationsUpserted, blobsUpserted };
