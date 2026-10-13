@@ -217,4 +217,100 @@ describe('note library sticky save on hide', () => {
 			db.notes.update = originalUpdate as unknown as typeof db.notes.update;
 		}
 	});
+
+	it('does not write again on a second pagehide', async () => {
+		const note = await createNote({ title: 'Draft', body: 'before' });
+		const life = installPageLifecycle();
+		const library = libraryForTests();
+		await library.loadNotes();
+		window.addEventListener('pagehide', library.flushPendingSave);
+		const originalUpdate = db.notes.update.bind(db.notes);
+		let updateCalls = 0;
+		let releaseDelayedWrite: () => void = () => undefined;
+		const delayedWrite = new Promise<void>((resolve) => {
+			releaseDelayedWrite = resolve;
+		});
+		let pendingWrite: Promise<unknown> = Promise.resolve();
+		db.notes.update = (async (...args: Parameters<typeof originalUpdate>) => {
+			const id = args[0];
+			if (id !== note.id) return originalUpdate(...args);
+			updateCalls += 1;
+			pendingWrite = delayedWrite.then(() => originalUpdate(...args));
+			return pendingWrite;
+		}) as unknown as typeof db.notes.update;
+
+		try {
+			vi.useFakeTimers();
+			library.handleStickyBodyChange(note.id, 'once');
+			life.pageHide();
+			expect(updateCalls).toBe(1);
+
+			life.pageHide();
+			await vi.advanceTimersByTimeAsync(1_000);
+			expect(updateCalls).toBe(1);
+
+			vi.useRealTimers();
+			releaseDelayedWrite();
+			await pendingWrite;
+			expect((await db.notes.get(note.id))?.body).toBe('once');
+
+			life.pageHide();
+			expect(updateCalls).toBe(1);
+			expect((await db.notes.get(note.id))?.body).toBe('once');
+			expect(library.notesById.get(note.id)?.body).toBe('once');
+		} finally {
+			db.notes.update = originalUpdate as unknown as typeof db.notes.update;
+		}
+	});
+
+	it('saves an edit made after a flush', async () => {
+		const note = await createNote({ title: 'Draft', body: 'before' });
+		const library = libraryForTests();
+		await library.loadNotes();
+
+		vi.useFakeTimers();
+		library.handleStickyBodyChange(note.id, 'flushed');
+		const flushed = library.flushPendingSaveAsync();
+		vi.useRealTimers();
+		await flushed;
+		expect((await db.notes.get(note.id))?.body).toBe('flushed');
+
+		vi.useFakeTimers();
+		library.handleStickyBodyChange(note.id, 'edited after flush');
+		const debounced = vi.advanceTimersByTimeAsync(450);
+		vi.useRealTimers();
+		await debounced;
+		expect(library.notesById.get(note.id)?.body).toBe('edited after flush');
+		expect((await db.notes.get(note.id))?.body).toBe('edited after flush');
+		expect(library.writeError).toBe('');
+	});
+
+	it('keeps a newer edit when an in-flight flush fails', async () => {
+		const note = await createNote({ title: 'Draft', body: 'before' });
+		const library = libraryForTests();
+		await library.loadNotes();
+		const originalUpdate = db.notes.update.bind(db.notes);
+		db.notes.update = (async () => {
+			throw new Error('Quota exceeded');
+		}) as unknown as typeof db.notes.update;
+
+		try {
+			vi.useFakeTimers();
+			library.handleStickyBodyChange(note.id, 'stale');
+			library.flushPendingSave();
+			library.handleStickyBodyChange(note.id, 'fresh');
+			await vi.advanceTimersByTimeAsync(0);
+			expect(library.notesById.get(note.id)?.body).toBe('fresh');
+			expect(library.writeError).toMatch(/could not save/i);
+
+			vi.useRealTimers();
+			db.notes.update = originalUpdate as unknown as typeof db.notes.update;
+			await library.flushPendingSaveAsync();
+			expect(library.writeError).toBe('');
+			expect(library.notesById.get(note.id)?.body).toBe('fresh');
+			expect((await db.notes.get(note.id))?.body).toBe('fresh');
+		} finally {
+			db.notes.update = originalUpdate as unknown as typeof db.notes.update;
+		}
+	});
 });
