@@ -28,8 +28,7 @@
 		isMarkedReady,
 		markdownNodes,
 		preloadMarked,
-		selectPreviewNodes,
-		type MarkdownNode
+		selectPreviewNodes
 	} from '$lib/markdown-nodes';
 	import { isMashBlobRef, releaseDisplayUrl, resolveDisplayUrl } from '$lib/note-blobs';
 	import { portal } from '$lib/portal';
@@ -76,8 +75,6 @@
 	let embeddedImage = $derived(parseEmbeddedNoteImage(body));
 	let editableText = $derived(embeddedImage ? embeddedImage.caption : body);
 	let markedReady = $state(isMarkedReady());
-	/** Last markdown render, kept on screen while a newer one is still loading. */
-	let previousPreview = $state<MarkdownNode[] | null>(null);
 	let activePreviewSource = $derived.by(() => {
 		if (embeddedImage) {
 			if (mode === 'edit' && !readOnly) return null;
@@ -92,7 +89,7 @@
 			? []
 			: selectPreviewNodes(
 					activePreviewSource,
-					previousPreview,
+					null,
 					markedReady ? markdownNodes(activePreviewSource) : null
 				)
 	);
@@ -145,11 +142,10 @@
 		void preloadMarked()
 			.then(() => {
 				if (cancelled) return;
-				previousPreview = markdownNodes(source);
 				markedReady = true;
 			})
 			.catch(() => {
-				// Stay on plain text or the previous render. A later source change retries.
+				// Stay on the stripped preview. A later source change retries.
 			});
 		return () => {
 			cancelled = true;

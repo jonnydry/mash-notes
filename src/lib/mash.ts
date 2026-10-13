@@ -228,7 +228,8 @@ ${pages}
 
 /**
  * Open a print dialog for a page sequence (Save as PDF in the browser).
- * Opens a blob URL in a new tab (avoids iframe print crashes in Chromium/PWAs).
+ * The window opens on the click, before marked loads, so Safari still treats it
+ * as the user gesture. The page is filled in once the print HTML is ready.
  * If the popup is blocked, downloads an HTML file instead.
  * No-op outside the browser.
  */
@@ -237,26 +238,38 @@ export async function printSequenceAsPdf(notes: Note[], docTitle?: string): Prom
 	const title =
 		docTitle ??
 		(notes.length === 1 ? notes[0].title.trim() || 'Untitled' : `Sequence · ${notes.length} pages`);
+	// Do not pass noopener — it makes window.open return null in Chromium.
+	// Open before any await. A later open is no longer part of the click, and Safari blocks it.
+	const win = window.open('', '_blank', 'width=900,height=700');
 	let html: string;
 	try {
 		html = await sequencePrintHtml(notes, title);
 	} catch (e) {
 		console.error(e);
+		win?.close();
 		return false;
 	}
 	const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
 	const url = URL.createObjectURL(blob);
-	// Do not pass noopener — it makes window.open return null in Chromium.
-	const win = window.open(url, '_blank', 'width=900,height=700');
-	if (!win) {
+	if (!win || win.closed) {
+		URL.revokeObjectURL(url);
+		if (!win) {
+			downloadTextFile(
+				html,
+				`${slugifyFilename(title, 'sequence')}.html`,
+				'text/html;charset=utf-8'
+			);
+			return true;
+		}
+		return false;
+	}
+	try {
+		win.location.href = url;
+		win.opener = null;
+	} catch {
 		URL.revokeObjectURL(url);
 		downloadTextFile(html, `${slugifyFilename(title, 'sequence')}.html`, 'text/html;charset=utf-8');
 		return true;
-	}
-	try {
-		win.opener = null;
-	} catch {
-		/* ignore */
 	}
 	setTimeout(() => URL.revokeObjectURL(url), 60_000);
 	return true;
