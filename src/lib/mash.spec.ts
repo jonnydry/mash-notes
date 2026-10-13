@@ -112,8 +112,8 @@ describe('notesFromSelection', () => {
 });
 
 describe('sequencePrintHtml', () => {
-	it('emits one section per note with page breaks', () => {
-		const html = sequencePrintHtml([
+	it('emits one section per note with page breaks', async () => {
+		const html = await sequencePrintHtml([
 			note({ id: '1', title: 'Project ideas', body: '- Build' }),
 			note({ id: '2', title: 'Goals', body: '1. Fast' })
 		]);
@@ -124,8 +124,8 @@ describe('sequencePrintHtml', () => {
 		expect(html).toContain('page-break-after: always');
 	});
 
-	it('applies note textAlign to each page', () => {
-		const html = sequencePrintHtml([
+	it('applies note textAlign to each page', async () => {
+		const html = await sequencePrintHtml([
 			note({ id: '1', title: 'Centered', body: 'Hi', textAlign: 'center' })
 		]);
 		expect(html).toContain('text-align: center');

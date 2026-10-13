@@ -1,8 +1,11 @@
 /**
- * Safe markdown rendering for sticky preview.
+ * Safe markdown rendering for sticky preview and print.
  * Wikilinks [[Title]] become clickable buttons; raw HTML is escaped by marked.
+ * The marked library loads from a separate chunk the first time it is needed.
  */
-import { marked, type Tokens } from 'marked';
+import { escapeAttr, escapeHtml, isSafeImageSrc } from './markdown-sanitize';
+
+export { isSafeHref, isSafeImageSrc } from './markdown-sanitize';
 
 const WIKILINK_RE = /\[\[([^\]|#]+)(?:\|([^\]]+))?\]\]/g;
 
@@ -16,66 +19,6 @@ export function extractWikilinks(body: string): string[] {
 		links.push(target);
 	}
 	return links;
-}
-
-function escapeAttr(s: string): string {
-	return s
-		.replace(/&/g, '&amp;')
-		.replace(/"/g, '&quot;')
-		.replace(/</g, '&lt;')
-		.replace(/>/g, '&gt;');
-}
-
-function escapeHtml(s: string): string {
-	return s
-		.replace(/&/g, '&amp;')
-		.replace(/</g, '&lt;')
-		.replace(/>/g, '&gt;')
-		.replace(/"/g, '&quot;');
-}
-
-/** Allow http(s), mailto, relative paths; block javascript/data/vbscript and protocol-relative URLs. */
-export function isSafeHref(href: string | undefined | null): boolean {
-	if (!href) return false;
-	const trimmed = href.trim();
-	if (!trimmed || trimmed.startsWith('#')) return true;
-	const lower = trimmed.toLowerCase();
-	// Protocol-relative URLs (//evil.example) inherit the page scheme and can phish.
-	if (trimmed.startsWith('//')) return false;
-	if (
-		lower.startsWith('javascript:') ||
-		lower.startsWith('data:') ||
-		lower.startsWith('vbscript:')
-	) {
-		return false;
-	}
-	return (
-		lower.startsWith('http://') ||
-		lower.startsWith('https://') ||
-		lower.startsWith('mailto:') ||
-		lower.startsWith('/') ||
-		lower.startsWith('./') ||
-		lower.startsWith('../') ||
-		// Relative paths without a scheme (no "word:")
-		!/^[a-z][a-z0-9+.-]*:/i.test(trimmed)
-	);
-}
-
-/** Safe image sources for sticky preview — local raster data and mash-blob refs only. */
-export function isSafeImageSrc(href: string | undefined | null): boolean {
-	if (!href) return false;
-	const trimmed = href.trim();
-	const lower = trimmed.toLowerCase();
-	if (/^data:image\/(?:png|jpeg|webp|gif);base64,[a-z0-9+/=\s]+$/i.test(trimmed)) {
-		return true;
-	}
-	// Out-of-line IndexedDB blobs: mash-blob:<id> (strict id charset).
-	if (lower.startsWith('mash-blob:')) {
-		const id = trimmed.slice('mash-blob:'.length);
-		return /^[A-Za-z0-9_-]{8,128}$/.test(id);
-	}
-	// Remote images would make opening an imported note leak the reader's IP and referrer.
-	return false;
 }
 
 /** Replace wikilinks with placeholders before markdown, restore as buttons after. */
@@ -102,30 +45,10 @@ function restoreWikilinks(html: string, links: Array<{ target: string; label: st
 	});
 }
 
-marked.use({
-	gfm: true,
-	breaks: true,
-	renderer: {
-		html({ text }: Tokens.HTML | Tokens.Tag) {
-			return escapeHtml(text);
-		},
-		link({ href, title, text }: Tokens.Link) {
-			const safeHref = isSafeHref(href) ? href! : '#';
-			const t = title ? ` title="${escapeAttr(title)}"` : '';
-			return `<a href="${escapeAttr(safeHref)}"${t} rel="noopener noreferrer" target="_blank">${text}</a>`;
-		},
-		image({ href, title, text }: Tokens.Image) {
-			if (!isSafeImageSrc(href)) return '';
-			const t = title ? ` title="${escapeAttr(title)}"` : '';
-			const alt = escapeAttr(text || 'Image');
-			return `<img src="${escapeAttr(href!)}" alt="${alt}"${t} loading="lazy" />`;
-		}
-	}
-});
-
-export function renderMarkdown(body: string): string {
+export async function renderMarkdown(body: string): Promise<string> {
+	const { parseMarkdown } = await import('./marked-runtime');
 	const { text, links } = protectWikilinks(body);
-	const raw = marked.parse(text, { async: false }) as string;
+	const raw = parseMarkdown(text);
 	return restoreWikilinks(raw, links);
 }
 

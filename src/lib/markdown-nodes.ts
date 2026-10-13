@@ -1,5 +1,4 @@
-import { marked } from 'marked';
-import { isSafeHref, isSafeImageSrc } from './markdown';
+import { isSafeHref, isSafeImageSrc } from './markdown-sanitize';
 
 export type MarkdownNode =
 	| { type: 'text'; text: string }
@@ -161,7 +160,82 @@ function convertTokens(tokens: LexerToken[]): MarkdownNode[] {
 	return tokens.flatMap(convertToken);
 }
 
+let lexMarkdown: ((body: string) => LexerToken[]) | null = null;
+let loadingMarked: Promise<void> | null = null;
+
+export function isMarkedReady(): boolean {
+	return lexMarkdown !== null;
+}
+
+/** Load the marked chunk. Repeated calls share one in-flight import. */
+export function preloadMarked(): Promise<void> {
+	loadingMarked ??= import('./marked-runtime')
+		.then((mod) => {
+			lexMarkdown = (body) => mod.lexMarkdown(body) as LexerToken[];
+		})
+		.catch((error: unknown) => {
+			loadingMarked = null;
+			throw error;
+		});
+	return loadingMarked;
+}
+
+/**
+ * Run work on the frame after first paint.
+ * One animation frame runs before paint; the second runs after it.
+ */
+export function runAfterFirstPaint(work: () => void): () => void {
+	if (typeof requestAnimationFrame !== 'function') {
+		work();
+		return () => {};
+	}
+	let inner = 0;
+	const outer = requestAnimationFrame(() => {
+		inner = requestAnimationFrame(() => {
+			work();
+		});
+	});
+	return () => {
+		cancelAnimationFrame(outer);
+		if (inner) cancelAnimationFrame(inner);
+	};
+}
+
+/** Start the marked download once the first paint has happened. */
+export function preloadMarkedAfterPaint(): () => void {
+	return runAfterFirstPaint(() => {
+		void preloadMarked();
+	});
+}
+
 /** Parse Markdown into inert render data so preview never needs an HTML injection sink. */
 export function markdownNodes(body: string): MarkdownNode[] {
-	return convertTokens(marked.lexer(body) as unknown as LexerToken[]);
+	if (!lexMarkdown) throw new Error('Markdown runtime is not loaded');
+	return convertTokens(lexMarkdown(body));
+}
+
+/** Visible text while the markdown chunk is still loading. Newlines stay as breaks. */
+export function plainMarkdownNodes(body: string): MarkdownNode[] {
+	if (!body) return [];
+	const children: MarkdownNode[] = [];
+	const lines = body.split('\n');
+	for (let index = 0; index < lines.length; index++) {
+		if (index > 0) children.push({ type: 'break' });
+		if (lines[index]) children.push({ type: 'text', text: lines[index] });
+	}
+	return [{ type: 'paragraph', children }];
+}
+
+/**
+ * What preview should paint before marked finishes.
+ * Ready nodes win. Otherwise keep the previous render, or fall back to plain text.
+ */
+export function selectPreviewNodes(
+	source: string,
+	previous: MarkdownNode[] | null,
+	readyNodes: MarkdownNode[] | null
+): MarkdownNode[] {
+	if (readyNodes) return readyNodes;
+	if (previous) return previous;
+	return plainMarkdownNodes(source);
 }

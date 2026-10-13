@@ -126,32 +126,37 @@ function escapeHtml(s: string): string {
 }
 
 /** Plain-text body for print — avoids interactive wikilink buttons in the print doc. */
-function printBodyHtml(body: string): string {
+async function printBodyHtml(body: string): Promise<string> {
 	const plain = body.replace(/\[\[([^\]|#]+)(?:\|([^\]]+))?\]\]/g, (_m, target, label) =>
 		String(label ?? target).trim()
 	);
 	try {
-		return renderMarkdown(plain).replace(/<button\b[^>]*>(.*?)<\/button>/gi, '$1');
+		return (await renderMarkdown(plain)).replace(/<button\b[^>]*>(.*?)<\/button>/gi, '$1');
 	} catch {
 		return `<pre>${escapeHtml(body)}</pre>`;
 	}
 }
 
 /** Printable HTML: one note per page (browser Print → Save as PDF). */
-export function sequencePrintHtml(notes: Note[], docTitle = 'Page sequence'): string {
-	const pages = notes
-		.map((n, i) => {
-			const title = n.title.trim() || 'Untitled';
-			const body = n.body.trim() ? printBodyHtml(n.body) : '<p class="empty"> </p>';
-			const align = n.textAlign === 'center' || n.textAlign === 'right' ? n.textAlign : 'left';
-			const breakAfter = i < notes.length - 1 ? ' page-break-after: always;' : '';
-			return `<section class="page" style="text-align: ${align};${breakAfter}">
+export async function sequencePrintHtml(
+	notes: Note[],
+	docTitle = 'Page sequence'
+): Promise<string> {
+	const pages = (
+		await Promise.all(
+			notes.map(async (n, i) => {
+				const title = n.title.trim() || 'Untitled';
+				const body = n.body.trim() ? await printBodyHtml(n.body) : '<p class="empty"> </p>';
+				const align = n.textAlign === 'center' || n.textAlign === 'right' ? n.textAlign : 'left';
+				const breakAfter = i < notes.length - 1 ? ' page-break-after: always;' : '';
+				return `<section class="page" style="text-align: ${align};${breakAfter}">
   <p class="page-num">Page ${i + 1} of ${notes.length}</p>
   <h1>${escapeHtml(title)}</h1>
   <div class="body">${body}</div>
 </section>`;
-		})
-		.join('\n');
+			})
+		)
+	).join('\n');
 
 	return `<!DOCTYPE html>
 <html lang="en">
@@ -227,14 +232,14 @@ ${pages}
  * If the popup is blocked, downloads an HTML file instead.
  * No-op outside the browser.
  */
-export function printSequenceAsPdf(notes: Note[], docTitle?: string): boolean {
+export async function printSequenceAsPdf(notes: Note[], docTitle?: string): Promise<boolean> {
 	if (typeof window === 'undefined' || notes.length === 0) return false;
 	const title =
 		docTitle ??
 		(notes.length === 1 ? notes[0].title.trim() || 'Untitled' : `Sequence · ${notes.length} pages`);
 	let html: string;
 	try {
-		html = sequencePrintHtml(notes, title);
+		html = await sequencePrintHtml(notes, title);
 	} catch (e) {
 		console.error(e);
 		return false;

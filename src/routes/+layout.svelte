@@ -3,6 +3,7 @@
 	import { pwaInfo } from 'virtual:pwa-info';
 	import './fonts.css';
 	import './layout.css';
+	import { preloadMarkedAfterPaint } from '$lib/markdown-nodes';
 	import { theme } from '$lib/stores/theme.svelte';
 	import { typography } from '$lib/stores/typography.svelte';
 	import MobileDesktopNotice from '$lib/components/MobileDesktopNotice.svelte';
@@ -14,16 +15,19 @@
 	// Ensure suite tokens apply on first paint (store constructor also applies).
 	void typography.suiteId;
 
-	onMount(async () => {
-		if (!pwaInfo) return;
-
-		const { registerSW } = await import('virtual:pwa-register');
-		registerSW({
-			immediate: true,
-			onRegisterError(error) {
-				console.error('Mash offline support could not start', error);
-			}
-		});
+	onMount(() => {
+		const cancelPreload = mobileOnly ? () => {} : preloadMarkedAfterPaint();
+		if (pwaInfo) {
+			void import('virtual:pwa-register').then(({ registerSW }) => {
+				registerSW({
+					immediate: true,
+					onRegisterError(error) {
+						console.error('Mash offline support could not start', error);
+					}
+				});
+			});
+		}
+		return cancelPreload;
 	});
 </script>
 

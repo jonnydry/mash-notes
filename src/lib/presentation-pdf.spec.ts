@@ -1,11 +1,16 @@
-import { describe, expect, it } from 'vitest';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { PDFDocument } from 'pdf-lib';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { buildExportDocument, type ExportTemplateId } from './export-document';
 import { defaultPresentationExportOptions } from './export-templates';
+import { preloadMarked } from './markdown-nodes';
 import { buildPresentationPdf, type PresentationPdfFontBytes } from './presentation-pdf';
 import type { Note } from './types';
+
+beforeAll(async () => {
+	await preloadMarked();
+});
 
 function note(title: string, body: string): Note {
 	return {

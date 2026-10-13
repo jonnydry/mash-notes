@@ -1,5 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { buildExportDocument, exportDocumentWordCount, noteSourceLabel } from './export-document';
+import { preloadMarked } from './markdown-nodes';
+
+beforeAll(async () => {
+	await preloadMarked();
+});
 import type { Note } from './types';
 
 function note(partial: Partial<Note> & Pick<Note, 'id' | 'title'>): Note {
