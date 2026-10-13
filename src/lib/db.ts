@@ -593,6 +593,7 @@ export async function addNoteToCanvas(
 
 		const count = await db.canvasItems.where('canvasId').equals(canvasId).count();
 		const slot = gridSlotPosition(count);
+		const now = Date.now();
 		const item: CanvasItem = {
 			id: newId(),
 			canvasId,
@@ -600,11 +601,12 @@ export async function addNoteToCanvas(
 			x: pos?.x ?? slot.x,
 			y: pos?.y ?? slot.y,
 			w: pos?.w ?? 220,
-			h: pos?.h ?? 120
+			h: pos?.h ?? 120,
+			modified: now
 		};
 		try {
 			await db.canvasItems.add(item);
-			await db.canvases.update(canvasId, { modified: Date.now() });
+			await db.canvases.update(canvasId, { modified: now });
 			return item;
 		} catch {
 			const raced = await db.canvasItems
@@ -623,24 +625,26 @@ export async function updateCanvasItemPosition(
 	opts?: { touchCanvas?: boolean }
 ): Promise<void> {
 	const item = await db.canvasItems.get(id);
-	const patch: Partial<CanvasItem> = { x: pos.x, y: pos.y };
+	const now = Date.now();
+	const patch: Partial<CanvasItem> = { x: pos.x, y: pos.y, modified: now };
 	if (pos.w !== undefined) patch.w = pos.w;
 	if (pos.h !== undefined) patch.h = pos.h;
 	await db.canvasItems.update(id, patch);
 	if (item && opts?.touchCanvas !== false) {
-		await db.canvases.update(item.canvasId, { modified: Date.now() });
+		await db.canvases.update(item.canvasId, { modified: now });
 	}
 }
 
 export async function updateCanvasItemColor(id: string, color: CanvasItem['color']): Promise<void> {
 	const item = await db.canvasItems.get(id);
 	if (!item) return;
-	const next = { ...item };
+	const now = Date.now();
+	const next = { ...item, modified: now };
 	if (color) next.color = color;
 	else delete next.color;
 	await db.transaction('rw', db.canvasItems, db.canvases, async () => {
 		await db.canvasItems.put(next);
-		await db.canvases.update(item.canvasId, { modified: Date.now() });
+		await db.canvases.update(item.canvasId, { modified: now });
 	});
 }
 
@@ -651,18 +655,19 @@ export async function bulkUpdateCanvasItemColors(
 ): Promise<void> {
 	const ids = [...new Set(itemIds)];
 	if (ids.length === 0) return;
+	const now = Date.now();
 	await db.transaction('rw', db.canvasItems, db.canvases, async () => {
 		const items = await db.canvasItems.bulkGet(ids);
 		let canvasId: string | undefined;
 		for (const item of items) {
 			if (!item) continue;
 			canvasId ??= item.canvasId;
-			const next = { ...item };
+			const next = { ...item, modified: now };
 			if (color) next.color = color;
 			else delete next.color;
 			await db.canvasItems.put(next);
 		}
-		if (canvasId) await db.canvases.update(canvasId, { modified: Date.now() });
+		if (canvasId) await db.canvases.update(canvasId, { modified: now });
 	});
 }
 
@@ -679,10 +684,11 @@ export async function bulkUpdateCanvasItemPositions(
 		await updateCanvasItemPosition(m.itemId, { x: m.x, y: m.y, w: m.w, h: m.h });
 		return;
 	}
+	const now = Date.now();
 	await db.transaction('rw', db.canvasItems, db.canvases, async () => {
 		let canvasId: string | undefined;
 		for (const m of moves) {
-			const patch: Partial<CanvasItem> = { x: m.x, y: m.y };
+			const patch: Partial<CanvasItem> = { x: m.x, y: m.y, modified: now };
 			if (m.w !== undefined) patch.w = m.w;
 			if (m.h !== undefined) patch.h = m.h;
 			if (!canvasId) {
@@ -692,7 +698,7 @@ export async function bulkUpdateCanvasItemPositions(
 			await db.canvasItems.update(m.itemId, patch);
 		}
 		if (canvasId) {
-			await db.canvases.update(canvasId, { modified: Date.now() });
+			await db.canvases.update(canvasId, { modified: now });
 		}
 	});
 }
@@ -730,14 +736,11 @@ export async function replaceCanvasItemSubset(
 		if (item) await rememberItem(item.canvasId, item.noteId);
 	}
 	const restoredItems: CanvasItem[] = [];
-	let restoredAt = Date.now();
+	const now = Date.now();
+	let restoredAt = now;
 	for (const item of desiredItems) {
 		const deletedAt = await forgetItem(item.canvasId, item.noteId);
-		if (deletedAt == null) {
-			restoredItems.push(item);
-			continue;
-		}
-		const modified = restoredEditTime(deletedAt);
+		const modified = deletedAt == null ? now : restoredEditTime(deletedAt, now);
 		restoredAt = Math.max(restoredAt, modified);
 		restoredItems.push({ ...item, modified });
 	}

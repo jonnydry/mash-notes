@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import 'fake-indexeddb/auto';
 import {
 	buildSyncBundle,
@@ -22,6 +22,7 @@ import {
 	removeCanvasElement,
 	removeCanvasItem,
 	replaceCanvasEdges,
+	updateCanvasItemPosition,
 	replaceCanvasElements,
 	replaceCanvasItemSubset
 } from './db';
@@ -1072,6 +1073,42 @@ describe('desk bundle delete markers', () => {
 			['recent-card']
 		);
 		expect(await db.canvasItems.where('noteId').equals('recent-card').count()).toBe(1);
+	});
+
+	it('does not bring a deleted card back when another card on the desk was moved later', async () => {
+		const now = Date.now();
+		const placedAt = now - 3 * DAY_MS;
+		const deletedAt = now - 2 * DAY_MS;
+		const movedAt = now - DAY_MS;
+		const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(placedAt);
+		try {
+			const canvas = await getOrCreateFolderCanvas('');
+			const n1 = await addNoteToCanvas(canvas.id, 'n1', { x: 0, y: 0 });
+			const n2 = await addNoteToCanvas(canvas.id, 'n2', { x: 220, y: 0 });
+			expect((await db.canvasItems.get(n1.id))?.modified).toBe(placedAt);
+
+			nowSpy.mockReturnValue(movedAt);
+			await updateCanvasItemPosition(n2.id, { x: 400, y: 12 });
+			expect((await db.canvases.get(canvas.id))?.modified).toBe(movedAt);
+			expect((await db.canvasItems.get(n1.id))?.modified).toBe(placedAt);
+
+			nowSpy.mockReturnValue(now);
+			await importDesk(
+				deskBundle({
+					canvasModified: now - 4 * DAY_MS,
+					items: [
+						{ id: 'ri1', canvasId: 'remote-root', noteId: 'n1', x: 1, y: 1 },
+						{ id: 'ri2', canvasId: 'remote-root', noteId: 'n2', x: 2, y: 2 }
+					],
+					deletions: [{ kind: 'item', canvasId: 'remote-root', noteId: 'n1', deletedAt }]
+				}),
+				['n1', 'n2']
+			);
+		} finally {
+			nowSpy.mockRestore();
+		}
+
+		expect((await db.canvasItems.toArray()).map((item) => item.noteId).sort()).toEqual(['n2']);
 	});
 
 	async function seedRemovedDesk() {

@@ -1320,6 +1320,7 @@ async function applyDeskIdbSnapshot(
 					})
 				: null;
 		const edgeMarker = edgeMarkerId ? activeDeletions.get(edgeMarkerId) : undefined;
+		// remoteEdge.created is an edge's only edit time.
 		if (edgeMarker && !editBeatsDeletion(remoteEdge.created, edgeMarker.deletedAt)) {
 			edgesSkipped += 1;
 			continue;

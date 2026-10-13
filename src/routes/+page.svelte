@@ -722,7 +722,10 @@
 		},
 		selectNote: (id, selOpts) => library.selectNote(id, selOpts),
 		toggleSelection: (id, selOpts) => library.toggleSelection(id, selOpts),
-		deleteBlankNote: (id) => deleteNote(id),
+		deleteBlankNote: (id) => {
+			library.cancelStickySave(id);
+			return deleteNote(id);
+		},
 		removeNoteFromSearch,
 		removeNoteFromLibrary: (id) => {
 			library.notes = library.notes.filter((n) => n.id !== id);

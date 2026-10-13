@@ -33,7 +33,6 @@ import {
 import { SYNC_BUNDLE_MAX_CHARS } from '$lib/sync-limits';
 import type { SyncConflict } from '$lib/sync-model';
 import { isStaleSyncBundle, recordSyncImport } from '$lib/sync-hygiene';
-import { noteHasDeskDeletionMarker } from '$lib/desk-deletion-record';
 import {
 	ensureMashTeamWelcomeNote,
 	isMashTeamWelcomeCandidate,
@@ -409,8 +408,9 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 		deletedNoteIds.add(noteId);
 	}
 
+	/** A card taken off the canvas is still a live note. Skip only a real delete. */
 	function flushSkipsNote(noteId: string): boolean {
-		return deletedNoteIds.has(noteId) || noteHasDeskDeletionMarker(noteId);
+		return deletedNoteIds.has(noteId);
 	}
 
 	function scheduleStickyPersist(noteId: string, patch: Partial<Note>, updated: Note) {
@@ -1242,6 +1242,7 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 		tagSelection,
 		assignFolderToSelection,
 		handleDelete,
+		cancelStickySave,
 		deleteFolder,
 		deleteTag,
 		copySelection,

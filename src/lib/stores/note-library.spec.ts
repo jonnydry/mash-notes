@@ -1,7 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import 'fake-indexeddb/auto';
 import { webcrypto } from 'node:crypto';
-import { createNote, db } from '$lib/db';
+import {
+	addNoteToCanvas,
+	createNote,
+	db,
+	getOrCreateFolderCanvas,
+	removeCanvasItem
+} from '$lib/db';
 import { createNoteLibrary } from './note-library.svelte';
 
 if (!globalThis.crypto?.randomUUID) {
@@ -197,6 +203,13 @@ describe('deleted notes are not written back', () => {
 		library.handleDelete();
 		await confirm();
 
+		// Dropping the note from the shelf is not the guard. A hide flush that
+		// can still see the row must not write the pending edit over the tombstone.
+		library.notes = [
+			...library.notes,
+			{ ...note, body: 'typed then deleted', modified: Date.now() }
+		];
+
 		vi.stubGlobal('document', { visibilityState: 'hidden' });
 		library.handleVisibilityChange();
 		library.flushPendingSave();
@@ -206,6 +219,40 @@ describe('deleted notes are not written back', () => {
 		const stored = await db.notes.get(note.id);
 		expect(stored?.deletedAt).toEqual(expect.any(Number));
 		expect(stored?.body).toBe('original');
+		expect(stored!.modified).toBeLessThanOrEqual(stored!.deletedAt!);
+	});
+
+	it('saves a later edit after the card is only removed from the canvas', async () => {
+		const note = await createNote({ title: 'Stay', body: 'original' });
+		const canvas = await getOrCreateFolderCanvas('');
+		const item = await addNoteToCanvas(canvas.id, note.id);
+		await removeCanvasItem(item.id);
+		const { library } = libraryWithConfirm();
+		await library.loadNotes();
+		vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
+		const originalUpdate = db.notes.update.bind(db.notes);
+		let saved = Promise.resolve();
+		db.notes.update = (async (...args: Parameters<typeof originalUpdate>) => {
+			const result = originalUpdate(...args);
+			saved = result.then(() => undefined);
+			return result;
+		}) as typeof db.notes.update;
+
+		try {
+			library.selectNote(note.id);
+			library.handleStickyBodyChange(note.id, 'edited off the desk');
+
+			vi.stubGlobal('document', { visibilityState: 'hidden' });
+			library.handleVisibilityChange();
+			await vi.advanceTimersByTimeAsync(500);
+			await saved;
+
+			const stored = await db.notes.get(note.id);
+			expect(stored?.deletedAt).toBeUndefined();
+			expect(stored?.body).toBe('edited off the desk');
+		} finally {
+			db.notes.update = originalUpdate;
+		}
 	});
 
 	it('does not write a sticky save that was still inside the 400ms debounce when the note was deleted', async () => {

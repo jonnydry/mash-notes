@@ -12,13 +12,6 @@ import {
 } from './desk-deletions';
 import type { CanvasEdge, CanvasElement } from './types';
 
-const notesWithItemMarkers = new Set<string>();
-
-/** True when this note's card was deleted in this session and a marker was stored. */
-export function noteHasDeskDeletionMarker(noteId: string): boolean {
-	return notesWithItemMarkers.has(noteId);
-}
-
 export async function rememberDeskDeletion(marker: DeskDeletionMarker): Promise<void> {
 	if (deletionExpired(marker.deletedAt)) return;
 	const id = deskDeletionId(marker);
@@ -26,7 +19,6 @@ export async function rememberDeskDeletion(marker: DeskDeletionMarker): Promise<
 	const existing = await db.deskDeletions.get(id);
 	if (existing && existing.deletedAt >= marker.deletedAt) return;
 	await db.deskDeletions.put({ ...marker, id });
-	if (marker.kind === 'item' && marker.noteId) notesWithItemMarkers.add(marker.noteId);
 }
 
 async function noteIdsForItems(itemIds: string[]): Promise<Map<string, string>> {
@@ -63,12 +55,6 @@ async function forgetStored(
 	const existing = await db.deskDeletions.get(id);
 	if (!existing) return null;
 	await db.deskDeletions.delete(id);
-	if (marker.kind === 'item' && marker.noteId) {
-		const another = await db.deskDeletions
-			.filter((row) => row.kind === 'item' && row.noteId === marker.noteId)
-			.first();
-		if (!another) notesWithItemMarkers.delete(marker.noteId);
-	}
 	return existing.deletedAt;
 }
 
