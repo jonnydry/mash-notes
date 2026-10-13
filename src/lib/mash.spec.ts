@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
 	combineNotes,
 	mashTitle,
@@ -112,8 +112,8 @@ describe('notesFromSelection', () => {
 });
 
 describe('sequencePrintHtml', () => {
-	it('emits one section per note with page breaks', () => {
-		const html = sequencePrintHtml([
+	it('emits one section per note with page breaks', async () => {
+		const html = await sequencePrintHtml([
 			note({ id: '1', title: 'Project ideas', body: '- Build' }),
 			note({ id: '2', title: 'Goals', body: '1. Fast' })
 		]);
@@ -124,10 +124,90 @@ describe('sequencePrintHtml', () => {
 		expect(html).toContain('page-break-after: always');
 	});
 
-	it('applies note textAlign to each page', () => {
-		const html = sequencePrintHtml([
+	it('applies note textAlign to each page', async () => {
+		const html = await sequencePrintHtml([
 			note({ id: '1', title: 'Centered', body: 'Hi', textAlign: 'center' })
 		]);
 		expect(html).toContain('text-align: center');
+	});
+
+	it('falls back to a pre block when the marked chunk fails to load', async () => {
+		vi.resetModules();
+		vi.doMock('./marked-runtime', () => {
+			throw new Error('marked chunk failed');
+		});
+		try {
+			const { sequencePrintHtml: printHtml } = await import('./mash');
+			const html = await printHtml([
+				note({ id: '1', title: 'Hello', body: 'Use **Mash** & <b>bold</b>' })
+			]);
+			expect(html).toContain('<pre>Use **Mash** &amp; &lt;b&gt;bold&lt;/b&gt;</pre>');
+			expect(html).not.toContain('<strong>');
+		} finally {
+			vi.doUnmock('./marked-runtime');
+			vi.resetModules();
+		}
+	});
+});
+
+describe('printSequenceAsPdf', () => {
+	it('opens the print window before markdown finishes loading', async () => {
+		vi.resetModules();
+		let release: (html: string) => void = () => {};
+		const pending = new Promise<string>((resolve) => {
+			release = resolve;
+		});
+		vi.doMock('./markdown', () => ({
+			renderMarkdown: () => pending
+		}));
+		const opened: Array<string | URL | undefined> = [];
+		const win = {
+			closed: false,
+			opener: {} as object | null,
+			location: { href: '' },
+			close() {
+				this.closed = true;
+			}
+		};
+		vi.stubGlobal('window', {
+			open: (url?: string | URL) => {
+				opened.push(url);
+				return win;
+			}
+		});
+		const realURL = globalThis.URL;
+		const createDescriptor = Object.getOwnPropertyDescriptor(realURL, 'createObjectURL');
+		const revokeDescriptor = Object.getOwnPropertyDescriptor(realURL, 'revokeObjectURL');
+		try {
+			const { printSequenceAsPdf } = await import('./mash');
+			Object.defineProperty(realURL, 'createObjectURL', {
+				configurable: true,
+				writable: true,
+				value: () => 'blob:print'
+			});
+			Object.defineProperty(realURL, 'revokeObjectURL', {
+				configurable: true,
+				writable: true,
+				value: () => {}
+			});
+			vi.useFakeTimers();
+			const job = printSequenceAsPdf([note({ id: '1', title: 'Hello', body: 'Body' })]);
+			expect(opened).toEqual(['']);
+			expect(win.location.href).toBe('');
+			release('<p>Body</p>');
+			await expect(job).resolves.toBe(true);
+			expect(win.location.href).toBe('blob:print');
+			expect(win.opener).toBeNull();
+			vi.runOnlyPendingTimers();
+		} finally {
+			if (createDescriptor) Object.defineProperty(realURL, 'createObjectURL', createDescriptor);
+			else Reflect.deleteProperty(realURL, 'createObjectURL');
+			if (revokeDescriptor) Object.defineProperty(realURL, 'revokeObjectURL', revokeDescriptor);
+			else Reflect.deleteProperty(realURL, 'revokeObjectURL');
+			vi.useRealTimers();
+			vi.unstubAllGlobals();
+			vi.doUnmock('./markdown');
+			vi.resetModules();
+		}
 	});
 });
