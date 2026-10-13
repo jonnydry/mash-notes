@@ -39,6 +39,9 @@ import {
 	isMashTeamWelcomeNote
 } from '$lib/system-notes';
 
+/** Same wording as DESK_BUNDLE_IMPORT_OFFLINE_MESSAGE. Kept here so the string stays in the shell. */
+const DESK_BUNDLE_IMPORT_OFFLINE_MESSAGE = 'Import needs a connection the first time';
+
 type SyncFileModule = typeof import('$lib/sync-file');
 type ConflictFormatter = SyncFileModule['formatConflictSummary'];
 
@@ -182,6 +185,8 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 
 	const stickySaveTimers = new Map<string, ReturnType<typeof setTimeout>>();
 	const stickyPendingPatches = new Map<string, Partial<Note>>();
+	/** Notes deleted this session. A tab-close flush must not write them back. */
+	const deletedNoteIds = new Set<string>();
 	let stickySaveStatusClear: ReturnType<typeof setTimeout> | null = null;
 	let notesLoadSeq = 0;
 
@@ -394,6 +399,19 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 		}
 	}
 
+	function cancelStickySave(noteId: string): void {
+		const timer = stickySaveTimers.get(noteId);
+		if (timer) clearTimeout(timer);
+		stickySaveTimers.delete(noteId);
+		stickyPendingPatches.delete(noteId);
+		deletedNoteIds.add(noteId);
+	}
+
+	/** A card taken off the canvas is still a live note. Skip only a real delete. */
+	function flushSkipsNote(noteId: string): boolean {
+		return deletedNoteIds.has(noteId);
+	}
+
 	function scheduleStickyPersist(noteId: string, patch: Partial<Note>, updated: Note) {
 		markStickySaving();
 		const mergedPatch = { ...(stickyPendingPatches.get(noteId) ?? {}), ...patch };
@@ -404,6 +422,10 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 			noteId,
 			setTimeout(() => {
 				stickySaveTimers.delete(noteId);
+				if (flushSkipsNote(noteId)) {
+					stickyPendingPatches.delete(noteId);
+					return;
+				}
 				const pending = stickyPendingPatches.get(noteId) ?? mergedPatch;
 				stickyPendingPatches.delete(noteId);
 				const latest = notes.find((n) => n.id === noteId) ?? updated;
@@ -473,6 +495,7 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 			stickySaveTimers.delete(noteId);
 			const pending = stickyPendingPatches.get(noteId);
 			stickyPendingPatches.delete(noteId);
+			if (flushSkipsNote(noteId)) continue;
 			const note = notesById.get(noteId);
 			if (!note || isMashTeamWelcomeNote(note)) continue;
 			const patch: Partial<Note> = pending ?? {
@@ -626,8 +649,22 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 				opts.flashToast(message);
 				return { ok: false, message };
 			}
-			const { parseSyncBundle, mergeSyncBundle, persistMergedSync, formatConflictSummary } =
-				await loadSyncFile();
+			let syncFile: SyncFileModule;
+			try {
+				syncFile = await loadSyncFile();
+			} catch {
+				const message = DESK_BUNDLE_IMPORT_OFFLINE_MESSAGE;
+				opts.flashToast(message);
+				return { ok: false, message };
+			}
+			const {
+				parseSyncBundle,
+				mergeSyncBundle,
+				persistMergedSync,
+				formatConflictSummary,
+				readStoredSyncNotes,
+				assignImportedNoteSessions
+			} = syncFile;
 			const parsed = parseSyncBundle(text);
 			if (!parsed.ok) {
 				opts.flashToast(parsed.error);
@@ -650,32 +687,19 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 
 			await flushPendingSaveAsync();
 
-			const { notes: mergedNotes, summary } = mergeSyncBundle(notes, parsed.bundle);
+			const storedNotes = await readStoredSyncNotes(parsed.bundle);
+			const { notes: mergedNotes, summary } = mergeSyncBundle(notes, parsed.bundle, storedNotes);
 			const sessionId = opts.getActiveSessionId?.() ?? undefined;
 			const defaultScope: NonNullable<Note['scope']> =
 				opts.getActiveSessionMode?.() === 'kept' ? 'kept' : 'session';
-			const localById = new Map(notes.map((n) => [n.id, n]));
 			// Dexie can't structured-clone Svelte $state proxies — always put plain objects.
-			// Preserve kept pantry ownership: do not demote durable kept notes onto this scratch.
-			const plainNotes = mergedNotes.map((n) => {
-				const local = localById.get(n.id);
-				const isKept =
-					n.scope === 'kept' ||
-					local?.scope === 'kept' ||
-					Boolean(n.keptAt) ||
-					Boolean(local?.keptAt);
-				return {
-					...n,
-					sessionId: isKept
-						? (n.sessionId ?? local?.sessionId ?? sessionId)
-						: (sessionId ?? n.sessionId),
-					scope: isKept ? 'kept' : (n.scope ?? defaultScope),
-					keptAt: isKept ? (n.keptAt ?? local?.keptAt) : n.keptAt,
-					tags: [...n.tags],
-					...(n.links ? { links: [...n.links] } : {}),
-					...(n.mashedFrom ? { mashedFrom: [...n.mashedFrom] } : {})
-				};
-			});
+			const plainNotes = assignImportedNoteSessions(
+				mergedNotes,
+				notes,
+				storedNotes,
+				sessionId,
+				defaultScope
+			);
 			const knownNoteIds = new Set(plainNotes.map((n) => n.id));
 
 			const persisted = await persistMergedSync(
@@ -1038,6 +1062,7 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 			danger: true,
 			action: async () => {
 				for (const id of ids) {
+					cancelStickySave(id);
 					await deleteNote(id);
 					removeNoteFromSearch(id);
 					opts.clearExpandedIfNote?.(id);
@@ -1223,6 +1248,7 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 		tagSelection,
 		assignFolderToSelection,
 		handleDelete,
+		cancelStickySave,
 		deleteFolder,
 		deleteTag,
 		copySelection,

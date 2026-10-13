@@ -92,7 +92,7 @@ async function createLegacyV9Database() {
 	legacy.close();
 }
 
-describe('database v10 migration', () => {
+describe('database migration to the current schema', () => {
 	afterEach(async () => {
 		await db.delete();
 		await db.open();
@@ -102,7 +102,8 @@ describe('database v10 migration', () => {
 		await createLegacyV9Database();
 		await db.open();
 
-		expect(db.verno).toBe(10);
+		expect(db.verno).toBe(11);
+		expect(await db.deskDeletions.count()).toBe(0);
 		expect(await db.canvasItems.get('legacy-item')).toMatchObject({
 			canvasId: 'legacy-canvas',
 			noteId: 'legacy-note',

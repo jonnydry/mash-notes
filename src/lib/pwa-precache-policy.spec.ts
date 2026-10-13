@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	collectInitialManifestFiles,
+	collectPrecachedLazyFiles,
 	isExcludedFromPrecache,
 	normalizePrecacheUrl,
 	prunePrecacheEntries
@@ -73,6 +74,38 @@ describe('PWA precache policy', () => {
 			'_app/immutable/chunks/marked-lib.js',
 			'icons/mash-logo-sprouts.png',
 			'fonts/Excalifont-Regular.woff2'
+		]);
+	});
+
+	it('precaches the desk bundle import chunk outside the initial graph', () => {
+		const withImport = {
+			...manifest,
+			sync: {
+				name: 'sync-file',
+				file: '_app/immutable/chunks/sync-file.js',
+				imports: ['shared', 'sync-helper']
+			},
+			'sync-helper': { file: '_app/immutable/chunks/sync-helper.js' }
+		};
+		const initial = collectInitialManifestFiles(withImport);
+		expect(initial.has('_app/immutable/chunks/sync-file.js')).toBe(false);
+		expect(collectPrecachedLazyFiles(withImport)).toEqual(
+			new Set(['_app/immutable/chunks/sync-file.js', '_app/immutable/chunks/sync-helper.js'])
+		);
+
+		const entries = [
+			'_app/immutable/entry/start.js',
+			'_app/immutable/chunks/shared.js',
+			'_app/immutable/chunks/sync-file.js',
+			'_app/immutable/chunks/sync-helper.js',
+			'_app/immutable/chunks/pdf-reader.js'
+		].map((url) => ({ url, revision: 'test', size: 1 }));
+
+		expect(prunePrecacheEntries(entries, withImport).map((entry) => entry.url)).toEqual([
+			'_app/immutable/entry/start.js',
+			'_app/immutable/chunks/shared.js',
+			'_app/immutable/chunks/sync-file.js',
+			'_app/immutable/chunks/sync-helper.js'
 		]);
 	});
 

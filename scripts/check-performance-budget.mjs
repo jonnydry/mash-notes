@@ -3,6 +3,7 @@ import {
 	collectInitialManifestFiles,
 	collectInitialManifestKeys,
 	collectPrecachedDeferredFiles,
+	collectPrecachedLazyFiles,
 	isExcludedFromPrecache,
 	normalizePrecacheUrl
 } from './pwa-precache-policy.js';
@@ -96,7 +97,10 @@ for (const name of deferredInitialEntryNames) {
 	if (initialKeys.has(entry.key)) errors.push(`${name} leaked into the initial JavaScript graph`);
 }
 
-const deferredPrecacheFiles = collectPrecachedDeferredFiles(manifest);
+const deferredPrecacheFiles = new Set([
+	...collectPrecachedDeferredFiles(manifest),
+	...collectPrecachedLazyFiles(manifest)
+]);
 const serviceWorker = await readFile('build/sw.js', 'utf8');
 const listedPrecacheFiles = [...serviceWorker.matchAll(/\burl:"([^"]+)"/g)].map((match) =>
 	normalizePrecacheUrl(match[1])
@@ -133,6 +137,15 @@ for (const file of deferredPrecacheFiles) {
 	}
 }
 
+const importChunk = byName.get('sync-file');
+if (!importChunk) {
+	errors.push('Desk bundle import chunk is missing from the build');
+} else if (initialKeys.has(importChunk.key)) {
+	errors.push('Desk bundle import chunk leaked into the initial JavaScript graph');
+} else if (!precacheFiles.includes(normalizePrecacheUrl(importChunk.file))) {
+	errors.push('Desk bundle import chunk is not in the PWA precache');
+}
+
 console.log(
 	`Initial JavaScript  ${format(javascript)} (${javascript} bytes) / ${format(budgets.javascript)}`
 );
@@ -143,7 +156,7 @@ console.log(
 console.log(
 	`PWA precache        ${format(precache)} / ${format(budgets.precache)} (${precacheFiles.length} files)`
 );
-console.log('Deferred features   excluded from the initial graph');
+console.log('Deferred features   excluded from the initial graph; desk import is precached');
 console.log('Markdown preview    precached for offline use after one visit');
 
 if (errors.length) {

@@ -155,6 +155,11 @@ export interface CanvasItem {
 	h?: number;
 	/** Canvas-only appearance. The underlying note and content exports stay unchanged. */
 	color?: CanvasColor;
+	/**
+	 * Last edit of this placement. Cards written before delete markers omit it;
+	 * those fall back to the parent canvas modified time during sync.
+	 */
+	modified?: number;
 }
 
 export type CanvasArrowAnchor = 'auto' | 'top' | 'right' | 'bottom' | 'left';
