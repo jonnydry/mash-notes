@@ -47,4 +47,113 @@ describe('note library write recovery', () => {
 		expect(library.writeError).toBe('');
 		expect((await db.notes.get(note.id))?.body).toBe('still in memory');
 	});
+
+	it('merges a desk bundle against stored notes, including tombstones and session ids', async () => {
+		const now = Date.now();
+		const day = 24 * 60 * 60 * 1000;
+		await db.notes.bulkPut([
+			{
+				id: 'fresh',
+				title: 'Fresh',
+				body: 'stored newer',
+				folder: '',
+				tags: [],
+				created: 1,
+				modified: now,
+				pinned: 0,
+				sessionId: 'desk-a',
+				scope: 'session'
+			},
+			{
+				id: 'moved',
+				title: 'Moved',
+				body: 'local body',
+				folder: '',
+				tags: [],
+				created: 1,
+				modified: now - 2 * day,
+				pinned: 0,
+				sessionId: 'desk-a',
+				scope: 'session'
+			},
+			{
+				id: 'tomb',
+				title: 'Tomb',
+				body: 'gone',
+				folder: '',
+				tags: [],
+				created: 1,
+				modified: now - day,
+				pinned: 0,
+				deletedAt: now - day,
+				sessionId: 'desk-a',
+				scope: 'session'
+			}
+		]);
+		const library = createNoteLibrary({
+			flashToast: () => undefined,
+			askConfirm: () => undefined,
+			getActiveCanvasId: () => null,
+			getActiveSessionId: () => 'desk-b',
+			getActiveSessionMode: () => 'scratch',
+			shouldSeedWelcome: () => false,
+			onFolderDeleted: async () => undefined,
+			getFilteredNoteIds: () => []
+		});
+		await library.loadNotes();
+
+		const result = await library.importSyncText(
+			JSON.stringify({
+				version: 6,
+				exportedAt: now,
+				notes: [
+					{
+						id: 'fresh',
+						title: 'Fresh',
+						body: 'incoming older',
+						folder: '',
+						tags: [],
+						created: 1,
+						modified: now - day,
+						pinned: 0
+					},
+					{
+						id: 'moved',
+						title: 'Moved',
+						body: 'remote edit',
+						folder: '',
+						tags: [],
+						created: 1,
+						modified: now,
+						pinned: 0
+					},
+					{
+						id: 'tomb',
+						title: 'Tomb',
+						body: 'revived',
+						folder: '',
+						tags: [],
+						created: 1,
+						modified: now - 2 * day,
+						pinned: 0
+					}
+				],
+				tombstones: []
+			})
+		);
+
+		expect(result.ok).toBe(true);
+		expect(await db.notes.get('fresh')).toMatchObject({
+			body: 'stored newer',
+			sessionId: 'desk-a'
+		});
+		expect(await db.notes.get('moved')).toMatchObject({
+			body: 'remote edit',
+			sessionId: 'desk-a'
+		});
+		expect((await db.notes.get('tomb'))?.deletedAt).toBe(now - day);
+		expect(library.notes.find((note) => note.id === 'tomb')).toBeUndefined();
+		expect(library.notes.find((note) => note.id === 'fresh')?.sessionId).toBe('desk-a');
+		expect(library.notes.find((note) => note.id === 'moved')?.sessionId).toBe('desk-a');
+	});
 });

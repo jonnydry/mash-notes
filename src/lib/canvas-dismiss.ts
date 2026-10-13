@@ -82,16 +82,25 @@ export function exportAllDismissed(): DismissedByCanvas {
 }
 
 /**
- * Merge remote dismissals into local (union per canvas).
+ * Merge remote dismissals into local.
+ * `union` only adds ids. `replace` sets each listed canvas to exactly the incoming ids,
+ * including an empty list, which clears the Removed from board set.
  * Keys must already be local canvas ids.
  */
-export function importDismissedMap(map: DismissedByCanvas): void {
+export function importDismissedMap(
+	map: DismissedByCanvas,
+	mode: 'union' | 'replace' = 'union'
+): void {
 	for (const [canvasId, noteIds] of Object.entries(map)) {
-		if (!canvasId || !Array.isArray(noteIds) || noteIds.length === 0) continue;
-		const ids = readSet(canvasId);
-		for (const id of noteIds) {
-			if (typeof id === 'string' && id) ids.add(id);
+		if (!canvasId || !Array.isArray(noteIds)) continue;
+		const incoming = noteIds.filter((id): id is string => typeof id === 'string' && Boolean(id));
+		if (mode === 'replace') {
+			writeSet(canvasId, new Set(incoming));
+			continue;
 		}
+		if (incoming.length === 0) continue;
+		const ids = readSet(canvasId);
+		for (const id of incoming) ids.add(id);
 		writeSet(canvasId, ids);
 	}
 }

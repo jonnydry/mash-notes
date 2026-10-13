@@ -620,8 +620,13 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 				opts.flashToast(message);
 				return { ok: false, message };
 			}
-			const { parseSyncBundle, mergeSyncBundle, persistMergedSync, formatConflictSummary } =
-				await loadSyncFile();
+			const {
+				parseSyncBundle,
+				mergeSyncBundle,
+				persistMergedSync,
+				formatConflictSummary,
+				readStoredSyncNotes
+			} = await loadSyncFile();
 			const parsed = parseSyncBundle(text);
 			if (!parsed.ok) {
 				opts.flashToast(parsed.error);
@@ -644,31 +649,43 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 
 			await flushPendingSaveAsync();
 
-			const { notes: mergedNotes, summary } = mergeSyncBundle(notes, parsed.bundle);
+			const storedNotes = await readStoredSyncNotes(parsed.bundle);
+			const storedById = new Map(storedNotes.map((note) => [note.id, note]));
+			const { notes: mergedNotes, summary } = mergeSyncBundle(notes, parsed.bundle, storedNotes);
 			const sessionId = opts.getActiveSessionId?.() ?? undefined;
 			const defaultScope: NonNullable<Note['scope']> =
 				opts.getActiveSessionMode?.() === 'kept' ? 'kept' : 'session';
 			const localById = new Map(notes.map((n) => [n.id, n]));
 			// Dexie can't structured-clone Svelte $state proxies — always put plain objects.
 			// Preserve kept pantry ownership: do not demote durable kept notes onto this scratch.
+			// Session id is assigned only for notes that were not already stored.
 			const plainNotes = mergedNotes.map((n) => {
 				const local = localById.get(n.id);
+				const stored = storedById.get(n.id);
 				const isKept =
 					n.scope === 'kept' ||
 					local?.scope === 'kept' ||
+					stored?.scope === 'kept' ||
 					Boolean(n.keptAt) ||
-					Boolean(local?.keptAt);
-				return {
+					Boolean(local?.keptAt) ||
+					Boolean(stored?.keptAt);
+				const plain = {
 					...n,
-					sessionId: isKept
-						? (n.sessionId ?? local?.sessionId ?? sessionId)
-						: (sessionId ?? n.sessionId),
 					scope: isKept ? 'kept' : (n.scope ?? defaultScope),
-					keptAt: isKept ? (n.keptAt ?? local?.keptAt) : n.keptAt,
+					keptAt: isKept ? (n.keptAt ?? stored?.keptAt ?? local?.keptAt) : n.keptAt,
 					tags: [...n.tags],
 					...(n.links ? { links: [...n.links] } : {}),
 					...(n.mashedFrom ? { mashedFrom: [...n.mashedFrom] } : {})
 				};
+				if (stored) {
+					if (stored.sessionId !== undefined) plain.sessionId = stored.sessionId;
+					else delete plain.sessionId;
+				} else {
+					plain.sessionId = isKept
+						? (n.sessionId ?? local?.sessionId ?? sessionId)
+						: (sessionId ?? n.sessionId);
+				}
+				return plain;
 			});
 			const knownNoteIds = new Set(plainNotes.map((n) => n.id));
 

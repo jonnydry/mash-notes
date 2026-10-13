@@ -18,8 +18,15 @@ import type {
 import { mergeNotesLww, hasConflicts, type MergeResult, type SyncConflict } from './sync-model';
 import { SYNC_BUNDLE_MAX_CHARS } from './sync-limits';
 import { normalizeImportedNote } from './import-notes';
-import { db, getSyncTombstoneNotes, newId } from './db';
+import { db, getSyncTombstoneNotes, newId, purgeExpiredDeskDeletions } from './db';
 import { exportAllDismissed, importDismissedMap, type DismissedByCanvas } from './canvas-dismiss';
+import {
+	canvasElementDeletionKey,
+	deletionExpired,
+	deskDeletionId,
+	editBeatsDeletion,
+	type DeskDeletionMarker
+} from './desk-deletions';
 import {
 	bytesToDataUrl,
 	dataUrlToBytes,
@@ -71,6 +78,12 @@ export type DeskSnapshot = {
 	elements?: CanvasElement[];
 	/** canvasId → dismissed note ids */
 	dismissed: DismissedByCanvas;
+	/**
+	 * Delete markers for cards, links, and arrows.
+	 * Absent on bundles written before markers existed. An empty array means the
+	 * exporter supports markers and currently has none.
+	 */
+	deletions?: DeskDeletionMarker[];
 };
 
 /** Transport-only image payload (v5). Rehydrated into noteBlobs on import. */
@@ -196,6 +209,9 @@ function normalizeCanvasItem(raw: unknown, index: number): CanvasItem | string {
 		item.h = clampNumber(raw.h, 160, 1, MAX_CANVAS_ITEM_EDGE);
 	}
 	if (isCanvasColor(raw.color)) item.color = raw.color;
+	if (typeof raw.modified === 'number' && Number.isFinite(raw.modified)) {
+		item.modified = raw.modified;
+	}
 	return item;
 }
 
@@ -365,13 +381,67 @@ function normalizeDesk(raw: unknown): DeskSnapshot | string {
 	}
 	const dismissed = normalizeDismissed(raw.dismissed);
 	if (typeof dismissed === 'string') return dismissed;
+	let deletions: DeskDeletionMarker[] | undefined;
+	if (raw.deletions !== undefined) {
+		const parsed = normalizeDeskDeletions(raw.deletions);
+		if (typeof parsed === 'string') return parsed;
+		deletions = parsed;
+	}
 	return {
 		canvases,
 		items,
 		edges,
 		elements,
-		dismissed
+		dismissed,
+		...(deletions !== undefined ? { deletions } : {})
 	};
+}
+
+const MAX_DESK_DELETIONS = 50_000;
+const MAX_ELEMENT_KEY_CHARS = 2_000;
+
+function normalizeDeskDeletions(raw: unknown): DeskDeletionMarker[] | string {
+	if (!Array.isArray(raw)) return 'Desk deletions must be an array';
+	if (raw.length > MAX_DESK_DELETIONS) return 'Too many desk deletions in sync bundle';
+	const out: DeskDeletionMarker[] = [];
+	const seen = new Set<string>();
+	for (let index = 0; index < raw.length; index++) {
+		const row = raw[index];
+		if (!isRecord(row)) return `Desk deletion ${index + 1} is not an object`;
+		const kind = row.kind;
+		if (kind !== 'item' && kind !== 'edge' && kind !== 'element') {
+			return `Desk deletion ${index + 1} has an unsupported kind`;
+		}
+		const canvasId = boundedId(row.canvasId);
+		const deletedAt = asNumber(row.deletedAt, NaN);
+		if (!canvasId || !Number.isFinite(deletedAt)) {
+			return `Desk deletion ${index + 1} missing canvasId/deletedAt`;
+		}
+		const marker: DeskDeletionMarker = { kind, canvasId, deletedAt };
+		if (kind === 'item') {
+			const noteId = boundedId(row.noteId);
+			if (!noteId) return `Desk deletion ${index + 1} missing noteId`;
+			marker.noteId = noteId;
+		} else if (kind === 'edge') {
+			const fromNoteId = boundedId(row.fromNoteId);
+			const toNoteId = boundedId(row.toNoteId);
+			if (!fromNoteId || !toNoteId || fromNoteId === toNoteId) {
+				return `Desk deletion ${index + 1} missing link endpoints`;
+			}
+			marker.fromNoteId = fromNoteId;
+			marker.toNoteId = toNoteId;
+		} else {
+			const elementKey = asString(row.elementKey).slice(0, MAX_ELEMENT_KEY_CHARS);
+			if (!elementKey) return `Desk deletion ${index + 1} missing elementKey`;
+			marker.elementKey = elementKey;
+		}
+		const id = deskDeletionId(marker);
+		if (!id) return `Desk deletion ${index + 1} is incomplete`;
+		if (seen.has(id)) return `Duplicate desk deletion: ${id.slice(0, 40)}`;
+		seen.add(id);
+		out.push(marker);
+	}
+	return out;
 }
 
 /** Load current desk layout from IndexedDB + local dismissals. */
@@ -390,6 +460,25 @@ export async function collectDeskSnapshot(sessionId?: string): Promise<DeskSnaps
 	const dismissed = Object.fromEntries(
 		Object.entries(allDismissed).filter(([canvasId]) => canvasIds.has(canvasId))
 	);
+	await purgeExpiredDeskDeletions();
+	const storedDeletions =
+		canvasIds.size > 0
+			? await db.deskDeletions
+					.where('canvasId')
+					.anyOf([...canvasIds])
+					.toArray()
+			: [];
+	const deletions = storedDeletions
+		.filter((marker) => canvasIds.has(marker.canvasId) && !deletionExpired(marker.deletedAt))
+		.map((marker) => ({
+			kind: marker.kind,
+			canvasId: marker.canvasId,
+			deletedAt: marker.deletedAt,
+			...(marker.noteId ? { noteId: marker.noteId } : {}),
+			...(marker.fromNoteId ? { fromNoteId: marker.fromNoteId } : {}),
+			...(marker.toNoteId ? { toNoteId: marker.toNoteId } : {}),
+			...(marker.elementKey ? { elementKey: marker.elementKey } : {})
+		}));
 	return {
 		canvases: canvases.map((c) => ({
 			...c,
@@ -400,7 +489,8 @@ export async function collectDeskSnapshot(sessionId?: string): Promise<DeskSnaps
 		items: items.map((i) => ({ ...i })),
 		edges: edges.map((e) => ({ ...e })),
 		elements: elements.map(cloneCanvasElement),
-		dismissed
+		dismissed,
+		deletions
 	};
 }
 
@@ -729,11 +819,27 @@ async function stripCanvasForDeletedNotes(noteIds: string[]): Promise<void> {
  * Returns updated note list + conflict summary (LWW already chose winners).
  * Applies tombstones so deletes propagate across devices.
  */
+/** IndexedDB rows for every note and tombstone id in the bundle. */
+export async function readStoredSyncNotes(bundle: SyncBundle): Promise<Note[]> {
+	const ids = [
+		...new Set([
+			...bundle.notes.map((note) => note.id),
+			...(bundle.tombstones ?? []).map((tomb) => tomb.id)
+		])
+	];
+	if (ids.length === 0) return [];
+	const rows = await db.notes.bulkGet(ids);
+	return rows.filter((note): note is Note => note != null);
+}
+
 export function mergeSyncBundle(
 	localNotes: Note[],
-	bundle: SyncBundle
+	bundle: SyncBundle,
+	storedNotes: readonly Note[] = []
 ): { notes: Note[]; summary: SyncMergeSummary } {
 	const byId = new Map(localNotes.map((n) => [n.id, { ...n }]));
+	// Stored rows, including tombstones the open desk is not showing, beat memory.
+	for (const stored of storedNotes) byId.set(stored.id, { ...stored });
 	const results: MergeResult[] = [];
 	const conflicts: SyncConflict[] = [];
 	let added = 0;
@@ -744,6 +850,7 @@ export function mergeSyncBundle(
 	for (const remote of bundle.notes) {
 		const local = byId.get(remote.id);
 		if (!local) {
+			// Only notes absent from both memory and IndexedDB are new.
 			byId.set(remote.id, { ...remote });
 			added += 1;
 			continue;
@@ -819,7 +926,14 @@ export function mergeSyncBundle(
 
 type DeskIdbApplyResult = DeskApplySummary & {
 	remappedDismissed: DismissedByCanvas;
+	dismissedMode: 'skip' | 'replace';
 };
+
+type ActiveDeletion = { id: string; deletedAt: number; marker: DeskDeletionMarker };
+
+function placementEditedAt(modified: number | undefined, canvasModified: number): number {
+	return typeof modified === 'number' && Number.isFinite(modified) ? modified : canvasModified;
+}
 
 /**
  * Apply remote desk onto local IndexedDB only (no localStorage dismissals).
@@ -836,6 +950,9 @@ async function applyDeskIdbSnapshot(
 		? await db.canvases.where('sessionId').equals(sessionId).toArray()
 		: await db.canvases.toArray();
 	const localByFolder = new Map(localCanvases.map((c) => [c.folder, c]));
+	/** folder → modified before this import. Item edits on old bundles fall back to this. */
+	const originalModifiedByFolder = new Map(localCanvases.map((c) => [c.folder, c.modified]));
+	const originalModifiedByCanvasId = new Map(localCanvases.map((c) => [c.id, c.modified]));
 	/** folder → effective modified used for LWW placement */
 	const folderModified = new Map(localCanvases.map((c) => [c.folder, c.modified]));
 	let canvasesUpserted = 0;
@@ -895,6 +1012,121 @@ async function applyDeskIdbSnapshot(
 		}
 		byNote.set(item.noteId, item);
 	}
+
+	await purgeExpiredDeskDeletions();
+	const activeDeletions = new Map<string, ActiveDeletion>();
+	if (targetCanvasIds.length > 0) {
+		const stored = await db.deskDeletions.where('canvasId').anyOf(targetCanvasIds).toArray();
+		for (const row of stored) {
+			if (deletionExpired(row.deletedAt)) continue;
+			activeDeletions.set(row.id, { id: row.id, deletedAt: row.deletedAt, marker: row });
+		}
+	}
+	for (const marker of desk.deletions ?? []) {
+		if (deletionExpired(marker.deletedAt)) continue;
+		const localCanvasId = idMap.get(marker.canvasId);
+		if (!localCanvasId) continue;
+		const id = deskDeletionId({ ...marker, canvasId: localCanvasId });
+		if (!id) continue;
+		const prev = activeDeletions.get(id);
+		if (!prev || marker.deletedAt > prev.deletedAt) {
+			activeDeletions.set(id, {
+				id,
+				deletedAt: marker.deletedAt,
+				marker: { ...marker, canvasId: localCanvasId }
+			});
+		}
+	}
+
+	const noteByItemId = new Map(existingItemRows.map((item) => [item.id, item.noteId]));
+	const itemIdsToDelete: string[] = [];
+	for (const item of existingItemRows) {
+		const markerId = deskDeletionId({
+			kind: 'item',
+			canvasId: item.canvasId,
+			noteId: item.noteId
+		});
+		const marker = markerId ? activeDeletions.get(markerId) : undefined;
+		if (!marker || !markerId) continue;
+		const editedAt = placementEditedAt(
+			item.modified,
+			originalModifiedByCanvasId.get(item.canvasId) ?? 0
+		);
+		if (editBeatsDeletion(editedAt, marker.deletedAt)) {
+			activeDeletions.delete(markerId);
+			continue;
+		}
+		itemIdsToDelete.push(item.id);
+		existingItemsByCanvas.get(item.canvasId)?.delete(item.noteId);
+	}
+
+	const existingEdgeRowsEarly =
+		targetCanvasIds.length > 0
+			? await db.canvasEdges.where('canvasId').anyOf(targetCanvasIds).toArray()
+			: [];
+	const edgeIdsToDelete: string[] = [];
+	for (const edge of existingEdgeRowsEarly) {
+		const fromNoteId = noteByItemId.get(edge.fromItemId);
+		const toNoteId = noteByItemId.get(edge.toItemId);
+		if (!fromNoteId || !toNoteId) continue;
+		const markerId = deskDeletionId({
+			kind: 'edge',
+			canvasId: edge.canvasId,
+			fromNoteId,
+			toNoteId
+		});
+		const marker = markerId ? activeDeletions.get(markerId) : undefined;
+		if (!marker || !markerId) continue;
+		if (editBeatsDeletion(edge.created, marker.deletedAt)) {
+			activeDeletions.delete(markerId);
+			continue;
+		}
+		edgeIdsToDelete.push(edge.id);
+	}
+
+	const existingElementRowsEarly =
+		targetCanvasIds.length > 0
+			? await db.canvasElements.where('canvasId').anyOf(targetCanvasIds).toArray()
+			: [];
+	const elementIdsToDelete: string[] = [];
+	for (const element of existingElementRowsEarly) {
+		const elementKey = canvasElementDeletionKey(element, noteByItemId);
+		if (!elementKey) continue;
+		const markerId = deskDeletionId({
+			kind: 'element',
+			canvasId: element.canvasId,
+			elementKey
+		});
+		const marker = markerId ? activeDeletions.get(markerId) : undefined;
+		if (!marker || !markerId) continue;
+		if (editBeatsDeletion(element.modified, marker.deletedAt)) {
+			activeDeletions.delete(markerId);
+			continue;
+		}
+		elementIdsToDelete.push(element.id);
+	}
+
+	const deletedItemIds = new Set(itemIdsToDelete);
+	for (const edge of existingEdgeRowsEarly) {
+		if (deletedItemIds.has(edge.fromItemId) || deletedItemIds.has(edge.toItemId)) {
+			edgeIdsToDelete.push(edge.id);
+		}
+	}
+	for (const element of existingElementRowsEarly) {
+		if (
+			deletedItemIds.size > 0 &&
+			[...deletedItemIds].some((id) => canvasElementBindsItem(element, id))
+		) {
+			elementIdsToDelete.push(element.id);
+		}
+	}
+	if (itemIdsToDelete.length > 0) await db.canvasItems.bulkDelete([...new Set(itemIdsToDelete)]);
+	if (edgeIdsToDelete.length > 0) await db.canvasEdges.bulkDelete([...new Set(edgeIdsToDelete)]);
+	if (elementIdsToDelete.length > 0) {
+		await db.canvasElements.bulkDelete([...new Set(elementIdsToDelete)]);
+	}
+
+	const remoteNoteByItemId = new Map(desk.items.map((item) => [item.id, item.noteId]));
 	const itemUpserts: CanvasItem[] = [];
 
 	for (const remoteItem of desk.items) {
@@ -917,14 +1149,30 @@ async function applyDeskIdbSnapshot(
 			existingItemsByCanvas.set(localCanvasId, byNote);
 		}
 		const existing = byNote.get(remoteItem.noteId);
+		const markerId = deskDeletionId({
+			kind: 'item',
+			canvasId: localCanvasId,
+			noteId: remoteItem.noteId
+		});
+		const marker = markerId ? activeDeletions.get(markerId) : undefined;
+		const incomingEditedAt = placementEditedAt(remoteItem.modified, remoteCanvas.modified);
+		const editWins = marker != null && editBeatsDeletion(incomingEditedAt, marker.deletedAt);
+		if (marker && !editWins) {
+			itemsSkipped += 1;
+			continue;
+		}
 
 		if (!existing) {
 			// Only insert remote-only placements when remote canvas wins LWW.
-			// Otherwise an older bundle can resurrect cards the user already removed.
-			if (!remoteNewer) {
+			// An edit after the delete marker still comes back.
+			if (!remoteNewer && !editWins) {
 				itemsSkipped += 1;
 				continue;
 			}
+		}
+		if (marker && markerId) activeDeletions.delete(markerId);
+
+		if (!existing) {
 			const localItemId = newId();
 			const next: CanvasItem = {
 				id: localItemId,
@@ -934,7 +1182,8 @@ async function applyDeskIdbSnapshot(
 				y: remoteItem.y,
 				w: remoteItem.w,
 				h: remoteItem.h,
-				color: remoteItem.color
+				color: remoteItem.color,
+				...(typeof remoteItem.modified === 'number' ? { modified: remoteItem.modified } : {})
 			};
 			itemUpserts.push(next);
 			byNote.set(remoteItem.noteId, next);
@@ -951,7 +1200,8 @@ async function applyDeskIdbSnapshot(
 				y: remoteItem.y,
 				w: remoteItem.w,
 				h: remoteItem.h,
-				color: remoteItem.color
+				color: remoteItem.color,
+				...(typeof remoteItem.modified === 'number' ? { modified: remoteItem.modified } : {})
 			};
 			itemUpserts.push(next);
 			byNote.set(remoteItem.noteId, next);
@@ -994,6 +1244,23 @@ async function applyDeskIdbSnapshot(
 			edgesSkipped += 1;
 			continue;
 		}
+		const fromNoteId = remoteNoteByItemId.get(remoteEdge.fromItemId);
+		const toNoteId = remoteNoteByItemId.get(remoteEdge.toItemId);
+		const edgeMarkerId =
+			fromNoteId && toNoteId
+				? deskDeletionId({
+						kind: 'edge',
+						canvasId: localCanvasId,
+						fromNoteId,
+						toNoteId
+					})
+				: null;
+		const edgeMarker = edgeMarkerId ? activeDeletions.get(edgeMarkerId) : undefined;
+		if (edgeMarker && !editBeatsDeletion(remoteEdge.created, edgeMarker.deletedAt)) {
+			edgesSkipped += 1;
+			continue;
+		}
+		if (edgeMarker && edgeMarkerId) activeDeletions.delete(edgeMarkerId);
 		const edgeKey = JSON.stringify([localCanvasId, fromLocal, toLocal]);
 		if (edgeKeys.has(edgeKey)) {
 			edgesSkipped += 1;
@@ -1045,6 +1312,21 @@ async function applyDeskIdbSnapshot(
 			elementsSkipped += 1;
 			continue;
 		}
+		const noteIds = new Map<string, string>();
+		for (const [remoteItemId, localItemId] of itemIdMap) {
+			const noteId = remoteNoteByItemId.get(remoteItemId);
+			if (noteId) noteIds.set(localItemId, noteId);
+		}
+		const elementKey = canvasElementDeletionKey(next, noteIds);
+		const elementMarkerId = elementKey
+			? deskDeletionId({ kind: 'element', canvasId: localCanvasId, elementKey })
+			: null;
+		const elementMarker = elementMarkerId ? activeDeletions.get(elementMarkerId) : undefined;
+		if (elementMarker && !editBeatsDeletion(next.modified, elementMarker.deletedAt)) {
+			elementsSkipped += 1;
+			continue;
+		}
+		if (elementMarker && elementMarkerId) activeDeletions.delete(elementMarkerId);
 		const key = elementFingerprint(next);
 		if (elementKeys.has(key)) {
 			elementsSkipped += 1;
@@ -1056,11 +1338,27 @@ async function applyDeskIdbSnapshot(
 	}
 	if (elementUpserts.length > 0) await db.canvasElements.bulkPut(elementUpserts);
 
+	if (targetCanvasIds.length > 0) {
+		await db.deskDeletions.where('canvasId').anyOf(targetCanvasIds).delete();
+		const markers = [...activeDeletions.values()].map((entry) => ({
+			...entry.marker,
+			id: entry.id,
+			deletedAt: entry.deletedAt
+		}));
+		if (markers.length > 0) await db.deskDeletions.bulkPut(markers);
+	}
+
+	const speaksDeletions = Array.isArray(desk.deletions);
 	const remappedDismissed: DismissedByCanvas = {};
-	for (const [remoteCanvasId, noteIds] of Object.entries(desk.dismissed)) {
-		const localId = idMap.get(remoteCanvasId);
-		if (!localId) continue;
-		remappedDismissed[localId] = noteIds;
+	if (speaksDeletions) {
+		for (const remote of desk.canvases) {
+			const localId = idMap.get(remote.id);
+			if (!localId) continue;
+			const original = originalModifiedByFolder.get(remote.folder);
+			const remoteWins = original == null || remote.modified >= original;
+			if (!remoteWins) continue;
+			remappedDismissed[localId] = desk.dismissed[remote.id] ?? [];
+		}
 	}
 
 	return {
@@ -1071,7 +1369,8 @@ async function applyDeskIdbSnapshot(
 		edgesSkipped,
 		elementsUpserted,
 		elementsSkipped,
-		remappedDismissed
+		remappedDismissed,
+		dismissedMode: speaksDeletions ? 'replace' : 'skip'
 	};
 }
 
@@ -1083,13 +1382,35 @@ export async function applyDeskSnapshot(
 	knownNoteIds: Set<string>,
 	sessionId?: string
 ): Promise<DeskApplySummary> {
-	const { remappedDismissed, ...summary } = await applyDeskIdbSnapshot(
+	const { remappedDismissed, dismissedMode, ...summary } = await applyDeskIdbSnapshot(
 		desk,
 		knownNoteIds,
 		sessionId
 	);
-	importDismissedMap(remappedDismissed);
+	if (dismissedMode === 'replace') importDismissedMap(remappedDismissed, 'replace');
 	return summary;
+}
+
+function reconcileStoredNote(incoming: Note, stored: Note | undefined): Note {
+	if (!stored) return incoming;
+	if (
+		stored.deletedAt != null &&
+		incoming.deletedAt == null &&
+		!(incoming.modified > stored.deletedAt)
+	) {
+		return { ...stored };
+	}
+	if (
+		stored.deletedAt == null &&
+		incoming.deletedAt == null &&
+		stored.modified > incoming.modified
+	) {
+		return { ...stored };
+	}
+	const next = { ...incoming };
+	if (stored.sessionId !== undefined) next.sessionId = stored.sessionId;
+	else delete next.sessionId;
+	return next;
 }
 
 /**
@@ -1106,11 +1427,12 @@ export async function persistMergedSync(
 	blobs: SyncBlob[] = []
 ): Promise<{ desk?: DeskApplySummary; operationsUpserted: number; blobsUpserted?: number }> {
 	let deskSummary: DeskApplySummary | undefined;
-	let remappedDismissed: DismissedByCanvas = {};
+	const dismissal: { mode: 'skip' | 'replace'; map: DismissedByCanvas } = {
+		mode: 'skip',
+		map: {}
+	};
 	let operationsUpserted = 0;
 	let blobsUpserted = 0;
-	const deletedIds = plainNotes.filter((n) => n.deletedAt != null).map((n) => n.id);
-	const deletedSet = new Set(deletedIds);
 	// Decode before opening the transaction; persist pixels atomically with their note references.
 	const decodedBlobs = decodeSyncBlobs(blobs);
 
@@ -1123,7 +1445,8 @@ export async function persistMergedSync(
 			db.canvasEdges,
 			db.canvasElements,
 			db.operations,
-			db.noteBlobs
+			db.noteBlobs,
+			db.deskDeletions
 		],
 		async () => {
 			const operationIdMap = new Map<string, string>();
@@ -1146,7 +1469,15 @@ export async function persistMergedSync(
 				await db.noteBlobs.bulkPut(decodedBlobs);
 				blobsUpserted = decodedBlobs.length;
 			}
-			await db.notes.bulkPut(plainNotes);
+			const existingNotes = await db.notes.bulkGet(plainNotes.map((note) => note.id));
+			const notesToWrite = plainNotes.map((note, index) =>
+				reconcileStoredNote(note, existingNotes[index])
+			);
+			await db.notes.bulkPut(notesToWrite);
+			const deletedIds = notesToWrite
+				.filter((note) => note.deletedAt != null)
+				.map((note) => note.id);
+			const deletedSet = new Set(deletedIds);
 			const mappedOperations = operations.map((operation): Operation => ({
 				...operation,
 				id: operationIdMap.get(operation.id) ?? operation.id,
@@ -1163,15 +1494,16 @@ export async function persistMergedSync(
 			if (desk) {
 				const activeIds = new Set([...knownNoteIds].filter((id) => !deletedSet.has(id)));
 				const result = await applyDeskIdbSnapshot(desk, activeIds, sessionId);
-				const { remappedDismissed: remapped, ...summary } = result;
+				const { remappedDismissed: remapped, dismissedMode: mode, ...summary } = result;
 				deskSummary = summary;
-				remappedDismissed = remapped;
+				dismissal.map = remapped;
+				dismissal.mode = mode;
 			}
 		}
 	);
 
-	if (Object.keys(remappedDismissed).length > 0) {
-		importDismissedMap(remappedDismissed);
+	if (dismissal.mode === 'replace') {
+		importDismissedMap(dismissal.map, 'replace');
 	}
 
 	return { desk: deskSummary, operationsUpserted, blobsUpserted };
