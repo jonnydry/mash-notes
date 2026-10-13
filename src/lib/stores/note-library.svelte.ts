@@ -377,10 +377,9 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 
 	function reportWriteFailure(noteId: string, patch: Partial<Note>, error: unknown) {
 		console.error('Mash note write failed', error);
-		stickyPendingPatches.set(noteId, {
-			...(stickyPendingPatches.get(noteId) ?? {}),
-			...patch
-		});
+		// A newer keystroke that landed while this write was in flight wins.
+		const newer = stickyPendingPatches.get(noteId);
+		stickyPendingPatches.set(noteId, { ...patch, ...(newer ?? {}) });
 		saveStatus = '';
 		writeError = 'Changes are still open in memory, but this browser could not save them locally.';
 	}
@@ -466,6 +465,7 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 
 	async function flushPendingSaveAsync(): Promise<void> {
 		const pendingIds = [...new Set([...stickySaveTimers.keys(), ...stickyPendingPatches.keys()])];
+		const started: Promise<void>[] = [];
 		let failed = false;
 		for (const noteId of pendingIds) {
 			const timer = stickySaveTimers.get(noteId);
@@ -473,8 +473,8 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 			stickySaveTimers.delete(noteId);
 			const pending = stickyPendingPatches.get(noteId);
 			stickyPendingPatches.delete(noteId);
-			const note = notes.find((n) => n.id === noteId);
-			if (!note) continue;
+			const note = notesById.get(noteId);
+			if (!note || isMashTeamWelcomeNote(note)) continue;
 			const patch: Partial<Note> = pending ?? {
 				title: note.title,
 				body: note.body,
@@ -485,12 +485,17 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 				textAlign: note.textAlign,
 				source: note.source
 			};
-			try {
-				await syncNoteUpdateAsync(noteId, patch);
-			} catch (error) {
-				failed = true;
-				reportWriteFailure(noteId, patch, error);
-			}
+			// Open the write before awaiting. A read-then-update can miss the hide turn.
+			const write = db.notes.update(noteId, { ...patch, modified: Date.now() });
+			started.push(
+				write.then(
+					() => undefined,
+					(error: unknown) => {
+						failed = true;
+						reportWriteFailure(noteId, patch, error);
+					}
+				)
+			);
 			updateNoteInSearch(
 				{
 					id: noteId,
@@ -504,6 +509,7 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 				note
 			);
 		}
+		await Promise.all(started);
 		if (!failed) {
 			writeError = '';
 			markStickySaved();
