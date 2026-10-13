@@ -139,13 +139,17 @@ describe('note library sticky save on hide', () => {
 			expect(updateCalls).toBe(0);
 
 			life.hide();
+			library.handleVisibilityChange();
 			expect(updateCalls).toBe(1);
 			expect(library.notesById.get(note.id)?.body).toBe('typed while debouncing');
 
 			// A hidden/visible flip, plus pagehide, must not start a second write.
 			life.show();
+			library.handleVisibilityChange();
 			life.hide();
+			library.handleVisibilityChange();
 			life.pageHide();
+			library.flushPendingSave();
 			expect(updateCalls).toBe(1);
 			expect(library.notesById.get(note.id)?.body).toBe('typed while debouncing');
 
@@ -189,11 +193,15 @@ describe('note library sticky save on hide', () => {
 			expect(updateCalls).toBe(0);
 
 			life.pageHide();
+			library.flushPendingSave();
 			expect(updateCalls).toBe(1);
 
 			life.hide();
+			library.handleVisibilityChange();
 			life.show();
+			library.handleVisibilityChange();
 			life.pageHide();
+			library.flushPendingSave();
 			expect(updateCalls).toBe(1);
 			expect(library.notesById.get(note.id)?.body).toBe('still pending at pagehide');
 
