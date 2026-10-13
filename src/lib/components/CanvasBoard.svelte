@@ -836,18 +836,17 @@
 		exitFlowMode();
 	}
 
-	function printSequence(seqIndex = 0) {
+	async function printSequence(seqIndex = 0) {
 		const idx = resolveExportSeqIndex(seqIndex);
 		if (idx < 0) return;
 		const payload = notesForSequence(idx);
 		if (!payload) return;
-		try {
-			printSequenceAsPdf(payload.notes, payload.title);
-			exitFlowMode();
-		} catch (e) {
-			console.error(e);
+		const opened = await printSequenceAsPdf(payload.notes, payload.title);
+		if (!opened) {
 			onToast?.('Could not open print preview');
+			return;
 		}
+		exitFlowMode();
 	}
 
 	async function copySequenceOutline(seqIndex?: number) {

@@ -2,6 +2,7 @@ import { readFile, stat } from 'node:fs/promises';
 import {
 	collectInitialManifestFiles,
 	collectInitialManifestKeys,
+	collectPrecachedDeferredFiles,
 	collectPrecachedLazyFiles,
 	isExcludedFromPrecache,
 	normalizePrecacheUrl
@@ -30,7 +31,8 @@ const deferredInitialEntryNames = new Set([
 	'presentation-docx',
 	'PasteChoiceDialog',
 	'GifExplodeDialog',
-	'sync-file'
+	'sync-file',
+	'marked-runtime'
 ]);
 const budgets = {
 	// Export scope handoff is core shell behavior; PDF/DOCX builders and the sheet stay deferred.
@@ -39,12 +41,11 @@ const budgets = {
 	css: 140 * 1024,
 	fonts: 120 * 1024,
 	fontFiles: 5,
-	// Install/update cost: the shell, initial graph, core fonts, and brand chrome only.
+	// Install/update cost: the shell, initial graph, markdown runtime, core fonts, and brand chrome.
 	precache: 2 * 1024 * 1024
 };
 
 const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
-const precachedLazyFiles = collectPrecachedLazyFiles(manifest);
 const byName = new Map(
 	Object.entries(manifest)
 		.filter(([, entry]) => entry.name)
@@ -86,7 +87,9 @@ for (const name of deferredInitialEntryNames) {
 	const entry = byName.get(name);
 	// Required deferred tooling must exist; chrome/optional names only fail if leaked.
 	if (!entry) {
-		if (['pdf', 'sequence-pdf', 'PdfReader', 'board-image-export'].includes(name)) {
+		if (
+			['pdf', 'sequence-pdf', 'PdfReader', 'board-image-export', 'marked-runtime'].includes(name)
+		) {
 			errors.push(`Deferred entry ${name} is missing from the build manifest`);
 		}
 		continue;
@@ -94,6 +97,10 @@ for (const name of deferredInitialEntryNames) {
 	if (initialKeys.has(entry.key)) errors.push(`${name} leaked into the initial JavaScript graph`);
 }
 
+const deferredPrecacheFiles = new Set([
+	...collectPrecachedDeferredFiles(manifest),
+	...collectPrecachedLazyFiles(manifest)
+]);
 const serviceWorker = await readFile('build/sw.js', 'utf8');
 const listedPrecacheFiles = [...serviceWorker.matchAll(/\burl:"([^"]+)"/g)].map((match) =>
 	normalizePrecacheUrl(match[1])
@@ -111,7 +118,7 @@ for (const file of precacheFiles) {
 	if (
 		file.startsWith('_app/immutable/') &&
 		!initialFiles.has(file) &&
-		!precachedLazyFiles.has(file)
+		!deferredPrecacheFiles.has(file)
 	) {
 		errors.push(`${file} is not in the initial graph but leaked into the PWA precache`);
 	}
@@ -124,6 +131,11 @@ for (const file of precacheFiles) {
 if (precache > budgets.precache) {
 	errors.push(`PWA precache is ${format(precache)} (budget ${format(budgets.precache)})`);
 }
+for (const file of deferredPrecacheFiles) {
+	if (!precacheFiles.includes(file)) {
+		errors.push(`${file} must be precached so markdown preview works offline`);
+	}
+}
 
 const importChunk = byName.get('sync-file');
 if (!importChunk) {
@@ -134,7 +146,9 @@ if (!importChunk) {
 	errors.push('Desk bundle import chunk is not in the PWA precache');
 }
 
-console.log(`Initial JavaScript  ${format(javascript)} / ${format(budgets.javascript)}`);
+console.log(
+	`Initial JavaScript  ${format(javascript)} (${javascript} bytes) / ${format(budgets.javascript)}`
+);
 console.log(`Initial CSS         ${format(css)} / ${format(budgets.css)}`);
 console.log(
 	`Initial fonts       ${format(fonts)} / ${format(budgets.fonts)} (${fontFiles.length} files)`
@@ -143,6 +157,7 @@ console.log(
 	`PWA precache        ${format(precache)} / ${format(budgets.precache)} (${precacheFiles.length} files)`
 );
 console.log('Deferred features   excluded from the initial graph; desk import is precached');
+console.log('Markdown preview    precached for offline use after one visit');
 
 if (errors.length) {
 	console.error(`\nPerformance budget failed:\n- ${errors.join('\n- ')}`);

@@ -25,7 +25,13 @@ const manifest = {
 		file: '_app/immutable/chunks/pdf-reader.js',
 		imports: ['shared', 'reader-vendor']
 	},
-	'reader-vendor': { file: '_app/immutable/chunks/pdf-vendor.js' }
+	'reader-vendor': { file: '_app/immutable/chunks/pdf-vendor.js' },
+	marked: {
+		name: 'marked-runtime',
+		file: '_app/immutable/chunks/marked-runtime.js',
+		imports: ['shared', 'marked-lib']
+	},
+	'marked-lib': { file: '_app/immutable/chunks/marked-lib.js' }
 };
 
 describe('PWA precache policy', () => {
@@ -41,6 +47,8 @@ describe('PWA precache policy', () => {
 		expect(files).toContain('_app/immutable/assets/core.woff2');
 		expect(files).not.toContain('_app/immutable/chunks/pdf-reader.js');
 		expect(files).not.toContain('_app/immutable/chunks/pdf-vendor.js');
+		expect(files).not.toContain('_app/immutable/chunks/marked-runtime.js');
+		expect(files).not.toContain('_app/immutable/chunks/marked-lib.js');
 	});
 
 	it('moves deferred code and optional static assets out of the precache', () => {
@@ -49,6 +57,8 @@ describe('PWA precache policy', () => {
 			'_app/immutable/chunks/shared.js',
 			'_app/immutable/chunks/pdf-reader.js',
 			'_app/immutable/chunks/pdf-vendor.js',
+			'_app/immutable/chunks/marked-runtime.js',
+			'_app/immutable/chunks/marked-lib.js',
 			'icons/Rotating Icons/Fried egg.png',
 			'pdfjs/wasm/quickjs-eval.js',
 			'icons/mash-monochrome.svg',
@@ -60,6 +70,8 @@ describe('PWA precache policy', () => {
 		expect(prunePrecacheEntries(entries, manifest).map((entry) => entry.url)).toEqual([
 			'_app/immutable/entry/start.js',
 			'_app/immutable/chunks/shared.js',
+			'_app/immutable/chunks/marked-runtime.js',
+			'_app/immutable/chunks/marked-lib.js',
 			'icons/mash-logo-sprouts.png',
 			'fonts/Excalifont-Regular.woff2'
 		]);

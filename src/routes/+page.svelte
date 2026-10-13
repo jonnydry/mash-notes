@@ -57,6 +57,7 @@
 	import OperatorReceiptStrip from '$lib/components/OperatorReceiptStrip.svelte';
 
 	import { exportNotesJson, printSequenceAsPdf } from '$lib/mash';
+	import { preloadMarked } from '$lib/markdown-nodes';
 	import type {
 		FinishDraft,
 		FinishExportKind,
@@ -1698,11 +1699,11 @@
 		);
 	}
 
-	function printSelection() {
+	async function printSelection() {
 		const notes = library.selectedNotes;
 		if (notes.length === 0) return;
 		library.bulkMenu = null;
-		const opened = printSequenceAsPdf(notes, selectionExportTitle(notes));
+		const opened = await printSequenceAsPdf(notes, selectionExportTitle(notes));
 		flashToast(
 			opened
 				? notes.length === 1
@@ -3470,7 +3471,7 @@
 		{/await}
 	{/if}
 	{#if presentationExportRequest}
-		{#await import('$lib/components/ExportSheet.svelte') then mod}
+		{#await Promise.all([import('$lib/components/ExportSheet.svelte'), preloadMarked()]) then [mod]}
 			<mod.default
 				request={presentationExportRequest}
 				onClose={() => {

@@ -24,7 +24,12 @@
 	import MarkdownPreview from '$lib/components/MarkdownPreview.svelte';
 	import { focusTrap } from '$lib/focus-trap';
 	import { composeEmbeddedNoteImage, parseEmbeddedNoteImage } from '$lib/markdown';
-	import { markdownNodes } from '$lib/markdown-nodes';
+	import {
+		isMarkedReady,
+		markdownNodes,
+		preloadMarked,
+		selectPreviewNodes
+	} from '$lib/markdown-nodes';
 	import { isMashBlobRef, releaseDisplayUrl, resolveDisplayUrl } from '$lib/note-blobs';
 	import { portal } from '$lib/portal';
 	import type { TextAlign } from '$lib/types';
@@ -69,15 +74,24 @@
 
 	let embeddedImage = $derived(parseEmbeddedNoteImage(body));
 	let editableText = $derived(embeddedImage ? embeddedImage.caption : body);
-	let captionPreviewNodes = $derived(
-		embeddedImage?.caption ? markdownNodes(embeddedImage.caption) : []
-	);
-	let previewNodes = $derived(
-		mode === 'preview'
-			? embeddedImage
-				? markdownNodes(embeddedImage.caption || '')
-				: markdownNodes(body || '')
-			: []
+	let markedReady = $state(isMarkedReady());
+	let activePreviewSource = $derived.by(() => {
+		if (embeddedImage) {
+			if (mode === 'edit' && !readOnly) return null;
+			if (!embeddedImage.caption.trim()) return null;
+			return embeddedImage.caption;
+		}
+		if (mode !== 'preview') return null;
+		return body || '';
+	});
+	let activePreviewNodes = $derived(
+		activePreviewSource === null
+			? []
+			: selectPreviewNodes(
+					activePreviewSource,
+					null,
+					markedReady ? markdownNodes(activePreviewSource) : null
+				)
 	);
 	let align = $derived(textAlign === 'center' || textAlign === 'right' ? textAlign : 'left');
 	let clipZoomLabel = $derived(`${Math.round(clipZoom * 100)}%`);
@@ -115,6 +129,27 @@
 			mode = 'preview';
 			onModeChange?.('preview');
 		}
+	});
+
+	$effect(() => {
+		const source = activePreviewSource;
+		if (source === null) return;
+		if (isMarkedReady()) {
+			markedReady = true;
+			return;
+		}
+		let cancelled = false;
+		void preloadMarked()
+			.then(() => {
+				if (cancelled) return;
+				markedReady = true;
+			})
+			.catch(() => {
+				// Stay on the stripped preview. A later source change retries.
+			});
+		return () => {
+			cancelled = true;
+		};
 	});
 
 	$effect(() => {
@@ -531,7 +566,7 @@
 					onpointerdown={(e) => e.stopPropagation()}
 					onwheel={(e) => e.stopPropagation()}
 				>
-					<MarkdownPreview nodes={captionPreviewNodes} {onWikilink} />
+					<MarkdownPreview nodes={activePreviewNodes} {onWikilink} />
 				</div>
 			{/if}
 		</div>
@@ -558,7 +593,7 @@
 			onwheel={(e) => e.stopPropagation()}
 		>
 			{#if body.trim()}
-				<MarkdownPreview nodes={previewNodes} {onWikilink} />
+				<MarkdownPreview nodes={activePreviewNodes} {onWikilink} />
 			{:else}
 				<p class="mash-sticky-preview-empty">Nothing to preview yet…</p>
 			{/if}
