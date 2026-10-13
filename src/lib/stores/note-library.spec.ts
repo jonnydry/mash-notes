@@ -30,7 +30,7 @@ describe('note library write recovery', () => {
 			getFilteredNoteIds: () => []
 		});
 		await library.loadNotes();
-		vi.useFakeTimers();
+		vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
 		const originalUpdate = db.notes.update.bind(db.notes);
 		db.notes.update = (async () => {
 			throw new Error('Quota exceeded');
@@ -155,5 +155,85 @@ describe('note library write recovery', () => {
 		expect(library.notes.find((note) => note.id === 'tomb')).toBeUndefined();
 		expect(library.notes.find((note) => note.id === 'fresh')?.sessionId).toBe('desk-a');
 		expect(library.notes.find((note) => note.id === 'moved')?.sessionId).toBe('desk-a');
+	});
+});
+
+describe('deleted notes are not written back', () => {
+	beforeEach(async () => {
+		await db.delete();
+		await db.open();
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+		vi.unstubAllGlobals();
+	});
+
+	function libraryWithConfirm() {
+		let action: (() => void | Promise<void>) | undefined;
+		const library = createNoteLibrary({
+			flashToast: () => undefined,
+			askConfirm: (opts) => {
+				action = opts.action;
+			},
+			getActiveCanvasId: () => null,
+			shouldSeedWelcome: () => false,
+			onFolderDeleted: async () => undefined,
+			getFilteredNoteIds: () => []
+		});
+		return {
+			library,
+			confirm: () => Promise.resolve(action?.())
+		};
+	}
+
+	it('keeps a deleted note deleted after tab hide and pagehide', async () => {
+		const note = await createNote({ title: 'Stay', body: 'original' });
+		const { library, confirm } = libraryWithConfirm();
+		await library.loadNotes();
+		vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
+		library.selectNote(note.id);
+		library.handleStickyBodyChange(note.id, 'typed then deleted');
+		library.handleDelete();
+		await confirm();
+
+		vi.stubGlobal('document', { visibilityState: 'hidden' });
+		library.handleVisibilityChange();
+		library.flushPendingSave();
+		await library.flushPendingSaveAsync();
+		await vi.advanceTimersByTimeAsync(500);
+
+		const stored = await db.notes.get(note.id);
+		expect(stored?.deletedAt).toEqual(expect.any(Number));
+		expect(stored?.body).toBe('original');
+	});
+
+	it('does not write a sticky save that was still inside the 400ms debounce when the note was deleted', async () => {
+		const note = await createNote({ title: 'Stay', body: 'original' });
+		const { library, confirm } = libraryWithConfirm();
+		await library.loadNotes();
+		const originalUpdate = db.notes.update.bind(db.notes);
+		let updates = 0;
+		db.notes.update = (async (...args: Parameters<typeof originalUpdate>) => {
+			updates += 1;
+			return originalUpdate(...args);
+		}) as typeof db.notes.update;
+
+		try {
+			vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
+			library.selectNote(note.id);
+			library.handleStickyBodyChange(note.id, 'quick edit');
+			expect(updates).toBe(0);
+			library.handleDelete();
+			await confirm();
+			await vi.advanceTimersByTimeAsync(500);
+
+			expect(updates).toBe(0);
+			const stored = await db.notes.get(note.id);
+			expect(stored?.deletedAt).toEqual(expect.any(Number));
+			expect(stored?.body).toBe('original');
+		} finally {
+			db.notes.update = originalUpdate;
+		}
 	});
 });

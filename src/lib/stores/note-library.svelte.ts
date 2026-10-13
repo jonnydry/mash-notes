@@ -33,6 +33,7 @@ import {
 import { SYNC_BUNDLE_MAX_CHARS } from '$lib/sync-limits';
 import type { SyncConflict } from '$lib/sync-model';
 import { isStaleSyncBundle, recordSyncImport } from '$lib/sync-hygiene';
+import { noteHasDeskDeletionMarker } from '$lib/desk-deletion-record';
 import {
 	ensureMashTeamWelcomeNote,
 	isMashTeamWelcomeCandidate,
@@ -185,6 +186,8 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 
 	const stickySaveTimers = new Map<string, ReturnType<typeof setTimeout>>();
 	const stickyPendingPatches = new Map<string, Partial<Note>>();
+	/** Notes deleted this session. A tab-close flush must not write them back. */
+	const deletedNoteIds = new Set<string>();
 	let stickySaveStatusClear: ReturnType<typeof setTimeout> | null = null;
 	let notesLoadSeq = 0;
 
@@ -398,6 +401,18 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 		}
 	}
 
+	function cancelStickySave(noteId: string): void {
+		const timer = stickySaveTimers.get(noteId);
+		if (timer) clearTimeout(timer);
+		stickySaveTimers.delete(noteId);
+		stickyPendingPatches.delete(noteId);
+		deletedNoteIds.add(noteId);
+	}
+
+	function flushSkipsNote(noteId: string): boolean {
+		return deletedNoteIds.has(noteId) || noteHasDeskDeletionMarker(noteId);
+	}
+
 	function scheduleStickyPersist(noteId: string, patch: Partial<Note>, updated: Note) {
 		markStickySaving();
 		const mergedPatch = { ...(stickyPendingPatches.get(noteId) ?? {}), ...patch };
@@ -408,6 +423,10 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 			noteId,
 			setTimeout(() => {
 				stickySaveTimers.delete(noteId);
+				if (flushSkipsNote(noteId)) {
+					stickyPendingPatches.delete(noteId);
+					return;
+				}
 				const pending = stickyPendingPatches.get(noteId) ?? mergedPatch;
 				stickyPendingPatches.delete(noteId);
 				const latest = notes.find((n) => n.id === noteId) ?? updated;
@@ -476,6 +495,7 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 			stickySaveTimers.delete(noteId);
 			const pending = stickyPendingPatches.get(noteId);
 			stickyPendingPatches.delete(noteId);
+			if (flushSkipsNote(noteId)) continue;
 			const note = notes.find((n) => n.id === noteId);
 			if (!note) continue;
 			const patch: Partial<Note> = pending ?? {
@@ -1036,6 +1056,7 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 			danger: true,
 			action: async () => {
 				for (const id of ids) {
+					cancelStickySave(id);
 					await deleteNote(id);
 					removeNoteFromSearch(id);
 					opts.clearExpandedIfNote?.(id);

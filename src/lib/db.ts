@@ -25,6 +25,11 @@ import {
 	cloneCanvasElement
 } from './canvas-elements';
 import type { StoredDeskDeletion } from './desk-deletions';
+import {
+	rememberEdgeDeletion,
+	rememberElementDeletion,
+	rememberItem
+} from './desk-deletion-record';
 
 // =============================================================================
 // DATABASE
@@ -484,6 +489,7 @@ export async function deleteNote(id: string): Promise<void> {
 	for (const item of items) {
 		await removeEdgesForItem(item.id);
 		await removeCanvasElementsForItem(item.id);
+		await rememberItem(item.canvasId, item.noteId, deletedAt);
 	}
 	await db.canvasItems.where('noteId').equals(id).delete();
 	// Orphan mash-blob: rows only if no remaining note references them.
@@ -693,6 +699,7 @@ export async function removeCanvasItem(id: string): Promise<void> {
 	await removeCanvasElementsForItem(id);
 	await db.canvasItems.delete(id);
 	if (item) {
+		await rememberItem(item.canvasId, item.noteId);
 		await db.canvases.update(item.canvasId, { modified: Date.now() });
 	}
 }
@@ -703,17 +710,29 @@ export async function replaceCanvasItemSubset(
 	affectedIds: string[],
 	desiredItems: CanvasItem[]
 ): Promise<void> {
+	const desiredIds = new Set(desiredItems.map((item) => item.id));
+	const removedIds = affectedIds.filter((id) => !desiredIds.has(id));
+	const removedItems = removedIds.length > 0 ? await db.canvasItems.bulkGet(removedIds) : [];
+	if (removedIds.length > 0) {
+		const removedIdSet = new Set(removedIds);
+		const elements = await db.canvasElements.where('canvasId').equals(canvasId).toArray();
+		for (const element of elements) {
+			if ([...removedIdSet].some((itemId) => canvasElementBindsItem(element, itemId))) {
+				await rememberElementDeletion(element);
+			}
+		}
+	}
+	for (const item of removedItems) {
+		if (item) await rememberItem(item.canvasId, item.noteId);
+	}
 	await db.transaction('rw', db.canvasItems, db.canvasElements, db.canvases, async () => {
 		if (affectedIds.length > 0) await db.canvasItems.bulkDelete(affectedIds);
 		if (desiredItems.length > 0) await db.canvasItems.bulkPut(desiredItems);
-		const desiredIds = new Set(desiredItems.map((item) => item.id));
-		const removedIds = new Set(affectedIds.filter((id) => !desiredIds.has(id)));
-		if (removedIds.size > 0) {
+		const gone = new Set(removedIds);
+		if (gone.size > 0) {
 			const elements = await db.canvasElements.where('canvasId').equals(canvasId).toArray();
 			const orphanIds = elements
-				.filter((element) =>
-					[...removedIds].some((itemId) => canvasElementBindsItem(element, itemId))
-				)
+				.filter((element) => [...gone].some((itemId) => canvasElementBindsItem(element, itemId)))
 				.map((element) => element.id);
 			if (orphanIds.length > 0) await db.canvasElements.bulkDelete(orphanIds);
 		}
@@ -725,12 +744,13 @@ export async function removeNotesFromCanvas(canvasId: string, noteIds: string[])
 	if (noteIds.length === 0) return;
 	const idSet = new Set(noteIds);
 	const items = await db.canvasItems.where('canvasId').equals(canvasId).toArray();
-	const toDelete = items.filter((i) => idSet.has(i.noteId)).map((i) => i.id);
-	for (const itemId of toDelete) {
-		await removeEdgesForItem(itemId);
-		await removeCanvasElementsForItem(itemId);
+	const toDelete = items.filter((i) => idSet.has(i.noteId));
+	for (const item of toDelete) {
+		await removeEdgesForItem(item.id);
+		await removeCanvasElementsForItem(item.id);
+		await rememberItem(item.canvasId, item.noteId);
 	}
-	await db.canvasItems.bulkDelete(toDelete);
+	await db.canvasItems.bulkDelete(toDelete.map((item) => item.id));
 	if (toDelete.length > 0) {
 		await db.canvases.update(canvasId, { modified: Date.now() });
 	}
@@ -785,21 +805,24 @@ export async function removeCanvasEdge(id: string): Promise<void> {
 	const edge = await db.canvasEdges.get(id);
 	await db.canvasEdges.delete(id);
 	if (edge) {
+		await rememberEdgeDeletion(edge);
 		await db.canvases.update(edge.canvasId, { modified: Date.now() });
 	}
 }
 
 /** Replace all edges on a canvas (used by undo/redo of link actions). */
 export async function replaceCanvasEdges(canvasId: string, edges: CanvasEdge[]): Promise<void> {
+	const nextIds = new Set(
+		edges.filter((edge) => edge.canvasId === canvasId).map((edge) => edge.id)
+	);
+	const existing = await db.canvasEdges.where('canvasId').equals(canvasId).toArray();
+	for (const edge of existing) {
+		if (!nextIds.has(edge.id)) await rememberEdgeDeletion(edge);
+	}
 	await db.transaction('rw', db.canvasEdges, db.canvases, async () => {
-		const existing = await db.canvasEdges.where('canvasId').equals(canvasId).toArray();
-		if (existing.length > 0) {
-			await db.canvasEdges.bulkDelete(existing.map((e) => e.id));
-		}
-		const next = edges.filter((e) => e.canvasId === canvasId);
-		if (next.length > 0) {
-			await db.canvasEdges.bulkAdd(next);
-		}
+		if (existing.length > 0) await db.canvasEdges.bulkDelete(existing.map((edge) => edge.id));
+		const next = edges.filter((edge) => edge.canvasId === canvasId);
+		if (next.length > 0) await db.canvasEdges.bulkAdd(next);
 		await db.canvases.update(canvasId, { modified: Date.now() });
 	});
 }
@@ -808,10 +831,11 @@ export async function replaceCanvasEdges(canvasId: string, edges: CanvasEdge[]):
 export async function removeEdgesForItem(itemId: string): Promise<void> {
 	const from = await db.canvasEdges.where('fromItemId').equals(itemId).toArray();
 	const to = await db.canvasEdges.where('toItemId').equals(itemId).toArray();
-	const ids = [...new Set([...from, ...to].map((e) => e.id))];
-	if (ids.length === 0) return;
-	const canvasId = from[0]?.canvasId ?? to[0]?.canvasId;
-	await db.canvasEdges.bulkDelete(ids);
+	const edges = [...new Map([...from, ...to].map((edge) => [edge.id, edge])).values()];
+	if (edges.length === 0) return;
+	for (const edge of edges) await rememberEdgeDeletion(edge);
+	const canvasId = edges[0]?.canvasId;
+	await db.canvasEdges.bulkDelete(edges.map((edge) => edge.id));
 	if (canvasId) {
 		await db.canvases.update(canvasId, { modified: Date.now() });
 	}
@@ -874,6 +898,7 @@ export async function removeCanvasElement(id: string): Promise<void> {
 		await db.canvasElements.delete(id);
 		await db.canvases.update(element.canvasId, { modified: Date.now() });
 	});
+	await rememberElementDeletion(element);
 }
 
 /** Replace every cosmetic element on one canvas (used by restore and undo/redo). */
@@ -881,6 +906,13 @@ export async function replaceCanvasElements(
 	canvasId: string,
 	elements: CanvasElement[]
 ): Promise<void> {
+	const nextIds = new Set(
+		elements.filter((element) => element.canvasId === canvasId).map((element) => element.id)
+	);
+	const existing = await db.canvasElements.where('canvasId').equals(canvasId).toArray();
+	for (const element of existing) {
+		if (!nextIds.has(element.id)) await rememberElementDeletion(element);
+	}
 	await db.transaction('rw', db.canvasElements, db.canvases, db.canvasItems, async () => {
 		await db.canvasElements.where('canvasId').equals(canvasId).delete();
 		const next = elements
@@ -897,6 +929,7 @@ export async function removeCanvasElementsForItem(itemId: string): Promise<void>
 	const elements = await db.canvasElements.toArray();
 	const bound = elements.filter((element) => canvasElementBindsItem(element, itemId));
 	if (bound.length === 0) return;
+	for (const element of bound) await rememberElementDeletion(element);
 	await db.canvasElements.bulkDelete(bound.map((element) => element.id));
 	for (const canvasId of new Set(bound.map((element) => element.canvasId))) {
 		await db.canvases.update(canvasId, { modified: Date.now() });
