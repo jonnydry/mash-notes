@@ -377,10 +377,9 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 
 	function reportWriteFailure(noteId: string, patch: Partial<Note>, error: unknown) {
 		console.error('Mash note write failed', error);
-		stickyPendingPatches.set(noteId, {
-			...(stickyPendingPatches.get(noteId) ?? {}),
-			...patch
-		});
+		// A newer keystroke that landed while this write was in flight wins.
+		const newer = stickyPendingPatches.get(noteId);
+		stickyPendingPatches.set(noteId, { ...patch, ...(newer ?? {}) });
 		saveStatus = '';
 		writeError = 'Changes are still open in memory, but this browser could not save them locally.';
 	}
@@ -466,15 +465,22 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 
 	async function flushPendingSaveAsync(): Promise<void> {
 		const pendingIds = [...new Set([...stickySaveTimers.keys(), ...stickyPendingPatches.keys()])];
-		let failed = false;
+		// Queue every IndexedDB update before the first await. A hiding page can
+		// freeze once this turn ends, and a preliminary read would miss that window.
+		const jobs: Array<{
+			noteId: string;
+			patch: Partial<Note>;
+			note: Note;
+			write: Promise<void>;
+		}> = [];
 		for (const noteId of pendingIds) {
 			const timer = stickySaveTimers.get(noteId);
 			if (timer) clearTimeout(timer);
 			stickySaveTimers.delete(noteId);
 			const pending = stickyPendingPatches.get(noteId);
 			stickyPendingPatches.delete(noteId);
-			const note = notes.find((n) => n.id === noteId);
-			if (!note) continue;
+			const note = notesById.get(noteId) ?? notes.find((n) => n.id === noteId);
+			if (!note || isMashTeamWelcomeNote(note)) continue;
 			const patch: Partial<Note> = pending ?? {
 				title: note.title,
 				body: note.body,
@@ -485,25 +491,39 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 				textAlign: note.textAlign,
 				source: note.source
 			};
+			let write: Promise<unknown>;
 			try {
-				await syncNoteUpdateAsync(noteId, patch);
+				write = db.notes.update(noteId, { ...patch, modified: Date.now() });
 			} catch (error) {
-				failed = true;
-				reportWriteFailure(noteId, patch, error);
+				write = Promise.reject(error);
 			}
-			updateNoteInSearch(
-				{
-					id: noteId,
-					title: note.title,
-					body: note.body,
-					folder: note.folder,
-					tags: note.tags,
-					pinned: note.pinned,
-					links: note.links
-				},
-				note
-			);
+			jobs.push({ noteId, patch, note, write: write.then(() => undefined) });
 		}
+
+		let failed = false;
+		await Promise.all(
+			jobs.map(async (job) => {
+				try {
+					await job.write;
+				} catch (error) {
+					failed = true;
+					reportWriteFailure(job.noteId, job.patch, error);
+					return;
+				}
+				updateNoteInSearch(
+					{
+						id: job.noteId,
+						title: job.note.title,
+						body: job.note.body,
+						folder: job.note.folder,
+						tags: job.note.tags,
+						pinned: job.note.pinned,
+						links: job.note.links
+					},
+					job.note
+				);
+			})
+		);
 		if (!failed) {
 			writeError = '';
 			markStickySaved();
@@ -517,6 +537,15 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 
 	function handleVisibilityChange(): void {
 		if (document.visibilityState === 'hidden') flushPendingSave();
+	}
+
+	// Start a pending sticky save when the tab hides. pagehide covers browsers
+	// that discard the document without a visibilitychange. beforeunload is not used.
+	if (typeof document !== 'undefined') {
+		document.addEventListener('visibilitychange', handleVisibilityChange);
+	}
+	if (typeof window !== 'undefined') {
+		window.addEventListener('pagehide', flushPendingSave);
 	}
 
 	async function loadNotes() {
