@@ -175,16 +175,22 @@ describe('printSequenceAsPdf', () => {
 				return win;
 			}
 		});
-		const urlGlobal = URL as typeof URL & {
-			createObjectURL?: (blob: Blob) => string;
-			revokeObjectURL?: (url: string) => void;
-		};
-		const originalCreate = urlGlobal.createObjectURL;
-		const originalRevoke = urlGlobal.revokeObjectURL;
-		urlGlobal.createObjectURL = vi.fn(() => 'blob:print');
-		urlGlobal.revokeObjectURL = vi.fn();
+		const realURL = globalThis.URL;
+		const createDescriptor = Object.getOwnPropertyDescriptor(realURL, 'createObjectURL');
+		const revokeDescriptor = Object.getOwnPropertyDescriptor(realURL, 'revokeObjectURL');
 		try {
 			const { printSequenceAsPdf } = await import('./mash');
+			Object.defineProperty(realURL, 'createObjectURL', {
+				configurable: true,
+				writable: true,
+				value: () => 'blob:print'
+			});
+			Object.defineProperty(realURL, 'revokeObjectURL', {
+				configurable: true,
+				writable: true,
+				value: () => {}
+			});
+			vi.useFakeTimers();
 			const job = printSequenceAsPdf([note({ id: '1', title: 'Hello', body: 'Body' })]);
 			expect(opened).toEqual(['']);
 			expect(win.location.href).toBe('');
@@ -192,11 +198,13 @@ describe('printSequenceAsPdf', () => {
 			await expect(job).resolves.toBe(true);
 			expect(win.location.href).toBe('blob:print');
 			expect(win.opener).toBeNull();
+			vi.runOnlyPendingTimers();
 		} finally {
-			if (originalCreate) urlGlobal.createObjectURL = originalCreate;
-			else delete urlGlobal.createObjectURL;
-			if (originalRevoke) urlGlobal.revokeObjectURL = originalRevoke;
-			else delete urlGlobal.revokeObjectURL;
+			if (createDescriptor) Object.defineProperty(realURL, 'createObjectURL', createDescriptor);
+			else Reflect.deleteProperty(realURL, 'createObjectURL');
+			if (revokeDescriptor) Object.defineProperty(realURL, 'revokeObjectURL', revokeDescriptor);
+			else Reflect.deleteProperty(realURL, 'revokeObjectURL');
+			vi.useRealTimers();
 			vi.unstubAllGlobals();
 			vi.doUnmock('./markdown');
 			vi.resetModules();
