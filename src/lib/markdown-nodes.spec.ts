@@ -37,17 +37,131 @@ function flatten(nodes: MarkdownNode[]): MarkdownNode[] {
 	});
 }
 
+function visibleText(nodes: MarkdownNode[]): string {
+	return nodes
+		.map((node) => {
+			switch (node.type) {
+				case 'text':
+				case 'code':
+				case 'code-block':
+					return node.text;
+				case 'wikilink':
+					return node.label;
+				case 'paragraph':
+				case 'heading':
+				case 'strong':
+				case 'emphasis':
+				case 'delete':
+				case 'link':
+				case 'blockquote':
+					return visibleText(node.children);
+				case 'list':
+					return node.items.map((item) => visibleText(item.children)).join('');
+				case 'table':
+					return [...node.header, ...node.rows.flat()].map(visibleText).join('');
+				default:
+					return '';
+			}
+		})
+		.join('');
+}
+
 describe('preview while marked loads', () => {
-	it('renders plain text until markdown is ready', () => {
-		expect(selectPreviewNodes('Use **Mash**', null, null)).toEqual(
-			plainMarkdownNodes('Use **Mash**')
-		);
+	it('strips emphasis markers before markdown is ready', () => {
+		const nodes = plainMarkdownNodes('Use **Mash**');
+		expect(nodes).toEqual([
+			{
+				type: 'paragraph',
+				children: [
+					{ type: 'text', text: 'Use ' },
+					{ type: 'strong', children: [{ type: 'text', text: 'Mash' }] }
+				]
+			}
+		]);
+		expect(selectPreviewNodes('Use **Mash**', null, null)).toEqual(nodes);
+		expect(visibleText(nodes)).toBe('Use Mash');
+		expect(plainMarkdownNodes('a *b* and _c_ and `d`')).toEqual([
+			{
+				type: 'paragraph',
+				children: [
+					{ type: 'text', text: 'a ' },
+					{ type: 'emphasis', children: [{ type: 'text', text: 'b' }] },
+					{ type: 'text', text: ' and ' },
+					{ type: 'emphasis', children: [{ type: 'text', text: 'c' }] },
+					{ type: 'text', text: ' and ' },
+					{ type: 'code', text: 'd' }
+				]
+			}
+		]);
 		expect(plainMarkdownNodes('one\ntwo')).toEqual([
 			{
 				type: 'paragraph',
 				children: [{ type: 'text', text: 'one' }, { type: 'break' }, { type: 'text', text: 'two' }]
 			}
 		]);
+	});
+
+	it('keeps heading, link, and list structure without the markers', () => {
+		expect(plainMarkdownNodes('# Guide')).toEqual([
+			{ type: 'heading', depth: 1, children: [{ type: 'text', text: 'Guide' }] }
+		]);
+		expect(plainMarkdownNodes('## Section')).toEqual([
+			{ type: 'heading', depth: 2, children: [{ type: 'text', text: 'Section' }] }
+		]);
+		expect(plainMarkdownNodes('See [Docs](https://example.com).')).toEqual([
+			{
+				type: 'paragraph',
+				children: [
+					{ type: 'text', text: 'See ' },
+					{
+						type: 'link',
+						href: 'https://example.com',
+						children: [{ type: 'text', text: 'Docs' }]
+					},
+					{ type: 'text', text: '.' }
+				]
+			}
+		]);
+		expect(plainMarkdownNodes('- alpha\n- beta')).toEqual([
+			{
+				type: 'list',
+				ordered: false,
+				items: [
+					{ children: [{ type: 'text', text: 'alpha' }], task: false, checked: false },
+					{ children: [{ type: 'text', text: 'beta' }], task: false, checked: false }
+				]
+			}
+		]);
+		expect(plainMarkdownNodes('> quoted\n\n---')).toEqual([
+			{
+				type: 'blockquote',
+				children: [{ type: 'paragraph', children: [{ type: 'text', text: 'quoted' }] }]
+			},
+			{ type: 'rule' }
+		]);
+	});
+
+	it('never shows raw markers on a cold-cache preview of a new card', () => {
+		const source = [
+			'# Welcome',
+			'',
+			'Use **Mash** and [Docs](https://example.com).',
+			'',
+			'- one',
+			'- two'
+		].join('\n');
+		const nodes = selectPreviewNodes(source, null, null);
+		const visible = visibleText(nodes);
+		expect(nodes.length).toBeGreaterThan(0);
+		expect(visible.length).toBeGreaterThan(0);
+		expect(visible).not.toContain('#');
+		expect(visible).not.toContain('**');
+		expect(visible).toContain('Welcome');
+		expect(visible).toContain('Mash');
+		expect(visible).toContain('Docs');
+		expect(visible).toContain('one');
+		expect(nodes.some((node) => node.type === 'heading' && node.depth === 1)).toBe(true);
+		expect(nodes.some((node) => node.type === 'list' && node.ordered === false)).toBe(true);
 	});
 
 	it('keeps the previous output until the next render is ready', () => {
