@@ -686,6 +686,7 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		);
 		const restored = await replaceCanvasItemSubset(activeCanvas.id, affectedIds, desired);
 		const affected = new Set(affectedIds);
+		// Session state keeps the stored `modified`, not the older undo snapshot.
 		canvasItems = [...canvasItems.filter((item) => !affected.has(item.id)), ...restored];
 	}
 

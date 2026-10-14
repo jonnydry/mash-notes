@@ -1176,35 +1176,6 @@ describe('desk bundle delete markers', () => {
 		await expectRestored(seed);
 	});
 
-	it('keeps an undone card when the post-undo export is imported on a fresh desk', async () => {
-		const seed = await seedRemovedDesk();
-		const withMarker = JSON.stringify(await buildSyncBundle([seed.noteA, seed.noteB]));
-		const markerDeletedAt = JSON.parse(withMarker).desk.deletions.find(
-			(row: { kind?: string; noteId?: string; deletedAt?: number }) =>
-				row.kind === 'item' && row.noteId === seed.noteA.id
-		)?.deletedAt;
-		expect(markerDeletedAt).toEqual(expect.any(Number));
-
-		await undoRemovedDesk(seed);
-		const undone = await buildSyncBundle([seed.noteA, seed.noteB]);
-		const exportedCard = undone.desk?.items.find((item) => item.noteId === seed.noteA.id);
-		expect(exportedCard?.modified).toBeGreaterThan(markerDeletedAt!);
-
-		await db.delete();
-		await db.open();
-		localStorage.clear();
-		await importDesk(JSON.stringify(undone), [seed.noteA.id, seed.noteB.id]);
-
-		const fresh = await db.canvasItems.where('noteId').equals(seed.noteA.id).first();
-		expect(fresh).toBeTruthy();
-		expect(fresh?.modified).toBeGreaterThan(markerDeletedAt!);
-
-		await importDesk(withMarker, [seed.noteA.id, seed.noteB.id]);
-		const afterOlder = await db.canvasItems.where('noteId').equals(seed.noteA.id).first();
-		expect(afterOlder).toBeTruthy();
-		expect(afterOlder?.modified).toBeGreaterThan(markerDeletedAt!);
-	});
-
 	it('keeps an undone card when the post-undo bundle is imported into a wiped database', async () => {
 		const seed = await seedRemovedDesk();
 		await undoRemovedDesk(seed);
