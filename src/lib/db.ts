@@ -714,12 +714,15 @@ export async function removeCanvasItem(id: string): Promise<void> {
 	}
 }
 
-/** Replace a known subset of canvas cards while preserving their stable ids (operator undo/redo). */
+/**
+ * Replace a known subset of canvas cards while preserving their stable ids (operator undo/redo).
+ * Returns the cards that were written, each with `modified` set to this undo time.
+ */
 export async function replaceCanvasItemSubset(
 	canvasId: string,
 	affectedIds: string[],
 	desiredItems: CanvasItem[]
-): Promise<void> {
+): Promise<CanvasItem[]> {
 	const desiredIds = new Set(desiredItems.map((item) => item.id));
 	const removedIds = affectedIds.filter((id) => !desiredIds.has(id));
 	const removedItems = removedIds.length > 0 ? await db.canvasItems.bulkGet(removedIds) : [];
@@ -740,6 +743,8 @@ export async function replaceCanvasItemSubset(
 	let restoredAt = now;
 	for (const item of desiredItems) {
 		const deletedAt = await forgetItem(item.canvasId, item.noteId);
+		// Undo time is the card's editedAt. A desk that still has the delete
+		// marker keeps the card when this edit is later than deletedAt.
 		const modified = deletedAt == null ? now : restoredEditTime(deletedAt, now);
 		restoredAt = Math.max(restoredAt, modified);
 		restoredItems.push({ ...item, modified });
@@ -757,6 +762,7 @@ export async function replaceCanvasItemSubset(
 		}
 		await db.canvases.update(canvasId, { modified: restoredAt });
 	});
+	return restoredItems;
 }
 
 export async function removeNotesFromCanvas(canvasId: string, noteIds: string[]): Promise<void> {
