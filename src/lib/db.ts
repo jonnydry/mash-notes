@@ -714,12 +714,15 @@ export async function removeCanvasItem(id: string): Promise<void> {
 	}
 }
 
-/** Replace a known subset of canvas cards while preserving their stable ids (operator undo/redo). */
+/**
+ * Replace a known subset of canvas cards while preserving their stable ids (operator undo/redo).
+ * Returns the written cards. Each `modified` is the time of this write.
+ */
 export async function replaceCanvasItemSubset(
 	canvasId: string,
 	affectedIds: string[],
 	desiredItems: CanvasItem[]
-): Promise<void> {
+): Promise<CanvasItem[]> {
 	const desiredIds = new Set(desiredItems.map((item) => item.id));
 	const removedIds = affectedIds.filter((id) => !desiredIds.has(id));
 	const removedItems = removedIds.length > 0 ? await db.canvasItems.bulkGet(removedIds) : [];
@@ -757,6 +760,7 @@ export async function replaceCanvasItemSubset(
 		}
 		await db.canvases.update(canvasId, { modified: restoredAt });
 	});
+	return restoredItems;
 }
 
 export async function removeNotesFromCanvas(canvasId: string, noteIds: string[]): Promise<void> {
