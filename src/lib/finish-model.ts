@@ -88,7 +88,8 @@ export function spatialNoteIds(items: CanvasItem[]): string[] {
 }
 
 function recoveryWindowPhrase(): string {
-	return `recoverable for ${RECOVERY_DAYS} day${RECOVERY_DAYS === 1 ? '' : 's'}`;
+	const days: number = RECOVERY_DAYS;
+	return `recoverable for ${days} day${days === 1 ? '' : 's'}`;
 }
 
 /**

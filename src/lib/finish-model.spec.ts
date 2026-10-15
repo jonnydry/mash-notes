@@ -256,7 +256,8 @@ describe('Finish snapshot', () => {
 	it('matches the canvas chip and names what Clear does to off-canvas notes', () => {
 		const onCanvas = [note('a', 1), note('b', 2)];
 		const items = [item('ia', 'a', 0, 0), item('ib', 'b', 40, 0)];
-		const recoverable = `recoverable for ${RECOVERY_DAYS} day${RECOVERY_DAYS === 1 ? '' : 's'}`;
+		const recoveryDays: number = RECOVERY_DAYS;
+		const recoverable = `recoverable for ${recoveryDays} day${recoveryDays === 1 ? '' : 's'}`;
 
 		const keptOff = [note('c', 3), note('d', 4)];
 		for (const row of keptOff) row.scope = 'kept';
