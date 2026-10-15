@@ -121,9 +121,13 @@ test('new cards stay clear of floating chrome on a busy desk', async ({ page }) 
 	const toast = page.getByTestId('action-status');
 
 	async function placeAndCheck(expectToast: boolean) {
-		const before = await page.locator('[data-canvas-card]').count();
+		const previousId = (await expanded.count())
+			? await expanded.getAttribute('data-note-id')
+			: null;
 		await newNote.click();
-		await expect(page.locator('[data-canvas-card]')).toHaveCount(before + 1, { timeout: 10_000 });
+		await expect
+			.poll(async () => expanded.getAttribute('data-note-id'), { timeout: 10_000 })
+			.not.toBe(previousId);
 		await expect(expanded).toHaveCount(1, { timeout: 10_000 });
 		await expect(expanded).toHaveCSS('width', '280px', { timeout: 10_000 });
 		await expect(toast).toBeVisible();
@@ -167,30 +171,59 @@ test('floating controls over the canvas carry data-floating-chrome', async ({ pa
 	}
 });
 
+/** Stored top-lefts, including cards the board has culled off screen. */
+async function storedTopLefts(page: Page): Promise<string[]> {
+	return page.evaluate(async () => {
+		const db = await new Promise<IDBDatabase>((resolve, reject) => {
+			const request = indexedDB.open('mashdb-notes-v1');
+			request.onsuccess = () => resolve(request.result);
+			request.onerror = () => reject(request.error);
+		});
+		try {
+			const items = await new Promise<Array<{ x: number; y: number }>>((resolve, reject) => {
+				const request = db
+					.transaction('canvasItems', 'readonly')
+					.objectStore('canvasItems')
+					.getAll();
+				request.onsuccess = () => resolve(request.result);
+				request.onerror = () => reject(request.error);
+			});
+			return items.map((item) => `${item.x}|${item.y}`);
+		} finally {
+			db.close();
+		}
+	});
+}
+
 async function distinctTopLefts(page: Page, count: number) {
 	const world = page.getByRole('application', { name: 'Mash canvas' }).locator('> div').first();
 	const transformBefore = await world.evaluate(
 		(element) => (element as HTMLElement).style.transform
 	);
 	const newNote = page.getByRole('button', { name: 'New note' });
+	const expanded = page.locator('[data-canvas-card][data-expanded="true"]');
 	for (let i = 0; i < count; i++) {
-		const before = await page.locator('[data-canvas-card]').count();
+		const previousId = (await expanded.count())
+			? await expanded.getAttribute('data-note-id')
+			: null;
 		await newNote.click();
-		await expect(page.locator('[data-canvas-card]')).toHaveCount(before + 1, { timeout: 10_000 });
-		await expect(page.locator('[data-canvas-card][data-expanded="true"]')).toHaveCount(1, {
-			timeout: 10_000
-		});
+		await expect
+			.poll(async () => expanded.getAttribute('data-note-id'), { timeout: 10_000 })
+			.not.toBe(previousId);
 	}
-	const spots = await page.locator('[data-canvas-card]').evaluateAll((cards) =>
-		cards.map((card) => {
-			const style = (card as HTMLElement).style;
-			return `${style.left}|${style.top}`;
-		})
-	);
+	let spots: string[] = [];
+	await expect
+		.poll(
+			async () => {
+				spots = await storedTopLefts(page);
+				return spots.length;
+			},
+			{ timeout: 15_000 }
+		)
+		.toBeGreaterThanOrEqual(count);
 	const distinct = new Set(spots);
 	console.log(`distinct top-lefts ${spots.length} cards, ${distinct.size} unique`);
 	expect(distinct.size, spots.join(', ')).toBe(spots.length);
-	expect(spots.length).toBeGreaterThanOrEqual(count);
 	expect(await world.evaluate((element) => (element as HTMLElement).style.transform)).toBe(
 		transformBefore
 	);
