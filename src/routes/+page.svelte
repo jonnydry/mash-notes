@@ -2501,6 +2501,7 @@
 		</div>
 		{#if settingsOpen}
 			<div
+				data-floating-chrome
 				class="mash-peel-slot pointer-events-auto absolute top-1/2 left-[4.75rem] z-30 -translate-y-1/2"
 			>
 				{#await import('$lib/components/SettingsPanel.svelte') then mod}
@@ -2553,6 +2554,7 @@
 			</div>
 		{:else if peel.peelOpen}
 			<div
+				data-floating-chrome
 				class="mash-peel-slot pointer-events-auto absolute top-1/2 left-[4.75rem] z-30 -translate-y-1/2"
 			>
 				<PeelScanner
