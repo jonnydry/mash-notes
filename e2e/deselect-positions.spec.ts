@@ -1,52 +1,53 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { createNamedNote, wipeIndexedDb } from './helpers';
 
-async function cardPositions(page: Page) {
-	return page.locator('[data-canvas-card]').evaluateAll((elements) =>
-		elements.map((element) => ({
-			id: element.getAttribute('data-note-id'),
-			left: (element as HTMLElement).style.left,
-			top: (element as HTMLElement).style.top
-		}))
-	);
+async function boardPosition(card: Locator) {
+	return card.evaluate((element) => ({
+		left: (element as HTMLElement).style.left,
+		top: (element as HTMLElement).style.top
+	}));
 }
 
-/** Fill the expanded new-note card and leave it open so neighbors stay bumped. */
-async function leaveExpandedNote(page: Page, title: string, body: string) {
-	const closeIngredients = page.getByRole('button', { name: 'Close ingredients' });
-	if (await closeIngredients.isVisible().catch(() => false)) await closeIngredients.click();
-	await page.getByRole('button', { name: 'New note' }).click();
-	const card = page
-		.locator('[data-canvas-card]')
-		.filter({ has: page.locator('textarea.mash-sticky-body') })
-		.first();
-	await expect(card).toBeVisible({ timeout: 10_000 });
-	await card.locator('input[type="text"]').first().fill(title);
-	const bodyEl = card.locator('textarea.mash-sticky-body');
-	await bodyEl.fill(body);
-	await bodyEl.blur();
-	await page.waitForTimeout(600);
+async function dragCard(page: Page, card: Locator, dx: number, dy: number) {
+	const box = await card.boundingBox();
+	expect(box).not.toBeNull();
+	const startX = box!.x + 28;
+	const startY = box!.y + 36;
+	await page.mouse.move(startX, startY);
+	await page.mouse.down();
+	await page.mouse.move(startX + dx, startY + dy, { steps: 12 });
+	await page.mouse.up();
+	await page.waitForTimeout(400);
 }
 
-test('selecting and deselecting cards does not move them', async ({ page }) => {
+test('collapse puts a bumped neighbor back at its original position', async ({ page }) => {
 	test.setTimeout(60_000);
 	await page.setViewportSize({ width: 1280, height: 800 });
 	await wipeIndexedDb(page);
-	await createNamedNote(page, 'Pile Alpha', 'One');
-	await createNamedNote(page, 'Pile Beta', 'Two');
-	await leaveExpandedNote(page, 'Pile Gamma', 'Three');
+	await createNamedNote(page, 'Anchor', 'Stays put');
+	await createNamedNote(page, 'Neighbor', 'Gets bumped');
 
-	await page.evaluate(() => {
-		(document.activeElement as HTMLElement | null)?.blur?.();
-	});
+	const anchor = page.getByRole('group', { name: 'Anchor' });
+	const neighbor = page.getByRole('group', { name: 'Neighbor' });
+	const anchorBox = await anchor.boundingBox();
+	const neighborBox = await neighbor.boundingBox();
+	expect(anchorBox).not.toBeNull();
+	expect(neighborBox).not.toBeNull();
+	// Collapsed cards are 220px wide and expanded cards are 280px, so a 16px
+	// gap overlaps only after expand and the neighbor has to move aside.
+	await dragCard(
+		page,
+		neighbor,
+		anchorBox!.x + anchorBox!.width + 16 - neighborBox!.x,
+		anchorBox!.y - neighborBox!.y
+	);
+
+	const original = await boardPosition(neighbor);
+	await anchor.dblclick();
+	await expect(anchor).toHaveAttribute('data-expanded', 'true');
+	await expect.poll(async () => (await boardPosition(neighbor)).left).not.toBe(original.left);
+
 	const board = page.getByRole('application', { name: 'Mash canvas' });
-	await board.hover();
-	await page.keyboard.press('Control+a');
-	await expect(page.locator('.mash-selection-bar')).toContainText(/[2-9]\d* selected/);
-
-	const before = await cardPositions(page);
-	expect(before.length).toBeGreaterThanOrEqual(3);
-
 	const point = await board.evaluate((element) => {
 		const boardRect = element.getBoundingClientRect();
 		const cards = [...document.querySelectorAll('[data-canvas-card]')].map((card) =>
@@ -70,8 +71,6 @@ test('selecting and deselecting cards does not move them', async ({ page }) => {
 	});
 	expect(point).not.toBeNull();
 	await board.click({ position: point! });
-	await page.waitForTimeout(500);
-
-	expect(await cardPositions(page)).toEqual(before);
-	await expect(page.locator('.mash-selection-bar')).toHaveCount(0);
+	await expect(anchor).not.toHaveAttribute('data-expanded', 'true');
+	await expect.poll(async () => boardPosition(neighbor)).toEqual(original);
 });

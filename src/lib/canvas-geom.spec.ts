@@ -137,7 +137,7 @@ describe('canvas-geom', () => {
 		expect(v.panX).toBeCloseTo(-25);
 	});
 
-	it('places cards at the view center with cascade', () => {
+	it('places later cards at the view center instead of a 24px diagonal', () => {
 		const base = viewCenterPlacement({
 			panX: 0,
 			panY: 0,
@@ -150,7 +150,7 @@ describe('canvas-geom', () => {
 		});
 		expect(base).toEqual({ x: 312, y: 240 });
 
-		const cascaded = viewCenterPlacement({
+		const next = viewCenterPlacement({
 			panX: 0,
 			panY: 0,
 			scale: 1,
@@ -160,7 +160,7 @@ describe('canvas-geom', () => {
 			cardH: 100,
 			index: 1
 		});
-		expect(cascaded).toEqual({ x: 336, y: 264 });
+		expect(next).toEqual(base);
 
 		const zoomed = viewCenterPlacement({
 			panX: 100,

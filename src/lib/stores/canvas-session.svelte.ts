@@ -1554,7 +1554,7 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		);
 	}
 
-	/** Snap bumped neighbors back to their pre-expand positions. */
+	/** Put each bumped neighbor back at the position recorded when it was bumped. */
 	async function restoreBumpLayout() {
 		const restore = bumpRestore;
 		bumpRestore = null;
@@ -1607,12 +1607,13 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		const noteId = expandedNoteId;
 		expandedNoteId = null;
 		expandFocus = null;
-		// Blank-canvas deselect and Escape both collapse the open card. Putting
-		// neighbors back on their pre-expand coordinates snaps them onto the 24px
-		// spawn cascade, which reads as a diagonal pile. Leave every card where it is.
-		bumpRestore = null;
-		if (!noteId) return;
-		await compactSticky(noteId);
+		// Collapse returns each neighbor to the position saved when it was bumped.
+		const restore = restoreBumpLayout();
+		if (!noteId) {
+			await restore;
+			return;
+		}
+		await Promise.all([restore, compactSticky(noteId)]);
 	}
 
 	/** Tray / search / peel: ensure note is on canvas, then expand it in place. */

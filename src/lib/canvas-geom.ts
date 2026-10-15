@@ -250,9 +250,6 @@ export function fitViewport(
 	return { panX, panY, scale };
 }
 
-const CASCADE_STEP_X = GRID; // 24 — stay on Snap lattice when cascading
-const CASCADE_STEP_Y = GRID;
-const CASCADE_MOD = 8;
 const OVERLAP_RATIO = 0.55;
 const NUDGE_STEP = GRID * 2; // 48 — stay on Snap lattice when spiraling
 const NUDGE_MAX = 12;
@@ -292,9 +289,9 @@ function heavilyOverlaps(
 }
 
 /**
- * Board-space top-left for a card centered in the current viewport,
- * with a light cascade so rapid spawns don't perfectly stack.
- * Optionally nudges away from heavily overlapping existing cards.
+ * Board-space top-left for a card centered in the current viewport.
+ * A 24px diagonal cascade stacked new cards into a pile, so later cards
+ * stay on that center and only step aside when they would cover another card.
  */
 export function viewCenterPlacement(opts: {
 	panX: number;
@@ -308,11 +305,10 @@ export function viewCenterPlacement(opts: {
 	existing?: Array<{ x: number; y: number; w: number; h: number }>;
 }): { x: number; y: number } {
 	const scale = opts.scale > 0 ? opts.scale : 1;
-	const cascade = (opts.index ?? 0) % CASCADE_MOD;
 	const centerBoardX = (opts.viewW / 2 - opts.panX) / scale;
 	const centerBoardY = (opts.viewH / 2 - opts.panY) / scale;
-	let x = centerBoardX - opts.cardW / 2 + cascade * CASCADE_STEP_X;
-	let y = centerBoardY - opts.cardH / 2 + cascade * CASCADE_STEP_Y;
+	let x = centerBoardX - opts.cardW / 2;
+	let y = centerBoardY - opts.cardH / 2;
 
 	const existing = opts.existing ?? [];
 	if (existing.length > 0 && heavilyOverlaps(x, y, opts.cardW, opts.cardH, existing)) {
