@@ -192,7 +192,7 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 	let expandedNoteId = $state<string | null>(null);
 	let expandFocus = $state<'title' | 'body' | null>(null);
 	let bumpRestore: Map<string, { x: number; y: number }> | null = $state(null);
-	/** Bump, restore, drag, organize, and compact writes must not pass each other. */
+	/** Bump, restore, drag, organize, compact, undo, and redo writes must not pass each other. */
 	let layoutWrite: Promise<unknown> = Promise.resolve();
 	let settlingIds = $state<Set<string>>(new Set());
 	let draggingTrayId = $state<string | null>(null);
@@ -652,8 +652,10 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 			patches.set(s.itemId, { x: s.x, y: s.y, w: s.w, h: s.h });
 		}
 		patchCanvasItems(patches);
-		await bulkUpdateCanvasItemPositions(
-			snaps.map((s) => ({ itemId: s.itemId, x: s.x, y: s.y, w: s.w, h: s.h }))
+		await enqueueLayoutWrite(() =>
+			bulkUpdateCanvasItemPositions(
+				snaps.map((s) => ({ itemId: s.itemId, x: s.x, y: s.y, w: s.w, h: s.h }))
+			)
 		);
 	}
 
@@ -832,6 +834,12 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 	) {
 		// Layout operators and drag completion supersede any in-flight canvas read.
 		canvasLoadSeq++;
+		// A card the user moves has a chosen spot. Collapse must not put it back.
+		if (bumpRestore) {
+			const next = new Map(bumpRestore);
+			for (const move of moves) next.delete(move.itemId);
+			bumpRestore = next.size > 0 ? next : null;
+		}
 		const beforeSnaps =
 			before?.map((b) => {
 				const cur = canvasItems.find((i) => i.id === b.itemId);

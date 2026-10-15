@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import 'fake-indexeddb/auto';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { webcrypto } from 'node:crypto';
 import { addNoteToCanvas, createNote, db, getOrCreateFolderCanvas } from '$lib/db';
 import { createCanvasSession } from './canvas-session.svelte';
@@ -65,6 +65,8 @@ describe('canvas session undo', () => {
 	});
 });
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 describe('layout write queue', () => {
 	beforeEach(async () => {
 		await db.delete();
@@ -78,9 +80,9 @@ describe('layout write queue', () => {
 			getNotes: () => notes,
 			getNotesById: () => notesById,
 			getCanvasKey: () => '',
-			getSelectionIds: () => notes.map((note) => note.id),
-			getSelectionSet: () => new Set(notes.map((note) => note.id)),
-			getSelectedId: () => notes[0]?.id ?? null,
+			getSelectionIds: () => [],
+			getSelectionSet: () => new Set(),
+			getSelectedId: () => null,
 			setSelection: () => undefined,
 			selectNote: () => undefined,
 			toggleSelection: () => undefined,
@@ -90,9 +92,10 @@ describe('layout write queue', () => {
 		});
 	}
 
-	it('runs drag, organize, and compact after an in-flight bump', async () => {
-		const anchorNote = await createNote({ title: 'Anchor', body: 'open' });
-		const neighborNote = await createNote({ title: 'Neighbor', body: 'aside' });
+	async function setup() {
+		const anchorNote = await createNote({ title: 'A', body: 'x' });
+		const neighborNote = await createNote({ title: 'B', body: 'y' });
+		const farNote = await createNote({ title: 'C', body: 'z' });
 		const canvas = await getOrCreateFolderCanvas('');
 		const anchor = await addNoteToCanvas(canvas.id, anchorNote.id, {
 			x: 48,
@@ -106,64 +109,153 @@ describe('layout write queue', () => {
 			w: 220,
 			h: 120
 		});
-		const session = sessionFor([anchorNote, neighborNote]);
+		const far = await addNoteToCanvas(canvas.id, farNote.id, {
+			// On the 24px grid and clear of the anchor, so the bump write is the
+			// one overlapping neighbor. An off-grid card is snapped into that write.
+			x: 2016,
+			y: 2016,
+			w: 220,
+			h: 120
+		});
+		const session = sessionFor([anchorNote, neighborNote, farNote]);
 		await session.loadContextCanvas('');
+		return { anchorNote, neighborNote, farNote, anchor, neighbor, far, session };
+	}
 
+	function holdFirstCanvasWrite() {
 		const originalUpdate = db.canvasItems.update.bind(db.canvasItems);
-		let releaseBump: () => void = () => undefined;
-		const bumpHeld = new Promise<void>((resolve) => {
-			releaseBump = resolve;
+		let releaseHeld: () => void = () => undefined;
+		const held = new Promise<void>((resolve) => {
+			releaseHeld = resolve;
 		});
 		const calls: string[] = [];
-		let holding = true;
+		let first = true;
 		db.canvasItems.update = (async (...args: Parameters<typeof originalUpdate>) => {
 			const patch = args[1] as { x?: number; y?: number; w?: number; h?: number };
 			const label = `${args[0]}:${patch.x},${patch.y},${patch.w ?? ''},${patch.h ?? ''}`;
-			if (holding) {
-				holding = false;
+			if (first) {
+				first = false;
 				calls.push(`hold:${label}`);
-				await bumpHeld;
+				await held;
 				calls.push(`release:${label}`);
 				return originalUpdate(...args);
 			}
 			calls.push(`next:${label}`);
 			return originalUpdate(...args);
 		}) as typeof db.canvasItems.update;
+		return {
+			calls,
+			release: () => releaseHeld(),
+			restore: () => {
+				db.canvasItems.update = originalUpdate;
+			}
+		};
+	}
 
+	it('drag waits behind a held bump', async () => {
+		const { anchorNote, neighbor, session } = await setup();
+		const held = holdFirstCanvasWrite();
 		try {
 			session.expandSticky(anchorNote.id);
 			await vi.waitFor(() => {
-				expect(calls.some((call) => call.startsWith('hold:'))).toBe(true);
+				expect(held.calls.some((call) => call.startsWith('hold:'))).toBe(true);
 			});
-
 			const drag = session.handleCanvasMoveEnd([{ itemId: neighbor.id, x: 600, y: 48 }]);
-			const organize = session.handleCanvasMoveEnd(
-				[{ itemId: neighbor.id, x: 720, y: 48 }],
-				undefined,
-				{ label: 'Arrange' }
-			);
-			const compact = session.collapseSticky();
-			expect(calls.filter((call) => call.startsWith('next:'))).toEqual([]);
-
-			releaseBump();
-			await Promise.all([drag, organize, compact]);
-
-			const holdIndex = calls.findIndex((call) => call.startsWith('hold:'));
-			const releaseIndex = calls.findIndex((call) => call.startsWith('release:'));
-			expect(holdIndex).toBe(0);
-			expect(releaseIndex).toBeGreaterThan(holdIndex);
-			expect(calls.slice(releaseIndex + 1).some((call) => call.startsWith('next:'))).toBe(true);
-			expect(calls.slice(0, releaseIndex).some((call) => call.startsWith('next:'))).toBe(false);
-
-			const storedNeighbor = await db.canvasItems.get(neighbor.id);
-			const storedAnchor = await db.canvasItems.get(anchor.id);
-			// Collapse restores the neighbor after the drag, then compact shrinks the anchor.
-			expect(storedNeighbor?.x).toBe(72);
-			expect(storedNeighbor?.y).toBe(120);
-			expect(storedAnchor?.w).toBe(220);
-			expect(storedAnchor?.h).toBe(120);
+			expect(session.canvasItems.find((item) => item.id === neighbor.id)?.x).toBe(600);
+			await sleep(60);
+			const early = held.calls.filter((call) => call.startsWith('next:'));
+			held.release();
+			await drag;
+			expect(early).toEqual([]);
+			expect((await db.canvasItems.get(neighbor.id))?.x).toBe(600);
 		} finally {
-			db.canvasItems.update = originalUpdate;
+			held.restore();
 		}
+	});
+
+	it('compact waits behind a held bump', async () => {
+		const { anchorNote, farNote, anchor, session } = await setup();
+		const held = holdFirstCanvasWrite();
+		try {
+			session.expandSticky(anchorNote.id);
+			await vi.waitFor(() => {
+				expect(held.calls.some((call) => call.startsWith('hold:'))).toBe(true);
+			});
+			// Opening another note compacts the anchor and restores the bump.
+			session.expandSticky(farNote.id);
+			await sleep(60);
+			const early = held.calls.filter((call) => call.startsWith('next:'));
+			held.release();
+			await sleep(60);
+			expect(early).toEqual([]);
+			expect((await db.canvasItems.get(anchor.id))?.w).toBe(220);
+		} finally {
+			held.restore();
+		}
+	});
+
+	it('undo right after a queued drag leaves the database matching the screen', async () => {
+		const { anchorNote, neighbor, session } = await setup();
+		const held = holdFirstCanvasWrite();
+		try {
+			session.expandSticky(anchorNote.id);
+			await vi.waitFor(() => {
+				expect(held.calls.some((call) => call.startsWith('hold:'))).toBe(true);
+			});
+			const drag = session.handleCanvasMoveEnd([{ itemId: neighbor.id, x: 600, y: 48 }]);
+			await sleep(5);
+			const undo = session.undoCanvasLayout();
+			await sleep(60);
+			held.release();
+			await Promise.all([drag, undo]);
+			await sleep(30);
+			const ui = session.canvasItems.find((item) => item.id === neighbor.id);
+			const stored = await db.canvasItems.get(neighbor.id);
+			expect({ x: stored?.x, y: stored?.y }).toEqual({ x: ui?.x, y: ui?.y });
+		} finally {
+			held.restore();
+		}
+	});
+
+	it('keeps a dragged bumped card where the user put it after collapse', async () => {
+		const anchorNote = await createNote({ title: 'Anchor', body: 'open' });
+		const neighborNote = await createNote({ title: 'Neighbor', body: 'aside' });
+		const otherNote = await createNote({ title: 'Other', body: 'stay' });
+		const canvas = await getOrCreateFolderCanvas('');
+		const neighbor = await addNoteToCanvas(canvas.id, neighborNote.id, {
+			x: 72,
+			y: 120,
+			w: 220,
+			h: 120
+		});
+		const other = await addNoteToCanvas(canvas.id, otherNote.id, {
+			x: 300,
+			y: 300,
+			w: 220,
+			h: 120
+		});
+		await addNoteToCanvas(canvas.id, anchorNote.id, { x: 48, y: 48, w: 400, h: 400 });
+		const session = sessionFor([anchorNote, neighborNote, otherNote]);
+		await session.loadContextCanvas('');
+
+		session.expandSticky(anchorNote.id);
+		const bumpedOther = session.canvasItems.find((item) => item.id === other.id);
+		expect(bumpedOther?.x !== 300 || bumpedOther?.y !== 300).toBe(true);
+		await session.handleCanvasMoveEnd([{ itemId: neighbor.id, x: 600, y: 48 }]);
+		await session.collapseSticky();
+
+		const uiNeighbor = session.canvasItems.find((item) => item.id === neighbor.id);
+		const storedNeighbor = await db.canvasItems.get(neighbor.id);
+		expect(uiNeighbor?.x).toBe(600);
+		expect(uiNeighbor?.y).toBe(48);
+		expect(storedNeighbor?.x).toBe(600);
+		expect(storedNeighbor?.y).toBe(48);
+
+		const uiOther = session.canvasItems.find((item) => item.id === other.id);
+		const storedOther = await db.canvasItems.get(other.id);
+		expect(uiOther?.x).toBe(300);
+		expect(uiOther?.y).toBe(300);
+		expect(storedOther?.x).toBe(300);
+		expect(storedOther?.y).toBe(300);
 	});
 });
