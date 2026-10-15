@@ -205,7 +205,7 @@ test('collapse returns a bumped neighbor after a jiggle that ends where it start
 
 test('New note leaves a bumped neighbor where undo put it after collapse', async ({ page }) => {
 	test.setTimeout(60_000);
-	const { neighbor, bumped } = await bumpNeighborAgainstAnchor(page);
+	const { neighbor, original, bumped } = await bumpNeighborAgainstAnchor(page);
 	await dragCard(page, neighbor, 0, 240);
 	await collapseExpanded(page);
 	await expect(page.getByRole('group', { name: 'Anchor' })).not.toHaveAttribute(
@@ -216,7 +216,12 @@ test('New note leaves a bumped neighbor where undo put it after collapse', async
 	await page.keyboard.press('Control+z');
 	await expect.poll(async () => boardPosition(neighbor)).toEqual(bumped);
 	await page.getByRole('button', { name: 'New note' }).click();
-	await expect(page.getByRole('group', { name: 'Untitled' })).toBeVisible();
-	await expect.poll(async () => boardPosition(neighbor)).toEqual(bumped);
-	await expectOriginalAfterReload(page, bumped);
+	const created = page.getByRole('group', { name: 'Untitled' });
+	await expect(created).toHaveAttribute('data-expanded', 'true');
+	// The new card may bump the neighbor aside. It must not restore the
+	// put-back spot from the expand that already closed.
+	await expect.poll(async () => (await boardPosition(neighbor)).left).toBe(bumped.left);
+	await expect.poll(async () => boardPosition(neighbor)).not.toEqual(original);
+	const afterNew = await boardPosition(neighbor);
+	await expectOriginalAfterReload(page, afterNew);
 });
