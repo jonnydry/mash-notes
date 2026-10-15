@@ -192,7 +192,7 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 	let expandedNoteId = $state<string | null>(null);
 	let expandFocus = $state<'title' | 'body' | null>(null);
 	let bumpRestore: Map<string, { x: number; y: number }> | null = $state(null);
-	/** Bump and restore writes on the same cards must not pass each other. */
+	/** Bump, restore, drag, organize, and compact writes must not pass each other. */
 	let layoutWrite: Promise<unknown> = Promise.resolve();
 	let settlingIds = $state<Set<string>>(new Set());
 	let draggingTrayId = $state<string | null>(null);
@@ -853,7 +853,9 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 			});
 			canvasUndoTick++;
 		}
-		await bulkUpdateCanvasItemPositions(moves.map((m) => ({ itemId: m.itemId, x: m.x, y: m.y })));
+		await enqueueLayoutWrite(() =>
+			bulkUpdateCanvasItemPositions(moves.map((m) => ({ itemId: m.itemId, x: m.x, y: m.y })))
+		);
 		for (const m of moves) dirtyLayoutIds.delete(m.itemId);
 		opts.onMeaningfulActivity?.();
 	}
@@ -1594,7 +1596,9 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		const w = COLLAPSED_CARD.w;
 		const h = COLLAPSED_CARD.h;
 		patchCanvasItems(new Map([[item.id, { w, h }]]));
-		await updateCanvasItemPosition(item.id, { x: item.x, y: item.y, w, h });
+		await enqueueLayoutWrite(() =>
+			updateCanvasItemPosition(item.id, { x: item.x, y: item.y, w, h })
+		);
 	}
 
 	function expandSticky(noteId: string, focus: 'title' | 'body' = 'body') {

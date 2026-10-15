@@ -390,10 +390,53 @@ function distinctStagger(
 }
 
 /**
+ * Same diagonal stagger, kept inside the visible view.
+ * Chrome may still cover the spot — the in-view search already failed — but the card
+ * does not leave the canvas, and it skips a taken top-left when another in-view cell exists.
+ */
+function inViewStagger(
+	origin: { x: number; y: number },
+	existing: readonly PlacementRect[],
+	view: { left: number; top: number; right: number; bottom: number },
+	cardW: number,
+	cardH: number
+): { x: number; y: number } {
+	const fits = (x: number, y: number) => cardFitsInView(x, y, cardW, cardH, view);
+	const steps = existing.length + 1;
+	for (let k = 0; k < steps; k++) {
+		const x = snapValue(origin.x + k * CASCADE_STEP);
+		const y = snapValue(origin.y + k * CASCADE_STEP);
+		if (!fits(x, y) || exactSpot(x, y, existing)) continue;
+		return { x, y };
+	}
+
+	const minX = Math.ceil(view.left / GRID) * GRID;
+	const maxX = Math.floor((view.right - cardW) / GRID) * GRID;
+	const minY = Math.ceil(view.top / GRID) * GRID;
+	const maxY = Math.floor((view.bottom - cardH) / GRID) * GRID;
+	let best: { x: number; y: number; dist: number } | null = null;
+	if (minX <= maxX && minY <= maxY) {
+		for (let x = minX; x <= maxX; x += GRID) {
+			for (let y = minY; y <= maxY; y += GRID) {
+				if (exactSpot(x, y, existing)) continue;
+				const dist = (x - origin.x) ** 2 + (y - origin.y) ** 2;
+				if (!best || dist < best.dist) best = { x, y, dist };
+			}
+		}
+	}
+	if (best) return { x: best.x, y: best.y };
+	return {
+		x: Math.min(maxX, Math.max(minX, snapValue(origin.x))),
+		y: Math.min(maxY, Math.max(minY, snapValue(origin.y)))
+	};
+}
+
+/**
  * Board-space top-left for a card centered in the current viewport.
  * Free spots stay inside the visible view, clear of measured chrome, diagonals included.
  * When no in-view cell is free, the next 24px diagonal step from the view centre is
- * used, skipping top-lefts an existing card already occupies.
+ * used, skipping top-lefts an existing card already occupies, and that step stays
+ * inside the visible view.
  * A card wider or taller than the view skips the in-view limit and uses that stagger.
  * Placement does not pan or scroll.
  */
@@ -461,7 +504,7 @@ export function viewCenterPlacement(opts: {
 			if (!best || dist < best.dist) best = { x, y, dist };
 		}
 	}
-	return best ?? distinctStagger(origin, existing);
+	return best ?? inViewStagger(origin, existing, view, opts.cardW, opts.cardH);
 }
 
 /**

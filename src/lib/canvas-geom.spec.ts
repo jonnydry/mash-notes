@@ -289,6 +289,45 @@ describe('canvas-geom', () => {
 		expect(existing.some((card) => card.x === placed.x && card.y === placed.y)).toBe(false);
 	});
 
+	it('keeps the stagger fallback inside the view when chrome covers every free cell', () => {
+		const viewW = 1280;
+		const viewH = 800;
+		const cardW = 280;
+		const cardH = 220;
+		const origin = viewCenterPlacement({
+			panX: 0,
+			panY: 0,
+			scale: 1,
+			viewW,
+			viewH,
+			cardW,
+			cardH
+		});
+		// Occupy the in-view diagonal and past the edge. The old fallback walked off screen.
+		const existing = Array.from({ length: 24 }, (_, k) => ({
+			x: origin.x + k * GRID,
+			y: origin.y + k * GRID,
+			w: cardW,
+			h: cardH
+		}));
+		const placed = viewCenterPlacement({
+			panX: 0,
+			panY: 0,
+			scale: 1,
+			viewW,
+			viewH,
+			cardW,
+			cardH,
+			existing,
+			obstacles: [{ x: -80, y: -80, w: viewW + 160, h: viewH + 160 }]
+		});
+		expect(placed.x).toBeGreaterThanOrEqual(0);
+		expect(placed.y).toBeGreaterThanOrEqual(0);
+		expect(placed.x + cardW).toBeLessThanOrEqual(viewW);
+		expect(placed.y + cardH).toBeLessThanOrEqual(viewH);
+		expect(existing.some((card) => card.x === placed.x && card.y === placed.y)).toBe(false);
+	});
+
 	it('places 35 new notes inside a 1280×800 view on distinct spots', () => {
 		const viewW = 1280;
 		const viewH = 800;
