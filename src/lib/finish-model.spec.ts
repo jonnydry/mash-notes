@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest';
+import { canvasNoteIdSet, countNotesOnCanvas } from './canvas-geom';
+import { RECOVERY_DAYS } from './session-lifecycle';
 import {
 	createFinishSnapshot,
 	defaultFinishScope,
 	EMPTY_CANVAS_FINISH_COPY,
 	finishExportSourceLabel,
+	finishOffCanvasLine,
+	recoveryWindowPhrase,
+	recoveryWindowPhraseCapitalized,
 	finishScopeOptions,
 	finishSectionHeading,
 	finishTakeawayAnnouncement,
@@ -45,6 +50,11 @@ function operation(partial: Partial<Operation> & Pick<Operation, 'id'>): Operati
 }
 
 describe('Finish snapshot', () => {
+	it('capitalizes the recovery window without changing the words', () => {
+		expect(recoveryWindowPhraseCapitalized()).toBe(recoveryWindowPhrase().replace(/^r/, 'R'));
+		expect(recoveryWindowPhraseCapitalized().slice(1)).toBe(recoveryWindowPhrase().slice(1));
+	});
+
 	it('orders current-canvas cards spatially and appends unplaced desk notes by creation', () => {
 		const notes = [note('a', 4), note('b', 2), note('c', 3), note('d', 1)];
 		const canvasItems = [
@@ -169,6 +179,13 @@ describe('Finish snapshot', () => {
 		expect(EMPTY_CANVAS_FINISH_COPY).toBe('The canvas is empty.');
 		expect(finishSectionHeading(snapshot)).toBe('Canvas');
 		expect(finishSectionHeading(snapshot)).not.toBe('Takeaway');
+		expect(
+			finishOffCanvasLine(snapshot, notesById, {
+				scope: 'desk',
+				keepTakeaway: false,
+				disposition: 'clear'
+			})
+		).toBeNull();
 	});
 
 	it('names the extra cards after Split by lines instead of a bare higher Whole desk count', () => {
@@ -251,6 +268,134 @@ describe('Finish snapshot', () => {
 		expect(deskLabel(['Grocery', 'Spice'])).toBe('Whole desk includes Grocery and Spice');
 	});
 
+	it('labels Whole desk with the action total and explains off-canvas notes under it', () => {
+		const onCanvas = [note('a', 1), note('b', 2)];
+		const offCanvas = [note('c', 3), note('d', 4)];
+		const notes = [...onCanvas, ...offCanvas];
+		const items = [item('ia', 'a', 0, 0), item('ib', 'b', 40, 0)];
+		const notesById = new Map(notes.map((row) => [row.id, row]));
+		const recoveryDays: number = RECOVERY_DAYS;
+		const recoverable = `recoverable for ${recoveryDays} day${recoveryDays === 1 ? '' : 's'}`;
+		const snapshot = createFinishSnapshot({
+			sessionId: 'desk',
+			canvasId: 'canvas',
+			notes,
+			canvasItems: items,
+			selectedNoteIds: ['a', 'c'],
+			operations: []
+		});
+		const desk = finishScopeOptions(snapshot, notesById).find((option) => option.scope === 'desk');
+
+		expect(countNotesOnCanvas(items, canvasNoteIdSet(notes))).toBe(2);
+		expect(snapshot.onCanvasCount).toBe(2);
+		expect(desk?.noteIds).toEqual(['a', 'b', 'c', 'd']);
+		expect(desk?.choiceLabel).toBe('Whole desk · 4');
+		expect(desk?.count).toBe(4);
+		expect(desk?.countLabel).toBe('4 cards');
+		expect(finishExportSourceLabel(snapshot, 'desk', notesById)).toBe('Whole desk · 4 cards');
+
+		const leave = finishOffCanvasLine(snapshot, notesById, {
+			scope: 'desk',
+			keepTakeaway: false,
+			disposition: 'leave'
+		});
+		expect(leave).toBe('2 on canvas · 2 off canvas');
+		expect(leave).not.toContain('cleared');
+		expect(leave).not.toContain('kept');
+
+		expect(
+			finishOffCanvasLine(snapshot, notesById, {
+				scope: 'desk',
+				keepTakeaway: true,
+				disposition: 'leave'
+			})
+		).toBe('2 on canvas · 2 off canvas (kept)');
+		expect(
+			finishOffCanvasLine(snapshot, notesById, {
+				scope: 'desk',
+				keepTakeaway: false,
+				disposition: 'keep-desk'
+			})
+		).toBe('2 on canvas · 2 off canvas (kept)');
+		expect(
+			finishOffCanvasLine(snapshot, notesById, {
+				scope: 'desk',
+				keepTakeaway: false,
+				disposition: 'clear'
+			})
+		).toBe(`2 on canvas · 2 off canvas, cleared with the desk (${recoverable})`);
+		expect(
+			finishOffCanvasLine(snapshot, notesById, {
+				scope: 'selected',
+				keepTakeaway: true,
+				disposition: 'clear'
+			})
+		).toBe(`2 on canvas · 2 off canvas (1 kept, 1 cleared with the desk, ${recoverable})`);
+
+		const keptOnly = finishOffCanvasLine(snapshot, notesById, {
+			scope: 'selected',
+			keepTakeaway: true,
+			disposition: 'leave'
+		});
+		expect(keptOnly).toBe('2 on canvas · 2 off canvas');
+		expect(keptOnly).not.toContain('cleared');
+	});
+
+	it('hides the off-canvas line when every desk note is on the canvas', () => {
+		const notes = [note('a', 1), note('b', 2)];
+		const snapshot = createFinishSnapshot({
+			sessionId: 'desk',
+			canvasId: 'canvas',
+			notes,
+			canvasItems: [item('ia', 'a', 0, 0), item('ib', 'b', 10, 0)],
+			selectedNoteIds: [],
+			operations: []
+		});
+		expect(
+			finishScopeOptions(snapshot, new Map(notes.map((row) => [row.id, row])))[2]?.choiceLabel
+		).toBe('Whole desk · 2');
+		expect(
+			finishOffCanvasLine(snapshot, new Map(notes.map((row) => [row.id, row])), {
+				scope: 'desk',
+				keepTakeaway: false,
+				disposition: 'clear'
+			})
+		).toBeNull();
+	});
+
+	it('keeps an already-kept off-canvas note when the rest clear with the desk', () => {
+		const kept = note('c', 3);
+		kept.scope = 'kept';
+		const notes = [note('a', 1), note('b', 2), kept, note('d', 4)];
+		const notesById = new Map(notes.map((row) => [row.id, row]));
+		const recoveryDays: number = RECOVERY_DAYS;
+		const recoverable = `recoverable for ${recoveryDays} day${recoveryDays === 1 ? '' : 's'}`;
+		const snapshot = createFinishSnapshot({
+			sessionId: 'desk',
+			canvasId: 'canvas',
+			notes,
+			canvasItems: [item('ia', 'a', 0, 0), item('ib', 'b', 40, 0)],
+			selectedNoteIds: [],
+			operations: []
+		});
+		expect(
+			finishOffCanvasLine(snapshot, notesById, {
+				scope: 'desk',
+				keepTakeaway: false,
+				disposition: 'clear'
+			})
+		).toBe(`2 on canvas · 2 off canvas (1 kept, 1 cleared with the desk, ${recoverable})`);
+
+		for (const row of notes) row.scope = 'kept';
+		expect(
+			finishOffCanvasLine(snapshot, notesById, {
+				scope: 'selected',
+				keepTakeaway: false,
+				disposition: 'clear'
+			})
+		).toBe('2 on canvas · 2 off canvas (kept)');
+	});
+
 	it('keeps a plain Whole desk count when the desk is not larger after Split by lines', () => {
 		const milk = note('milk', 1);
 		const eggs = note('eggs', 2);
@@ -277,5 +422,39 @@ describe('Finish snapshot', () => {
 		expect(desk?.count).toBe(2);
 		expect(desk?.choiceLabel).toBe('Whole desk · 2');
 		expect(desk?.namesExtras).toBe(false);
+	});
+
+	it('ignores another desk cards so on canvas plus off canvas equals the action total', () => {
+		const notes = [
+			note('a', 1),
+			note('b', 2),
+			note('c', 3),
+			note('d', 4),
+			note('foreign', 5, 'other-desk')
+		];
+		const items = [item('ia', 'a', 0, 0), item('ib', 'b', 40, 0), item('if', 'foreign', 80, 0)];
+		const snapshot = createFinishSnapshot({
+			sessionId: 'desk',
+			canvasId: 'canvas',
+			notes,
+			canvasItems: items,
+			selectedNoteIds: [],
+			operations: []
+		});
+		const offCanvas = snapshot.deskNoteIds.length - snapshot.canvasNoteIds.length;
+
+		expect(snapshot.deskNoteIds).not.toContain('foreign');
+		expect(snapshot.onCanvasCount).toBe(2);
+		expect(offCanvas).toBe(2);
+		expect(snapshot.onCanvasCount + offCanvas).toBe(snapshot.deskNoteIds.length);
+		expect(
+			finishOffCanvasLine(snapshot, new Map(notes.map((row) => [row.id, row])), {
+				scope: 'desk',
+				keepTakeaway: false,
+				disposition: 'leave'
+			})
+		).toBe('2 on canvas · 2 off canvas');
+		expect(countNotesOnCanvas(items, canvasNoteIdSet(notes))).toBe(3);
+		expect(countNotesOnCanvas(items, canvasNoteIdSet(notes, 'desk'))).toBe(2);
 	});
 });

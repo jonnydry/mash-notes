@@ -81,6 +81,7 @@
 
 <div
 	data-canvas-chrome
+	data-floating-chrome
 	class="mash-canvas-chrome-top pointer-events-none absolute top-3 right-3 z-10 flex flex-col items-end gap-1.5"
 >
 	<div class="pointer-events-auto flex flex-wrap items-center justify-end gap-1.5">
@@ -318,6 +319,7 @@
 
 <div
 	data-canvas-chrome
+	data-floating-chrome
 	class="mash-canvas-chrome-mobile pointer-events-none absolute top-3 right-3 z-20"
 >
 	<div class="mash-board-chip pointer-events-auto flex items-center gap-1 rounded-xl p-1 shadow">
@@ -433,6 +435,7 @@
 <!-- Pan / zoom pad -->
 <div
 	data-canvas-chrome
+	data-floating-chrome
 	class="mash-canvas-chrome-pan pointer-events-auto absolute right-3 bottom-3 z-10 flex flex-col items-center gap-1"
 >
 	<div class="mash-board-chip grid grid-cols-3 gap-0.5 rounded-lg p-1 shadow">

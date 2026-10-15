@@ -14,11 +14,7 @@ export type DeskPlacementDeps = {
 	getActiveCanvasId: () => string | null | undefined;
 	getCanvasFolder: () => string;
 	activeNoteOwnership: () => { sessionId?: string; scope?: 'session' | 'kept' };
-	getCanvasItemCount: () => number;
-	getSpawnPoint: (
-		size: { w: number; h: number },
-		index: number
-	) => { x: number; y: number } | undefined;
+	getSpawnPoint: (size: { w: number; h: number }) => { x: number; y: number } | undefined;
 	refreshCanvasItems: () => Promise<void>;
 	adoptNotesToLibrary: (notes: Note[]) => void;
 	setSelection: (ids: string[], primary: string | null) => void;
@@ -46,7 +42,7 @@ export function createDeskPlacement(deps: DeskPlacementDeps) {
 		}
 		if (drafts.length === 0) return [];
 		const spawn = origin ??
-			deps.getSpawnPoint(COLLAPSED_CARD, deps.getCanvasItemCount()) ?? {
+			deps.getSpawnPoint(COLLAPSED_CARD) ?? {
 				x: 80,
 				y: 80
 			};

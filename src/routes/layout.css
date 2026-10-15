@@ -3209,7 +3209,8 @@ body:has(.mash-board-surface.is-gesture) .mash-board-chip {
 		left: 0.75rem !important;
 		right: 0.75rem !important;
 		width: auto !important;
-		transform: none !important;
+		/* Cancels Tailwind v4 `translate`, which `transform` does not. Do not pair with `transform: none` — Lightning CSS folds the two and drops this. */
+		translate: none !important;
 		max-width: none;
 		z-index: 36;
 	}

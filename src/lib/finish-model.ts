@@ -1,3 +1,5 @@
+import { canvasNoteIdSet, countNotesOnCanvas } from './canvas-geom';
+import { RECOVERY_DAYS } from './session-lifecycle';
 import type { CanvasItem, Note, Operation } from './types';
 
 export type FinishScope = 'selected' | 'results' | 'desk';
@@ -16,6 +18,10 @@ export type FinishSnapshot = {
 	canvasId: string | null;
 	/** Cards actually placed on the canvas, in spatial order. */
 	canvasNoteIds: string[];
+	/**
+	 * Placement count from `countNotesOnCanvas` — the same number as the desk chip.
+	 */
+	onCanvasCount: number;
 	selectedNoteIds: string[];
 	resultNoteIds: string[];
 	deskNoteIds: string[];
@@ -76,6 +82,17 @@ export function spatialNoteIds(items: CanvasItem[]): string[] {
 		.map(({ item }) => item.noteId);
 }
 
+export function recoveryWindowPhrase(): string {
+	const days: number = RECOVERY_DAYS;
+	return `recoverable for ${days} day${days === 1 ? '' : 's'}`;
+}
+
+/** Same words as `recoveryWindowPhrase()`, with the first letter capitalized. */
+export function recoveryWindowPhraseCapitalized(): string {
+	const phrase = recoveryWindowPhrase();
+	return phrase.charAt(0).toUpperCase() + phrase.slice(1);
+}
+
 export function createFinishSnapshot(input: FinishSnapshotInput): FinishSnapshot {
 	const sessionNotes = input.notes.filter(
 		(note) => note.deletedAt == null && (!note.sessionId || note.sessionId === input.sessionId)
@@ -93,6 +110,10 @@ export function createFinishSnapshot(input: FinishSnapshotInput): FinishSnapshot
 		validIds
 	);
 
+	const onCanvasCount = countNotesOnCanvas(
+		input.canvasItems,
+		canvasNoteIdSet(input.notes, input.sessionId)
+	);
 	const onCanvas = uniqueValidIds(spatialNoteIds(input.canvasItems), validIds);
 	const placed = new Set(onCanvas);
 	const remaining = sessionNotes
@@ -112,6 +133,7 @@ export function createFinishSnapshot(input: FinishSnapshotInput): FinishSnapshot
 		sessionId: input.sessionId,
 		canvasId: input.canvasId,
 		canvasNoteIds: onCanvas,
+		onCanvasCount,
 		selectedNoteIds: canvasEmpty ? [] : selectedNoteIds,
 		resultNoteIds: canvasEmpty ? [] : resultNoteIds,
 		deskNoteIds: canvasEmpty ? [] : [...onCanvas, ...remaining],
@@ -166,6 +188,56 @@ export function noteIdsForFinishScope(snapshot: FinishSnapshot, scope: FinishSco
 	return snapshot.deskNoteIds;
 }
 
+export type FinishOffCanvasChoice = {
+	scope: FinishScope;
+	keepTakeaway: boolean;
+	disposition: FinishDisposition;
+};
+
+/**
+ * Line directly under the scope choices when Whole desk includes notes that are
+ * not on the canvas. Hidden when there are none. The suffix follows the chosen
+ * scope and keep option: already-kept notes, Keep entire desk, and Keep this
+ * takeaway stay; Clear sends the rest into the recovery window.
+ */
+export function finishOffCanvasLine(
+	snapshot: FinishSnapshot,
+	notesById: ReadonlyMap<string, Note>,
+	choice: FinishOffCanvasChoice
+): string | null {
+	const onCanvas = new Set(snapshot.canvasNoteIds);
+	const offCanvasIds = snapshot.deskNoteIds.filter((id) => !onCanvas.has(id));
+	if (offCanvasIds.length === 0) return null;
+
+	const keptByChoice = new Set<string>();
+	if (choice.disposition === 'keep-desk') {
+		for (const id of offCanvasIds) keptByChoice.add(id);
+	} else if (choice.keepTakeaway) {
+		for (const id of noteIdsForFinishScope(snapshot, choice.scope)) keptByChoice.add(id);
+	}
+
+	let keptCount = 0;
+	let clearedCount = 0;
+	for (const id of offCanvasIds) {
+		const kept = notesById.get(id)?.scope === 'kept' || keptByChoice.has(id);
+		if (kept) {
+			keptCount += 1;
+			continue;
+		}
+		if (choice.disposition === 'clear') clearedCount += 1;
+	}
+
+	const head = `${snapshot.onCanvasCount} on canvas · ${offCanvasIds.length} off canvas`;
+	if (keptCount === offCanvasIds.length) return `${head} (kept)`;
+	if (clearedCount === offCanvasIds.length) {
+		return `${head}, cleared with the desk (${recoveryWindowPhrase()})`;
+	}
+	if (keptCount > 0 && clearedCount > 0 && keptCount + clearedCount === offCanvasIds.length) {
+		return `${head} (${keptCount} kept, ${clearedCount} cleared with the desk, ${recoveryWindowPhrase()})`;
+	}
+	return head;
+}
+
 export function notesForFinishScope(
 	snapshot: FinishSnapshot,
 	scope: FinishScope,
@@ -186,10 +258,9 @@ export function finishScopeOptions(
 		const label =
 			scope === 'selected' ? 'Selected' : scope === 'results' ? 'Results' : 'Whole desk';
 		const named = scope === 'desk' ? splitLinesDeskChoiceLabel(snapshot, noteIds, notesById) : null;
-		const choiceLabel = named ?? `${label} · ${noteIds.length}`;
-		const countLabel = named
-			? named
-			: `${noteIds.length} ${noteIds.length === 1 ? 'card' : 'cards'}`;
+		const shownCount = noteIds.length;
+		const choiceLabel = named ?? `${label} · ${shownCount}`;
+		const countLabel = named ? named : `${shownCount} ${shownCount === 1 ? 'card' : 'cards'}`;
 		return {
 			scope,
 			label,
@@ -197,7 +268,7 @@ export function finishScopeOptions(
 			countLabel,
 			namesExtras: named !== null,
 			noteIds,
-			count: noteIds.length,
+			count: shownCount,
 			enabled: scope === 'desk' || noteIds.length > 0,
 			preview: titles.join(', ') + (noteIds.length > titles.length ? '…' : '')
 		};

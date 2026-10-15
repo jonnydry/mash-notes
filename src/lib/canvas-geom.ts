@@ -250,12 +250,10 @@ export function fitViewport(
 	return { panX, panY, scale };
 }
 
-const CASCADE_STEP_X = GRID; // 24 — stay on Snap lattice when cascading
-const CASCADE_STEP_Y = GRID;
-const CASCADE_MOD = 8;
 const OVERLAP_RATIO = 0.55;
 const NUDGE_STEP = GRID * 2; // 48 — stay on Snap lattice when spiraling
-const NUDGE_MAX = 12;
+const CASCADE_STEP = GRID; // 24 — main's diagonal stagger from the view center
+const CASCADE_MOD = 8;
 
 function rectOverlapRatio(
 	ax: number,
@@ -273,7 +271,9 @@ function rectOverlapRatio(
 	const y2 = Math.min(ay + ah, by + bh);
 	const iw = Math.max(0, x2 - x1);
 	const ih = Math.max(0, y2 - y1);
-	const area = aw * ah;
+	// Use the smaller card. A larger new card can cover an existing one while
+	// overlapping only a modest share of its own area.
+	const area = Math.min(aw * ah, bw * bh);
 	if (area <= 0) return 0;
 	return (iw * ih) / area;
 }
@@ -291,10 +291,111 @@ function heavilyOverlaps(
 	return false;
 }
 
+type PlacementRect = { x: number; y: number; w: number; h: number };
+
+function boardView(opts: {
+	panX: number;
+	panY: number;
+	scale: number;
+	viewW: number;
+	viewH: number;
+}) {
+	const scale = opts.scale > 0 ? opts.scale : 1;
+	const left = -opts.panX / scale;
+	const top = -opts.panY / scale;
+	return { scale, left, top, right: left + opts.viewW / scale, bottom: top + opts.viewH / scale };
+}
+
+function cardFitsInView(
+	x: number,
+	y: number,
+	w: number,
+	h: number,
+	view: { left: number; top: number; right: number; bottom: number }
+): boolean {
+	return x >= view.left && y >= view.top && x + w <= view.right && y + h <= view.bottom;
+}
+
+function exactSpot(x: number, y: number, existing: readonly PlacementRect[]): boolean {
+	return existing.some((rect) => rect.x === x && rect.y === y);
+}
+
+function rectsIntersect(a: PlacementRect, b: PlacementRect): boolean {
+	return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+function hitsObstacle(
+	x: number,
+	y: number,
+	w: number,
+	h: number,
+	obstacles: readonly PlacementRect[]
+): boolean {
+	const card = { x, y, w, h };
+	return obstacles.some((obstacle) => rectsIntersect(card, obstacle));
+}
+
+/** Layout inset already used by the chrome (top/right/bottom/left), in screen pixels. */
+export function measuredChromeClearance(style: {
+	top: string;
+	right: string;
+	bottom: string;
+	left: string;
+}): number {
+	const edges = [style.top, style.right, style.bottom, style.left]
+		.map((value) => Number.parseFloat(value))
+		.filter((value) => Number.isFinite(value) && value > 0);
+	if (edges.length === 0) return 0;
+	return Math.min(...edges);
+}
+
+/** Screen box, plus its own layout inset, in board space. */
+export function screenBoxToBoardRect(
+	box: { left: number; top: number; width: number; height: number; clearance: number },
+	board: { left: number; top: number },
+	panX: number,
+	panY: number,
+	scale: number
+): PlacementRect {
+	const safeScale = scale > 0 ? scale : 1;
+	const left = box.left - box.clearance;
+	const top = box.top - box.clearance;
+	return {
+		x: (left - board.left - panX) / safeScale,
+		y: (top - board.top - panY) / safeScale,
+		w: (box.width + box.clearance * 2) / safeScale,
+		h: (box.height + box.clearance * 2) / safeScale
+	};
+}
+
 /**
- * Board-space top-left for a card centered in the current viewport,
- * with a light cascade so rapid spawns don't perfectly stack.
- * Optionally nudges away from heavily overlapping existing cards.
+ * Diagonal stagger that skips top-lefts an existing card already occupies.
+ * Used when the card cannot fit inside the view, so the in-view limit does not apply.
+ * Does not pan or scroll.
+ */
+function distinctStagger(
+	origin: { x: number; y: number },
+	existing: readonly PlacementRect[]
+): { x: number; y: number } {
+	const steps = existing.length + 1;
+	for (let k = 0; k < steps; k++) {
+		const x = snapValue(origin.x + k * CASCADE_STEP);
+		const y = snapValue(origin.y + k * CASCADE_STEP);
+		if (!exactSpot(x, y, existing)) return { x, y };
+	}
+	return {
+		x: snapValue(origin.x + steps * CASCADE_STEP),
+		y: snapValue(origin.y + steps * CASCADE_STEP)
+	};
+}
+
+/**
+ * Board-space top-left for a card centered in the current viewport.
+ * Free spots stay inside the visible view, clear of measured chrome, diagonals included.
+ * When no in-view cell is free, the next 24px diagonal step from the view centre is
+ * used, skipping top-lefts an existing card already occupies.
+ * A card wider or taller than the view skips the in-view limit and uses that stagger.
+ * Placement does not pan or scroll.
  */
 export function viewCenterPlacement(opts: {
 	panX: number;
@@ -304,35 +405,63 @@ export function viewCenterPlacement(opts: {
 	viewH: number;
 	cardW: number;
 	cardH: number;
-	index?: number;
-	existing?: Array<{ x: number; y: number; w: number; h: number }>;
+	existing?: Array<PlacementRect>;
+	obstacles?: Array<PlacementRect>;
 }): { x: number; y: number } {
-	const scale = opts.scale > 0 ? opts.scale : 1;
-	const cascade = (opts.index ?? 0) % CASCADE_MOD;
-	const centerBoardX = (opts.viewW / 2 - opts.panX) / scale;
-	const centerBoardY = (opts.viewH / 2 - opts.panY) / scale;
-	let x = centerBoardX - opts.cardW / 2 + cascade * CASCADE_STEP_X;
-	let y = centerBoardY - opts.cardH / 2 + cascade * CASCADE_STEP_Y;
-
+	const view = boardView(opts);
+	const origin = {
+		x: snapValue((opts.viewW / 2 - opts.panX) / view.scale - opts.cardW / 2),
+		y: snapValue((opts.viewH / 2 - opts.panY) / view.scale - opts.cardH / 2)
+	};
 	const existing = opts.existing ?? [];
-	if (existing.length > 0 && heavilyOverlaps(x, y, opts.cardW, opts.cardH, existing)) {
-		// Spiral outward until clear or give up.
-		for (let i = 1; i <= NUDGE_MAX; i++) {
-			const ring = Math.ceil(i / 4);
-			const side = (i - 1) % 4;
-			const dx = side === 0 ? ring : side === 2 ? -ring : 0;
-			const dy = side === 1 ? ring : side === 3 ? -ring : 0;
-			const nx = x + dx * NUDGE_STEP;
-			const ny = y + dy * NUDGE_STEP;
-			if (!heavilyOverlaps(nx, ny, opts.cardW, opts.cardH, existing)) {
-				x = nx;
-				y = ny;
-				break;
+	const obstacles = opts.obstacles ?? [];
+	const viewW = view.right - view.left;
+	const viewH = view.bottom - view.top;
+	if (opts.cardW > viewW || opts.cardH > viewH) return distinctStagger(origin, existing);
+
+	const free = (x: number, y: number) =>
+		cardFitsInView(x, y, opts.cardW, opts.cardH, view) &&
+		!heavilyOverlaps(x, y, opts.cardW, opts.cardH, existing) &&
+		!hitsObstacle(x, y, opts.cardW, opts.cardH, obstacles);
+	const inViewAndClear = (x: number, y: number) =>
+		cardFitsInView(x, y, opts.cardW, opts.cardH, view) &&
+		!exactSpot(x, y, existing) &&
+		!hitsObstacle(x, y, opts.cardW, opts.cardH, obstacles);
+
+	if (free(origin.x, origin.y)) return origin;
+
+	const maxRing = Math.ceil(Math.max(opts.viewW, opts.viewH) / view.scale / NUDGE_STEP) + 1;
+	for (let ring = 1; ring <= maxRing; ring++) {
+		for (let dx = -ring; dx <= ring; dx++) {
+			for (let dy = -ring; dy <= ring; dy++) {
+				if (Math.max(Math.abs(dx), Math.abs(dy)) !== ring) continue;
+				const x = origin.x + dx * NUDGE_STEP;
+				const y = origin.y + dy * NUDGE_STEP;
+				if (free(x, y)) return { x, y };
 			}
 		}
 	}
 
-	return { x: snapValue(x), y: snapValue(y) };
+	for (let k = 0; k < CASCADE_MOD; k++) {
+		const x = snapValue(origin.x + k * CASCADE_STEP);
+		const y = snapValue(origin.y + k * CASCADE_STEP);
+		if (!inViewAndClear(x, y)) continue;
+		return { x, y };
+	}
+
+	const minX = Math.ceil(view.left / GRID) * GRID;
+	const maxX = Math.floor((view.right - opts.cardW) / GRID) * GRID;
+	const minY = Math.ceil(view.top / GRID) * GRID;
+	const maxY = Math.floor((view.bottom - opts.cardH) / GRID) * GRID;
+	let best: { x: number; y: number; dist: number } | null = null;
+	for (let x = minX; x <= maxX; x += GRID) {
+		for (let y = minY; y <= maxY; y += GRID) {
+			if (!inViewAndClear(x, y)) continue;
+			const dist = (x - origin.x) ** 2 + (y - origin.y) ** 2;
+			if (!best || dist < best.dist) best = { x, y, dist };
+		}
+	}
+	return best ?? distinctStagger(origin, existing);
 }
 
 /**
@@ -735,6 +864,38 @@ export function resolveOverlapsKeepingFixed(
 		out.set(rect.id, { x: rect.x, y: rect.y });
 	}
 	return out;
+}
+
+/**
+ * Non-deleted note ids. Pass `sessionId` so another desk's cards are left out.
+ * The chip and Finish pass this same set into `countNotesOnCanvas`.
+ */
+export function canvasNoteIdSet(
+	notes: Iterable<{ id: string; deletedAt?: number | null; sessionId?: string | null }>,
+	sessionId?: string | null
+): Set<string> {
+	const ids = new Set<string>();
+	for (const note of notes) {
+		if (note.deletedAt != null) continue;
+		if (sessionId != null && note.sessionId && note.sessionId !== sessionId) continue;
+		ids.add(note.id);
+	}
+	return ids;
+}
+
+/**
+ * How many canvas placements refer to a note the desk actually has.
+ * The title chip and Finish both use this, so "N on canvas" cannot drift.
+ */
+export function countNotesOnCanvas(
+	items: readonly { noteId: string }[],
+	knownNoteIds: { has(noteId: string): boolean }
+): number {
+	let count = 0;
+	for (const item of items) {
+		if (knownNoteIds.has(item.noteId)) count += 1;
+	}
+	return count;
 }
 
 const SNAP_PREF_KEY = 'mash.canvasSnap';

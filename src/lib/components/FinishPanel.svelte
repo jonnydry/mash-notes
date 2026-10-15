@@ -13,6 +13,8 @@
 	import {
 		defaultFinishScope,
 		finishCanvasIsEmpty,
+		finishOffCanvasLine,
+		recoveryWindowPhraseCapitalized,
 		finishScopeOptions,
 		finishSectionHeading,
 		finishTakeawayAnnouncement,
@@ -51,6 +53,9 @@
 	let commitStatus = $state<FinishCommitResult | null>(null);
 	let options = $derived(snapshot ? finishScopeOptions(snapshot, notesById) : []);
 	let activeOption = $derived(options.find((option) => option.scope === scope) ?? options[0]);
+	let offCanvasLine = $derived(
+		snapshot ? finishOffCanvasLine(snapshot, notesById, { scope, keepTakeaway, disposition }) : null
+	);
 	let hasTakeaway = $derived((activeOption?.count ?? 0) > 0);
 	let canvasEmpty = $derived(snapshot ? finishCanvasIsEmpty(snapshot) : false);
 	let takeawayPreview = $derived(
@@ -199,6 +204,11 @@
 					</div>
 				</fieldset>
 			{/if}
+			{#if offCanvasLine}
+				<p class="mash-finish-off-canvas mash-type-caption" data-testid="finish-off-canvas">
+					{offCanvasLine}
+				</p>
+			{/if}
 			<p class="sr-only" aria-live="polite" aria-atomic="true">
 				{takeawayAnnouncement}
 			</p>
@@ -302,7 +312,7 @@
 							bind:group={disposition}
 						/>
 						<Trash2 class="h-4 w-4 shrink-0 text-[var(--mash-danger)]" />
-						<span><strong class="block">Clear now</strong>Recoverable 7 days</span>
+						<span><strong class="block">Clear now</strong>{recoveryWindowPhraseCapitalized()}</span>
 					</label>
 				</div>
 			</fieldset>

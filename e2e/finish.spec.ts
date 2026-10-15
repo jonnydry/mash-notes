@@ -90,6 +90,30 @@ test.describe('Consolidated Finish takeaway', () => {
 		await wholeDeskScope.focus();
 		await wholeDeskScope.press('Space');
 		await expect(wholeDeskScope).toBeChecked();
+		await expect(finish.getByRole('radio', { name: 'Whole desk · 4' })).toBeChecked();
+		const split = finish.getByTestId('finish-off-canvas');
+		await expect(split).toHaveText('2 on canvas · 2 off canvas');
+		const scopeBox = await finish.locator('.mash-finish-scope').boundingBox();
+		const splitBox = await split.boundingBox();
+		expect(scopeBox).not.toBeNull();
+		expect(splitBox).not.toBeNull();
+		expect(splitBox!.y).toBeGreaterThanOrEqual(scopeBox!.y + scopeBox!.height - 1);
+
+		const clearNow = finish.getByRole('radio', { name: /Clear now/ });
+		await clearNow.focus();
+		await clearNow.press('Space');
+		await expect(split).toHaveText(
+			/2 on canvas · 2 off canvas, cleared with the desk \(recoverable for \d+ days\)/
+		);
+		const keepEntireDesk = finish.getByRole('radio', { name: /Keep entire desk/ });
+		await keepEntireDesk.focus();
+		await keepEntireDesk.press('Space');
+		await expect(split).toHaveText('2 on canvas · 2 off canvas (kept)');
+		const leaveScratch = finish.getByRole('radio', { name: /Leave as scratch/ });
+		await leaveScratch.focus();
+		await leaveScratch.press('Space');
+		await expect(split).toHaveText('2 on canvas · 2 off canvas');
+
 		await finish.getByRole('button', { name: /Export PDF/ }).click();
 		const exportSheet = page.getByRole('dialog', { name: 'Export a polished document' });
 		await expect(exportSheet).toBeVisible();

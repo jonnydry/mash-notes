@@ -68,7 +68,12 @@
 	import { clearDismissedForCanvas } from '$lib/canvas-dismiss';
 	import { findBacklinks, findOutgoingNotes } from '$lib/links';
 	import { readSyncHygiene, recordSyncExport } from '$lib/sync-hygiene';
-	import { loadSnapPref, saveSnapPref } from '$lib/canvas-geom';
+	import {
+		canvasNoteIdSet,
+		countNotesOnCanvas,
+		loadSnapPref,
+		saveSnapPref
+	} from '$lib/canvas-geom';
 	import {
 		COLLAPSED_CARD,
 		EXPANDED_CARD,
@@ -946,8 +951,7 @@
 		getActiveCanvasId: () => canvas.activeCanvas?.id,
 		getCanvasFolder: () => peel.canvasFolder,
 		activeNoteOwnership,
-		getCanvasItemCount: () => canvas.canvasItems.length,
-		getSpawnPoint: (size, index) => canvas.canvasBoard?.getSpawnPoint(size, index),
+		getSpawnPoint: (size) => canvas.canvasBoard?.getSpawnPoint(size),
 		refreshCanvasItems: () => canvas.refreshCanvasItems(),
 		adoptNotesToLibrary: (notes) => {
 			for (const note of notes) addNoteToSearch(note);
@@ -1218,7 +1222,7 @@
 
 	async function openClippingsOnCanvas(noteIds: string[], close: () => void) {
 		if (noteIds.length === 0) return;
-		const spawn = canvas.canvasBoard?.getSpawnPoint(COLLAPSED_CARD, canvas.canvasItems.length) ?? {
+		const spawn = canvas.canvasBoard?.getSpawnPoint(COLLAPSED_CARD) ?? {
 			x: 80,
 			y: 80
 		};
@@ -1497,7 +1501,10 @@
 	);
 	let screenplayChipTitle = $derived(peel.canvasTitle);
 	let canvasPlaceCount = $derived(
-		canvas.canvasItems.filter((item) => library.notesById.has(item.noteId)).length
+		countNotesOnCanvas(
+			canvas.canvasItems,
+			canvasNoteIdSet(library.notes, sessionManager.activeSession?.id)
+		)
 	);
 	let selectedCanvasColor = $derived.by(() => {
 		const selected = new Set(library.selectionIds);
@@ -1609,7 +1616,7 @@
 			// cannot rehydrate its expanded dimensions during the canvas refresh.
 			await canvas.collapseSticky();
 			// Place via drop path (bumps load seq) and expand in-place — stage is for explicit Edit.
-			const spawn = canvas.canvasBoard?.getSpawnPoint(EXPANDED_CARD, canvas.canvasItems.length) ?? {
+			const spawn = canvas.canvasBoard?.getSpawnPoint(EXPANDED_CARD) ?? {
 				x: 80,
 				y: 80
 			};
@@ -2231,10 +2238,11 @@
 	{/if}
 
 	<!-- Full-bleed canvas stage -->
-	<div class="relative flex min-h-0 flex-1">
+	<div data-canvas-overlay class="relative flex min-h-0 flex-1">
 		<div class="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
 			{#if !documentReaders.documentReaderOpen}
 				<div
+					data-floating-chrome
 					class="mash-canvas-title-chip is-spaces-trigger mash-type-caption absolute top-3 left-[4.75rem] z-10 rounded-full border px-3 py-1 backdrop-blur-sm"
 					class:pointer-events-none={spacesOverviewOpen}
 					style="border-color: var(--mash-chrome-chip-border); background: var(--mash-chrome-chip-soft); color: var(--mash-chrome-muted);"
@@ -2294,6 +2302,7 @@
 				<CanvasBoard
 					bind:this={canvas.canvasBoard}
 					items={canvas.canvasItems}
+					placementOccupants={canvas.placementOccupants}
 					notesById={library.notesById}
 					selectedIds={library.selectionSet}
 					primarySelectedId={library.selectedId}
@@ -2477,6 +2486,7 @@
 
 		<!-- Dock + peel sit above the canvas stage so magnification isn't clipped by overflow-hidden. -->
 		<div
+			data-floating-chrome
 			class="mash-dock-slot pointer-events-auto absolute top-1/2 left-3 z-30 -translate-y-1/2 overflow-visible py-5 pr-8"
 		>
 			<MashDock
@@ -2491,6 +2501,7 @@
 		</div>
 		{#if settingsOpen}
 			<div
+				data-floating-chrome
 				class="mash-peel-slot pointer-events-auto absolute top-1/2 left-[4.75rem] z-30 -translate-y-1/2"
 			>
 				{#await import('$lib/components/SettingsPanel.svelte') then mod}
@@ -2543,6 +2554,7 @@
 			</div>
 		{:else if peel.peelOpen}
 			<div
+				data-floating-chrome
 				class="mash-peel-slot pointer-events-auto absolute top-1/2 left-[4.75rem] z-30 -translate-y-1/2"
 			>
 				<PeelScanner
@@ -2638,6 +2650,7 @@
 
 		{#if (library.selectionIds.length > 0 || latestKitchenReceipt) && !documentReaders.documentReaderOpen}
 			<div
+				data-floating-chrome
 				class="mash-selection-bar absolute bottom-5 left-1/2 z-20 flex -translate-x-1/2 flex-col items-center gap-2"
 				class:mash-selection-bar--peel={peel.peelOpen || settingsOpen}
 			>
@@ -3380,6 +3393,7 @@
 			aria-live="polite"
 			aria-atomic="true"
 			data-testid="action-status"
+			data-floating-chrome
 			class="mash-type-caption pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-lg border px-3 py-1.5 shadow-lg"
 			style="border-color: var(--mash-tray-edge); background: var(--mash-panel); color: var(--mash-ink);"
 		>

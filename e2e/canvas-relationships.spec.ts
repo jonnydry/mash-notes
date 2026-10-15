@@ -63,8 +63,7 @@ test('colors cards and creates persistent, editable, exportable visual relations
 	await page.mouse.down();
 	await page.mouse.move((start.x + end.x) / 2, (start.y + end.y) / 2, { steps: 5 });
 	await page.mouse.move(end.x, end.y, { steps: 5 });
-	// The cards intentionally overlap when newly spawned. Assert the preview once the
-	// pointer reaches the distinct target card, rather than while it is still over the source.
+	// Cards step apart inside the view, so the arrow stroke has layout width.
 	await expect(page.locator('[data-connect-preview]')).toBeVisible();
 	await page.mouse.up();
 	await expect(page.locator('g[data-canvas-element]')).toHaveCount(1);

@@ -141,10 +141,7 @@ export function computeExpandBumps(
 }
 
 export type CanvasBoardApi = {
-	getSpawnPoint: (
-		size: { w: number; h: number },
-		cascadeIndex?: number
-	) => { x: number; y: number };
+	getSpawnPoint: (size: { w: number; h: number }) => { x: number; y: number };
 	ensureNoteVisible: (noteId: string) => void;
 	frameNoteForEditing?: (noteId: string, maxScale?: number) => void;
 	applyAlign: (mode: AlignMode) => void;
@@ -195,6 +192,8 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 	let expandedNoteId = $state<string | null>(null);
 	let expandFocus = $state<'title' | 'body' | null>(null);
 	let bumpRestore: Map<string, { x: number; y: number }> | null = $state(null);
+	/** Bump and restore writes on the same cards must not pass each other. */
+	let layoutWrite: Promise<unknown> = Promise.resolve();
 	let settlingIds = $state<Set<string>>(new Set());
 	let draggingTrayId = $state<string | null>(null);
 	let touchPlaceGhost = $state<{
@@ -1549,12 +1548,14 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		setTimeout(() => {
 			settlingIds = new Set();
 		}, 320);
-		await bulkUpdateCanvasItemPositions(
-			[...moved.entries()].map(([id, pos]) => ({ itemId: id, x: pos.x, y: pos.y }))
+		await enqueueLayoutWrite(() =>
+			bulkUpdateCanvasItemPositions(
+				[...moved.entries()].map(([id, pos]) => ({ itemId: id, x: pos.x, y: pos.y }))
+			)
 		);
 	}
 
-	/** Snap bumped neighbors back to their pre-expand positions. */
+	/** Put each bumped neighbor back at the position recorded when it was bumped. */
 	async function restoreBumpLayout() {
 		const restore = bumpRestore;
 		bumpRestore = null;
@@ -1567,9 +1568,20 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		setTimeout(() => {
 			settlingIds = new Set();
 		}, 320);
-		await bulkUpdateCanvasItemPositions(
-			[...restore.entries()].map(([itemId, pos]) => ({ itemId, x: pos.x, y: pos.y }))
+		await enqueueLayoutWrite(() =>
+			bulkUpdateCanvasItemPositions(
+				[...restore.entries()].map(([itemId, pos]) => ({ itemId, x: pos.x, y: pos.y }))
+			)
 		);
+	}
+
+	function enqueueLayoutWrite(write: () => Promise<void>): Promise<void> {
+		const run = layoutWrite.then(write, write);
+		layoutWrite = run.then(
+			() => undefined,
+			() => undefined
+		);
+		return run;
 	}
 
 	async function compactSticky(noteId: string) {
@@ -1607,6 +1619,7 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		const noteId = expandedNoteId;
 		expandedNoteId = null;
 		expandFocus = null;
+		// Collapse returns each neighbor to the position saved when it was bumped.
 		const restore = restoreBumpLayout();
 		if (!noteId) {
 			await restore;
@@ -1622,7 +1635,7 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		canvasLoadSeq++;
 		const existing = canvasItems.find((i) => i.noteId === noteId);
 		if (!existing) {
-			const spawn = canvasBoard?.getSpawnPoint(COLLAPSED_CARD, canvasItems.length) ?? {
+			const spawn = canvasBoard?.getSpawnPoint(COLLAPSED_CARD) ?? {
 				x: 80,
 				y: 80
 			};
@@ -1712,6 +1725,23 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		window.addEventListener('pointermove', onMove);
 		window.addEventListener('pointerup', onUp);
 		window.addEventListener('pointercancel', onCancel);
+	}
+
+	/** Current card rects plus any spot a bumped neighbor is about to reclaim. */
+	function placementOccupants(): Array<{ x: number; y: number; w: number; h: number }> {
+		const rects = canvasItems.map((item) => {
+			const size = cardDisplaySize(item, expandedNoteId);
+			return { x: item.x, y: item.y, w: size.w, h: size.h };
+		});
+		const restore = bumpRestore;
+		if (!restore) return rects;
+		for (const [id, pos] of restore) {
+			const item = canvasItems.find((candidate) => candidate.id === id);
+			if (!item || (item.x === pos.x && item.y === pos.y)) continue;
+			const size = cardDisplaySize(item, null);
+			rects.push({ x: pos.x, y: pos.y, w: size.w, h: size.h });
+		}
+		return rects;
 	}
 
 	return {
@@ -1845,6 +1875,7 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		restoreBumpLayout,
 		expandSticky,
 		collapseSticky,
+		placementOccupants,
 		openStickyFromTray,
 		onTrayDragStart,
 		onTrayDragEnd,

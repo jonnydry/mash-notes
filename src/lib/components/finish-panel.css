@@ -95,6 +95,11 @@
 	outline-offset: 2px;
 }
 
+.mash-finish-off-canvas {
+	margin: 8px 2px 0;
+	color: var(--mash-ink-muted);
+}
+
 .mash-finish-preview {
 	margin: 10px 0 0;
 	min-height: 1.25rem;

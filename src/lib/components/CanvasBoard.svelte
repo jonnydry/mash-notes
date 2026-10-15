@@ -27,8 +27,10 @@
 		clampSize,
 		fitViewport,
 		loadSnapPref,
+		measuredChromeClearance,
 		panToShowRect,
 		saveSnapPref,
+		screenBoxToBoardRect,
 		snapPoint,
 		snapRectsWithoutOverlap,
 		snapSize,
@@ -242,6 +244,12 @@
 		onOpenShortcuts?: () => void;
 		/** Shared with Settings — bindable so dock prefs stay in sync. */
 		snapEnabled?: boolean;
+		/**
+		 * Live card rects for placement. Includes a bumped neighbor's current spot
+		 * and the spot it will reclaim on collapse, read from session state so a
+		 * stale board prop cannot offer that spot to a new card.
+		 */
+		placementOccupants?: () => Array<{ x: number; y: number; w: number; h: number }>;
 	}
 
 	let {
@@ -310,7 +318,8 @@
 		onRedo,
 		onOpenShortcuts,
 		// Default from storage when unbound; parent bind:snapEnabled owns the live value.
-		snapEnabled = $bindable(loadSnapPref())
+		snapEnabled = $bindable(loadSnapPref()),
+		placementOccupants
 	}: Props = $props();
 
 	let boardEl: HTMLDivElement | undefined = $state();
@@ -1763,18 +1772,48 @@
 		scale = next.scale;
 	}
 
-	/** Board-space top-left for a new card in the current viewport. */
-	export function getSpawnPoint(
-		size: { w: number; h: number },
-		cascadeIndex = 0
-	): { x: number; y: number } {
+	/**
+	 * Live `[data-floating-chrome]` boxes, in board space.
+	 * A hidden node contributes nothing. The toast node exists only while a toast is showing.
+	 */
+	function floatingChromeObstacles(board: DOMRect) {
+		if (typeof document === 'undefined') return [];
+		const obstacles = [];
+		for (const node of document.querySelectorAll('[data-floating-chrome]')) {
+			if (!(node instanceof HTMLElement)) continue;
+			const box = node.getBoundingClientRect();
+			if (box.width <= 0 || box.height <= 0) continue;
+			const clearance = measuredChromeClearance(getComputedStyle(node));
+			obstacles.push(
+				screenBoxToBoardRect(
+					{
+						left: box.left,
+						top: box.top,
+						width: box.width,
+						height: box.height,
+						clearance
+					},
+					board,
+					panX,
+					panY,
+					scale
+				)
+			);
+		}
+		return obstacles;
+	}
+
+	/** Board-space top-left for a new card in the current viewport. Does not pan or scroll. */
+	export function getSpawnPoint(size: { w: number; h: number }): { x: number; y: number } {
 		const view = boardEl?.getBoundingClientRect();
 		const viewW = view?.width ?? 800;
 		const viewH = view?.height ?? 600;
-		const existing = items.map((i) => {
-			const s = cardSize(i, i.noteId);
-			return { x: i.x, y: i.y, w: s.w, h: s.h };
-		});
+		const existing = placementOccupants
+			? placementOccupants()
+			: items.map((i) => {
+					const s = cardSize(i, i.noteId);
+					return { x: i.x, y: i.y, w: s.w, h: s.h };
+				});
 		return viewCenterPlacement({
 			panX,
 			panY,
@@ -1783,8 +1822,8 @@
 			viewH,
 			cardW: size.w,
 			cardH: size.h,
-			index: cascadeIndex,
-			existing
+			existing,
+			obstacles: view ? floatingChromeObstacles(view) : []
 		});
 	}
 
@@ -2301,6 +2340,7 @@
 	aria-label="Mash canvas"
 >
 	<div
+		data-canvas-world
 		class="absolute top-0 left-0 origin-top-left will-change-transform"
 		style="transform: translate({panX}px, {panY}px) scale({scale});"
 	>
