@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { canvasNoteIdSet, countNotesOnCanvas } from './canvas-geom';
+import { RECOVERY_DAYS } from './session-lifecycle';
 import {
 	createFinishSnapshot,
 	defaultFinishScope,
@@ -252,9 +253,10 @@ describe('Finish snapshot', () => {
 		expect(deskLabel(['Grocery', 'Spice'])).toBe('Whole desk includes Grocery and Spice');
 	});
 
-	it('matches the canvas chip and names off-canvas notes, marking kept only when they are kept', () => {
+	it('matches the canvas chip and names what Clear does to off-canvas notes', () => {
 		const onCanvas = [note('a', 1), note('b', 2)];
 		const items = [item('ia', 'a', 0, 0), item('ib', 'b', 40, 0)];
+		const recoverable = `recoverable for ${RECOVERY_DAYS} day${RECOVERY_DAYS === 1 ? '' : 's'}`;
 
 		const keptOff = [note('c', 3), note('d', 4)];
 		for (const row of keptOff) row.scope = 'kept';
@@ -290,8 +292,23 @@ describe('Finish snapshot', () => {
 		expect(scratchSnapshot.onCanvasCount).toBe(
 			countNotesOnCanvas(items, canvasNoteIdSet(scratchNotes))
 		);
-		expect(scratchSnapshot.offCanvasLine).toBe('2 on canvas · 2 off canvas');
-		expect(scratchSnapshot.offCanvasLine).not.toContain('(kept)');
+		expect(scratchSnapshot.offCanvasLine).toBe(
+			`2 on canvas · 2 off canvas, cleared with the desk (${recoverable})`
+		);
+
+		const keptOne = note('c', 3);
+		keptOne.scope = 'kept';
+		const mixedSnapshot = createFinishSnapshot({
+			sessionId: 'desk',
+			canvasId: 'canvas',
+			notes: [...onCanvas, keptOne, note('d', 4)],
+			canvasItems: items,
+			selectedNoteIds: [],
+			operations: []
+		});
+		expect(mixedSnapshot.offCanvasLine).toBe(
+			`2 on canvas · 2 off canvas (1 kept, 1 cleared with the desk, ${recoverable})`
+		);
 	});
 
 	it('keeps a plain Whole desk count when the desk is not larger after Split by lines', () => {

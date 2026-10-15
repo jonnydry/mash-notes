@@ -1,4 +1,5 @@
 import { canvasNoteIdSet, countNotesOnCanvas } from './canvas-geom';
+import { RECOVERY_DAYS } from './session-lifecycle';
 import type { CanvasItem, Note, Operation } from './types';
 
 export type FinishScope = 'selected' | 'results' | 'desk';
@@ -23,8 +24,7 @@ export type FinishSnapshot = {
 	onCanvasCount: number;
 	/**
 	 * Own line under the scope choices when notes exist that are not on the canvas.
-	 * "(kept)" is included only when every one of those notes already has scope kept.
-	 * Clear does not promote the others; it parks the whole desk in recovery.
+	 * Says whether those notes are already kept or leave with the desk into recovery.
 	 */
 	offCanvasLine: string | null;
 	selectedNoteIds: string[];
@@ -87,18 +87,26 @@ export function spatialNoteIds(items: CanvasItem[]): string[] {
 		.map(({ item }) => item.noteId);
 }
 
+function recoveryWindowPhrase(): string {
+	return `recoverable for ${RECOVERY_DAYS} day${RECOVERY_DAYS === 1 ? '' : 's'}`;
+}
+
 /**
- * Names notes that are not on the canvas. "(kept)" only when Clear would actually
- * preserve them: every one already has scope `kept`. Scratch notes ride along into
- * 7-day recovery and are deleted after that, so they are not labeled kept.
+ * Names notes that are not on the canvas, using the same recovery window as Clear.
+ * Notes already scoped `kept` stay. The others leave with the desk and come back
+ * if that desk is restored before `RECOVERY_DAYS` elapses.
  */
 export function finishOffCanvasLine(
 	onCanvasCount: number,
 	offCanvasNotes: readonly Note[]
 ): string | null {
 	if (offCanvasNotes.length === 0) return null;
-	const kept = offCanvasNotes.every((note) => note.scope === 'kept');
-	return `${onCanvasCount} on canvas · ${offCanvasNotes.length} off canvas${kept ? ' (kept)' : ''}`;
+	const keptCount = offCanvasNotes.filter((note) => note.scope === 'kept').length;
+	const clearedCount = offCanvasNotes.length - keptCount;
+	const head = `${onCanvasCount} on canvas · ${offCanvasNotes.length} off canvas`;
+	if (clearedCount === 0) return `${head} (kept)`;
+	if (keptCount === 0) return `${head}, cleared with the desk (${recoveryWindowPhrase()})`;
+	return `${head} (${keptCount} kept, ${clearedCount} cleared with the desk, ${recoveryWindowPhrase()})`;
 }
 
 export function createFinishSnapshot(input: FinishSnapshotInput): FinishSnapshot {
