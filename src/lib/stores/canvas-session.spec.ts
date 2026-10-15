@@ -258,4 +258,82 @@ describe('layout write queue', () => {
 		expect(storedOther?.x).toBe(300);
 		expect(storedOther?.y).toBe(300);
 	});
+
+	it('undo of a drag restores a bumped card put-back spot', async () => {
+		const { anchorNote, neighbor, session } = await setup();
+		session.expandSticky(anchorNote.id);
+		const bumped = session.canvasItems.find((item) => item.id === neighbor.id)!;
+		expect(bumped.x !== 72 || bumped.y !== 120).toBe(true);
+		await session.handleCanvasMoveEnd(
+			[{ itemId: neighbor.id, x: 600, y: 48 }],
+			[{ itemId: neighbor.id, x: bumped.x, y: bumped.y }]
+		);
+		await session.undoCanvasLayout();
+		const afterUndo = session.canvasItems.find((item) => item.id === neighbor.id);
+		expect(afterUndo?.x).toBe(bumped.x);
+		expect(afterUndo?.y).toBe(bumped.y);
+		await session.collapseSticky();
+		const ui = session.canvasItems.find((item) => item.id === neighbor.id);
+		const stored = await db.canvasItems.get(neighbor.id);
+		expect(ui?.x).toBe(72);
+		expect(ui?.y).toBe(120);
+		expect(stored?.x).toBe(72);
+		expect(stored?.y).toBe(120);
+	});
+
+	it('redo of an undone drag drops the put-back spot again', async () => {
+		const { anchorNote, neighbor, session } = await setup();
+		session.expandSticky(anchorNote.id);
+		const bumped = session.canvasItems.find((item) => item.id === neighbor.id)!;
+		await session.handleCanvasMoveEnd(
+			[{ itemId: neighbor.id, x: 600, y: 48 }],
+			[{ itemId: neighbor.id, x: bumped.x, y: bumped.y }]
+		);
+		await session.undoCanvasLayout();
+		await session.redoCanvasLayout();
+		await session.collapseSticky();
+		const ui = session.canvasItems.find((item) => item.id === neighbor.id);
+		const stored = await db.canvasItems.get(neighbor.id);
+		expect(ui?.x).toBe(600);
+		expect(ui?.y).toBe(48);
+		expect(stored?.x).toBe(600);
+		expect(stored?.y).toBe(48);
+	});
+
+	it('a drag that ends on the bumped spot keeps the put-back spot', async () => {
+		const { anchorNote, neighbor, session } = await setup();
+		session.expandSticky(anchorNote.id);
+		const bumped = session.canvasItems.find((item) => item.id === neighbor.id)!;
+		session.handleCanvasMove(neighbor.id, bumped.x + 10, bumped.y);
+		session.handleCanvasMove(neighbor.id, bumped.x, bumped.y);
+		await session.handleCanvasMoveEnd(
+			[{ itemId: neighbor.id, x: bumped.x, y: bumped.y }],
+			[{ itemId: neighbor.id, x: bumped.x, y: bumped.y }]
+		);
+		await session.collapseSticky();
+		const ui = session.canvasItems.find((item) => item.id === neighbor.id);
+		const stored = await db.canvasItems.get(neighbor.id);
+		expect(ui?.x).toBe(72);
+		expect(ui?.y).toBe(120);
+		expect(stored?.x).toBe(72);
+		expect(stored?.y).toBe(120);
+	});
+
+	it('an arrange while expanded drops bumped put-back spots', async () => {
+		const { anchorNote, neighbor, session } = await setup();
+		session.expandSticky(anchorNote.id);
+		const bumped = session.canvasItems.find((item) => item.id === neighbor.id)!;
+		await session.handleCanvasMoveEnd(
+			[{ itemId: neighbor.id, x: bumped.x + 24, y: bumped.y }],
+			[{ itemId: neighbor.id, x: bumped.x, y: bumped.y }],
+			{ label: 'Arrange' }
+		);
+		await session.collapseSticky();
+		const ui = session.canvasItems.find((item) => item.id === neighbor.id);
+		const stored = await db.canvasItems.get(neighbor.id);
+		expect(ui?.x).toBe(bumped.x + 24);
+		expect(ui?.y).toBe(bumped.y);
+		expect(stored?.x).toBe(bumped.x + 24);
+		expect(stored?.y).toBe(bumped.y);
+	});
 });

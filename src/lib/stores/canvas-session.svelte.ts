@@ -742,6 +742,7 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		const entry = canvasUndo.undo();
 		canvasUndoTick++;
 		if (!entry) return;
+		rememberClearedBumpSpots(entry.clearedBumpRestore);
 		await opts.applyNoteReceipt?.(entry.notesBefore, entry.notesAfter, 'before');
 		await applyCanvasItemReceipt(entry.itemsBefore, entry.itemsAfter, 'before');
 		if (entry.before.length > 0) {
@@ -766,6 +767,7 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		const entry = canvasUndo.redo();
 		canvasUndoTick++;
 		if (!entry) return;
+		forgetClearedBumpSpots(entry.clearedBumpRestore);
 		await opts.applyNoteReceipt?.(entry.notesBefore, entry.notesAfter, 'after');
 		await applyCanvasItemReceipt(entry.itemsBefore, entry.itemsAfter, 'after');
 		if (entry.after.length > 0) {
@@ -834,12 +836,9 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 	) {
 		// Layout operators and drag completion supersede any in-flight canvas read.
 		canvasLoadSeq++;
-		// A card the user moves has a chosen spot. Collapse must not put it back.
-		if (bumpRestore) {
-			const next = new Map(bumpRestore);
-			for (const move of moves) next.delete(move.itemId);
-			bumpRestore = next.size > 0 ? next : null;
-		}
+		// Only a card that lands off its bumped spot has a chosen place. A jiggle
+		// that ends where it started keeps the put-back reservation.
+		const clearedBumpRestore = takeChangedBumpSpots(moves, before);
 		const beforeSnaps =
 			before?.map((b) => {
 				const cur = canvasItems.find((i) => i.id === b.itemId);
@@ -857,7 +856,8 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 				mutation: moveOpts?.actionId ? 'layout' : undefined,
 				affectedNoteIds: moveOpts?.affectedNoteIds,
 				before: beforeSnaps,
-				after: afterSnaps
+				after: afterSnaps,
+				clearedBumpRestore: clearedBumpRestore.length > 0 ? clearedBumpRestore : undefined
 			});
 			canvasUndoTick++;
 		}
@@ -1563,6 +1563,59 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 				[...moved.entries()].map(([id, pos]) => ({ itemId: id, x: pos.x, y: pos.y }))
 			)
 		);
+	}
+
+	/**
+	 * Drop put-back spots for cards whose committed position differs from the
+	 * bumped spot. `before` is the drag origin; live drag frames may already
+	 * have patched `canvasItems` to the final position.
+	 */
+	function takeChangedBumpSpots(
+		moves: Array<{ itemId: string; x: number; y: number }>,
+		before?: Array<{ itemId: string; x: number; y: number }>
+	): Array<{ itemId: string; x: number; y: number }> {
+		if (!bumpRestore || bumpRestore.size === 0) return [];
+		const origin = new Map<string, { x: number; y: number }>();
+		if (before) {
+			for (const spot of before) origin.set(spot.itemId, { x: spot.x, y: spot.y });
+		} else {
+			for (const move of moves) {
+				const cur = canvasItems.find((item) => item.id === move.itemId);
+				if (cur) origin.set(move.itemId, { x: cur.x, y: cur.y });
+			}
+		}
+		const next = new Map(bumpRestore);
+		const removed: Array<{ itemId: string; x: number; y: number }> = [];
+		for (const move of moves) {
+			const saved = next.get(move.itemId);
+			if (!saved) continue;
+			const from = origin.get(move.itemId);
+			if (from && move.x === from.x && move.y === from.y) continue;
+			next.delete(move.itemId);
+			removed.push({ itemId: move.itemId, x: saved.x, y: saved.y });
+		}
+		if (removed.length > 0) bumpRestore = next.size > 0 ? next : null;
+		return removed;
+	}
+
+	function rememberClearedBumpSpots(
+		spots: Array<{ itemId: string; x: number; y: number }> | undefined
+	) {
+		if (!spots || spots.length === 0) return;
+		const next = new Map(bumpRestore ?? undefined);
+		for (const spot of spots) {
+			if (!next.has(spot.itemId)) next.set(spot.itemId, { x: spot.x, y: spot.y });
+		}
+		bumpRestore = next;
+	}
+
+	function forgetClearedBumpSpots(
+		spots: Array<{ itemId: string; x: number; y: number }> | undefined
+	) {
+		if (!bumpRestore || !spots || spots.length === 0) return;
+		const next = new Map(bumpRestore);
+		for (const spot of spots) next.delete(spot.itemId);
+		bumpRestore = next.size > 0 ? next : null;
 	}
 
 	/** Put each bumped neighbor back at the position recorded when it was bumped. */
