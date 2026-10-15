@@ -335,19 +335,6 @@ function hitsObstacle(
 	return obstacles.some((obstacle) => rectsIntersect(card, obstacle));
 }
 
-/**
- * Floating chrome measured with getBoundingClientRect at placement time.
- * The toast node exists only while a toast is visible, so it is absent otherwise.
- * Top controls, the pan pad, and the bottom selection toolbar are the rest.
- */
-export const FLOATING_CHROME_SELECTORS = [
-	'.mash-canvas-chrome-top',
-	'.mash-canvas-chrome-mobile',
-	'.mash-canvas-chrome-pan',
-	'.mash-selection-bar',
-	'[data-testid="action-status"]'
-] as const;
-
 /** Layout inset already used by the chrome (top/right/bottom/left), in screen pixels. */
 export function measuredChromeClearance(style: {
 	top: string;
@@ -405,10 +392,10 @@ function distinctStagger(
 /**
  * Board-space top-left for a card centered in the current viewport.
  * Free spots stay inside the visible view, clear of measured chrome, diagonals included.
- * A full view falls back to the 24px diagonal stagger, still inside the view and never
- * on a top-left an existing card already occupies.
- * A card wider or taller than the view skips that in-view limit and still gets a
- * distinct stagger spot. Placement does not pan or scroll.
+ * When no in-view cell is free, the next 24px diagonal step from the view centre is
+ * used, skipping top-lefts an existing card already occupies.
+ * A card wider or taller than the view skips the in-view limit and uses that stagger.
+ * Placement does not pan or scroll.
  */
 export function viewCenterPlacement(opts: {
 	panX: number;
@@ -474,7 +461,7 @@ export function viewCenterPlacement(opts: {
 			if (!best || dist < best.dist) best = { x, y, dist };
 		}
 	}
-	return best ?? origin;
+	return best ?? distinctStagger(origin, existing);
 }
 
 /**

@@ -348,6 +348,36 @@ describe('canvas-geom', () => {
 		expect(new Set(placed.map((card) => `${card.x},${card.y}`)).size).toBe(placed.length);
 	});
 
+	it('staggers distinct top-lefts when chrome leaves no free area', () => {
+		const viewW = 1280;
+		const viewH = 800;
+		const cardW = 280;
+		const cardH = 220;
+		const obstacle = { x: -2000, y: -2000, w: 8000, h: 8000 };
+		const placed: Array<{ x: number; y: number; w: number; h: number }> = [];
+		for (let i = 0; i < 10; i++) {
+			const next = viewCenterPlacement({
+				panX: 0,
+				panY: 0,
+				scale: 1,
+				viewW,
+				viewH,
+				cardW,
+				cardH,
+				existing: placed,
+				obstacles: [obstacle]
+			});
+			placed.push({ ...next, w: cardW, h: cardH });
+		}
+		expect(new Set(placed.map((card) => `${card.x},${card.y}`)).size).toBe(10);
+		const origin = placed[0]!;
+		expect(placed.filter((card) => card.x === origin.x && card.y === origin.y)).toHaveLength(1);
+		for (let i = 1; i < placed.length; i++) {
+			expect(placed[i]!.x - placed[i - 1]!.x).toBe(GRID);
+			expect(placed[i]!.y - placed[i - 1]!.y).toBe(GRID);
+		}
+	});
+
 	it('uses the toast area when no toast is visible', () => {
 		const viewW = 1280;
 		const viewH = 800;

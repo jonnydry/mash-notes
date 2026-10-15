@@ -2238,10 +2238,11 @@
 	{/if}
 
 	<!-- Full-bleed canvas stage -->
-	<div class="relative flex min-h-0 flex-1">
+	<div data-canvas-overlay class="relative flex min-h-0 flex-1">
 		<div class="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
 			{#if !documentReaders.documentReaderOpen}
 				<div
+					data-floating-chrome
 					class="mash-canvas-title-chip is-spaces-trigger mash-type-caption absolute top-3 left-[4.75rem] z-10 rounded-full border px-3 py-1 backdrop-blur-sm"
 					class:pointer-events-none={spacesOverviewOpen}
 					style="border-color: var(--mash-chrome-chip-border); background: var(--mash-chrome-chip-soft); color: var(--mash-chrome-muted);"
@@ -2301,6 +2302,7 @@
 				<CanvasBoard
 					bind:this={canvas.canvasBoard}
 					items={canvas.canvasItems}
+					placementOccupants={canvas.placementOccupants}
 					notesById={library.notesById}
 					selectedIds={library.selectionSet}
 					primarySelectedId={library.selectedId}
@@ -2484,6 +2486,7 @@
 
 		<!-- Dock + peel sit above the canvas stage so magnification isn't clipped by overflow-hidden. -->
 		<div
+			data-floating-chrome
 			class="mash-dock-slot pointer-events-auto absolute top-1/2 left-3 z-30 -translate-y-1/2 overflow-visible py-5 pr-8"
 		>
 			<MashDock
@@ -2645,6 +2648,7 @@
 
 		{#if (library.selectionIds.length > 0 || latestKitchenReceipt) && !documentReaders.documentReaderOpen}
 			<div
+				data-floating-chrome
 				class="mash-selection-bar absolute bottom-5 left-1/2 z-20 flex -translate-x-1/2 flex-col items-center gap-2"
 				class:mash-selection-bar--peel={peel.peelOpen || settingsOpen}
 			>
@@ -3387,6 +3391,7 @@
 			aria-live="polite"
 			aria-atomic="true"
 			data-testid="action-status"
+			data-floating-chrome
 			class="mash-type-caption pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-lg border px-3 py-1.5 shadow-lg"
 			style="border-color: var(--mash-tray-edge); background: var(--mash-panel); color: var(--mash-ink);"
 		>
