@@ -320,11 +320,95 @@ function exactSpot(x: number, y: number, existing: readonly PlacementRect[]): bo
 	return existing.some((rect) => rect.x === x && rect.y === y);
 }
 
+function rectsIntersect(a: PlacementRect, b: PlacementRect): boolean {
+	return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+function hitsObstacle(
+	x: number,
+	y: number,
+	w: number,
+	h: number,
+	obstacles: readonly PlacementRect[]
+): boolean {
+	const card = { x, y, w, h };
+	return obstacles.some((obstacle) => rectsIntersect(card, obstacle));
+}
+
+/**
+ * Floating chrome measured with getBoundingClientRect at placement time.
+ * The toast node exists only while a toast is visible, so it is absent otherwise.
+ * Top controls, the pan pad, and the bottom selection toolbar are the rest.
+ */
+export const FLOATING_CHROME_SELECTORS = [
+	'.mash-canvas-chrome-top',
+	'.mash-canvas-chrome-mobile',
+	'.mash-canvas-chrome-pan',
+	'.mash-selection-bar',
+	'[data-testid="action-status"]'
+] as const;
+
+/** Layout inset already used by the chrome (top/right/bottom/left), in screen pixels. */
+export function measuredChromeClearance(style: {
+	top: string;
+	right: string;
+	bottom: string;
+	left: string;
+}): number {
+	const edges = [style.top, style.right, style.bottom, style.left]
+		.map((value) => Number.parseFloat(value))
+		.filter((value) => Number.isFinite(value) && value > 0);
+	if (edges.length === 0) return 0;
+	return Math.min(...edges);
+}
+
+/** Screen box, plus its own layout inset, in board space. */
+export function screenBoxToBoardRect(
+	box: { left: number; top: number; width: number; height: number; clearance: number },
+	board: { left: number; top: number },
+	panX: number,
+	panY: number,
+	scale: number
+): PlacementRect {
+	const safeScale = scale > 0 ? scale : 1;
+	const left = box.left - box.clearance;
+	const top = box.top - box.clearance;
+	return {
+		x: (left - board.left - panX) / safeScale,
+		y: (top - board.top - panY) / safeScale,
+		w: (box.width + box.clearance * 2) / safeScale,
+		h: (box.height + box.clearance * 2) / safeScale
+	};
+}
+
+/**
+ * Diagonal stagger that skips top-lefts an existing card already occupies.
+ * Used when the card cannot fit inside the view, so the in-view limit does not apply.
+ * Does not pan or scroll.
+ */
+function distinctStagger(
+	origin: { x: number; y: number },
+	existing: readonly PlacementRect[]
+): { x: number; y: number } {
+	const steps = existing.length + 1;
+	for (let k = 0; k < steps; k++) {
+		const x = snapValue(origin.x + k * CASCADE_STEP);
+		const y = snapValue(origin.y + k * CASCADE_STEP);
+		if (!exactSpot(x, y, existing)) return { x, y };
+	}
+	return {
+		x: snapValue(origin.x + steps * CASCADE_STEP),
+		y: snapValue(origin.y + steps * CASCADE_STEP)
+	};
+}
+
 /**
  * Board-space top-left for a card centered in the current viewport.
- * Free spots are searched only inside the visible view, diagonals included.
- * A full view falls back to the 24px diagonal stagger and still stays on screen,
- * never on a top-left an existing card already occupies.
+ * Free spots stay inside the visible view, clear of measured chrome, diagonals included.
+ * A full view falls back to the 24px diagonal stagger, still inside the view and never
+ * on a top-left an existing card already occupies.
+ * A card wider or taller than the view skips that in-view limit and still gets a
+ * distinct stagger spot. Placement does not pan or scroll.
  */
 export function viewCenterPlacement(opts: {
 	panX: number;
@@ -335,6 +419,7 @@ export function viewCenterPlacement(opts: {
 	cardW: number;
 	cardH: number;
 	existing?: Array<PlacementRect>;
+	obstacles?: Array<PlacementRect>;
 }): { x: number; y: number } {
 	const view = boardView(opts);
 	const origin = {
@@ -342,11 +427,20 @@ export function viewCenterPlacement(opts: {
 		y: snapValue((opts.viewH / 2 - opts.panY) / view.scale - opts.cardH / 2)
 	};
 	const existing = opts.existing ?? [];
+	const obstacles = opts.obstacles ?? [];
+	const viewW = view.right - view.left;
+	const viewH = view.bottom - view.top;
+	if (opts.cardW > viewW || opts.cardH > viewH) return distinctStagger(origin, existing);
+
 	const free = (x: number, y: number) =>
 		cardFitsInView(x, y, opts.cardW, opts.cardH, view) &&
-		!heavilyOverlaps(x, y, opts.cardW, opts.cardH, existing);
+		!heavilyOverlaps(x, y, opts.cardW, opts.cardH, existing) &&
+		!hitsObstacle(x, y, opts.cardW, opts.cardH, obstacles);
+	const inViewAndClear = (x: number, y: number) =>
+		cardFitsInView(x, y, opts.cardW, opts.cardH, view) &&
+		!exactSpot(x, y, existing) &&
+		!hitsObstacle(x, y, opts.cardW, opts.cardH, obstacles);
 
-	if (existing.length === 0) return origin;
 	if (free(origin.x, origin.y)) return origin;
 
 	const maxRing = Math.ceil(Math.max(opts.viewW, opts.viewH) / view.scale / NUDGE_STEP) + 1;
@@ -364,8 +458,7 @@ export function viewCenterPlacement(opts: {
 	for (let k = 0; k < CASCADE_MOD; k++) {
 		const x = snapValue(origin.x + k * CASCADE_STEP);
 		const y = snapValue(origin.y + k * CASCADE_STEP);
-		if (!cardFitsInView(x, y, opts.cardW, opts.cardH, view)) continue;
-		if (exactSpot(x, y, existing)) continue;
+		if (!inViewAndClear(x, y)) continue;
 		return { x, y };
 	}
 
@@ -376,8 +469,7 @@ export function viewCenterPlacement(opts: {
 	let best: { x: number; y: number; dist: number } | null = null;
 	for (let x = minX; x <= maxX; x += GRID) {
 		for (let y = minY; y <= maxY; y += GRID) {
-			if (!cardFitsInView(x, y, opts.cardW, opts.cardH, view)) continue;
-			if (exactSpot(x, y, existing)) continue;
+			if (!inViewAndClear(x, y)) continue;
 			const dist = (x - origin.x) ** 2 + (y - origin.y) ** 2;
 			if (!best || dist < best.dist) best = { x, y, dist };
 		}

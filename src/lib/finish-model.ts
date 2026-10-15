@@ -87,6 +87,12 @@ export function recoveryWindowPhrase(): string {
 	return `recoverable for ${days} day${days === 1 ? '' : 's'}`;
 }
 
+/** Same words as `recoveryWindowPhrase()`, with the first letter capitalized. */
+export function recoveryWindowPhraseCapitalized(): string {
+	const phrase = recoveryWindowPhrase();
+	return phrase.charAt(0).toUpperCase() + phrase.slice(1);
+}
+
 export function createFinishSnapshot(input: FinishSnapshotInput): FinishSnapshot {
 	const sessionNotes = input.notes.filter(
 		(note) => note.deletedAt == null && (!note.sessionId || note.sessionId === input.sessionId)

@@ -26,9 +26,12 @@
 		boundsOf,
 		clampSize,
 		fitViewport,
+		FLOATING_CHROME_SELECTORS,
 		loadSnapPref,
+		measuredChromeClearance,
 		panToShowRect,
 		saveSnapPref,
+		screenBoxToBoardRect,
 		snapPoint,
 		snapRectsWithoutOverlap,
 		snapSize,
@@ -1763,7 +1766,37 @@
 		scale = next.scale;
 	}
 
-	/** Board-space top-left for a new card in the current viewport. */
+	/** Live floating chrome, in board space. A hidden node or a dismissed toast contributes nothing. */
+	function floatingChromeObstacles(board: DOMRect) {
+		if (typeof document === 'undefined') return [];
+		const obstacles = [];
+		for (const selector of FLOATING_CHROME_SELECTORS) {
+			for (const node of document.querySelectorAll(selector)) {
+				if (!(node instanceof HTMLElement)) continue;
+				const box = node.getBoundingClientRect();
+				if (box.width <= 0 || box.height <= 0) continue;
+				const clearance = measuredChromeClearance(getComputedStyle(node));
+				obstacles.push(
+					screenBoxToBoardRect(
+						{
+							left: box.left,
+							top: box.top,
+							width: box.width,
+							height: box.height,
+							clearance
+						},
+						board,
+						panX,
+						panY,
+						scale
+					)
+				);
+			}
+		}
+		return obstacles;
+	}
+
+	/** Board-space top-left for a new card in the current viewport. Does not pan or scroll. */
 	export function getSpawnPoint(size: { w: number; h: number }): { x: number; y: number } {
 		const view = boardEl?.getBoundingClientRect();
 		const viewW = view?.width ?? 800;
@@ -1780,7 +1813,8 @@
 			viewH,
 			cardW: size.w,
 			cardH: size.h,
-			existing
+			existing,
+			obstacles: view ? floatingChromeObstacles(view) : []
 		});
 	}
 

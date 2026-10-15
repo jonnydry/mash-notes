@@ -7,6 +7,8 @@ import {
 	EMPTY_CANVAS_FINISH_COPY,
 	finishExportSourceLabel,
 	finishOffCanvasLine,
+	recoveryWindowPhrase,
+	recoveryWindowPhraseCapitalized,
 	finishScopeOptions,
 	finishSectionHeading,
 	finishTakeawayAnnouncement,
@@ -48,6 +50,11 @@ function operation(partial: Partial<Operation> & Pick<Operation, 'id'>): Operati
 }
 
 describe('Finish snapshot', () => {
+	it('capitalizes the recovery window without changing the words', () => {
+		expect(recoveryWindowPhraseCapitalized()).toBe(recoveryWindowPhrase().replace(/^r/, 'R'));
+		expect(recoveryWindowPhraseCapitalized().slice(1)).toBe(recoveryWindowPhrase().slice(1));
+	});
+
 	it('orders current-canvas cards spatially and appends unplaced desk notes by creation', () => {
 		const notes = [note('a', 4), note('b', 2), note('c', 3), note('d', 1)];
 		const canvasItems = [

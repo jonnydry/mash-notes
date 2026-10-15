@@ -8,6 +8,8 @@ import {
 	alignRects,
 	fitViewport,
 	viewCenterPlacement,
+	measuredChromeClearance,
+	screenBoxToBoardRect,
 	panToShowRect,
 	bumpOverlappingRects,
 	gridSlotPosition,
@@ -285,6 +287,167 @@ describe('canvas-geom', () => {
 		expect(placed.x + cardW).toBeLessThanOrEqual(viewW);
 		expect(placed.y + cardH).toBeLessThanOrEqual(viewH);
 		expect(existing.some((card) => card.x === placed.x && card.y === placed.y)).toBe(false);
+	});
+
+	it('places 35 new notes inside a 1280×800 view on distinct spots', () => {
+		const viewW = 1280;
+		const viewH = 800;
+		const cardW = 280;
+		const cardH = 220;
+		const placed = placeSequence(35, { viewW, viewH, cardW, cardH });
+		const spots = new Set(placed.map((card) => `${card.x},${card.y}`));
+		expect(spots.size).toBe(35);
+		for (const card of placed) {
+			expect(card.x).toBeGreaterThanOrEqual(0);
+			expect(card.y).toBeGreaterThanOrEqual(0);
+			expect(card.x + cardW).toBeLessThanOrEqual(viewW);
+			expect(card.y + cardH).toBeLessThanOrEqual(viewH);
+		}
+	});
+
+	function intersects(
+		card: { x: number; y: number; w: number; h: number },
+		obstacle: { x: number; y: number; w: number; h: number }
+	) {
+		return (
+			card.x < obstacle.x + obstacle.w &&
+			card.x + card.w > obstacle.x &&
+			card.y < obstacle.y + obstacle.h &&
+			card.y + card.h > obstacle.y
+		);
+	}
+
+	it('keeps new cards clear of top controls, the bottom toolbar, and a visible toast', () => {
+		const viewW = 1280;
+		const viewH = 800;
+		const cardW = 280;
+		const cardH = 220;
+		const topControls = { x: 760, y: 0, w: 520, h: 64 };
+		const bottomToolbar = { x: 360, y: 730, w: 560, h: 70 };
+		const toast = { x: 470, y: 680, w: 340, h: 52 };
+		const obstacles = [topControls, bottomToolbar, toast];
+		const placed: Array<{ x: number; y: number; w: number; h: number }> = [];
+		for (let i = 0; i < 18; i++) {
+			const next = viewCenterPlacement({
+				panX: 0,
+				panY: 0,
+				scale: 1,
+				viewW,
+				viewH,
+				cardW,
+				cardH,
+				existing: placed,
+				obstacles
+			});
+			const card = { ...next, w: cardW, h: cardH };
+			for (const obstacle of obstacles) {
+				expect(intersects(card, obstacle)).toBe(false);
+			}
+			placed.push(card);
+		}
+		expect(new Set(placed.map((card) => `${card.x},${card.y}`)).size).toBe(placed.length);
+	});
+
+	it('uses the toast area when no toast is visible', () => {
+		const viewW = 1280;
+		const viewH = 800;
+		const cardW = 280;
+		const cardH = 220;
+		const toastArea = { x: 400, y: 540, w: 480, h: 260 };
+		const blockers = [
+			{ x: -40, y: -40, w: 1360, h: 580 },
+			{ x: -40, y: 520, w: 440, h: 320 },
+			{ x: 880, y: 520, w: 480, h: 320 }
+		];
+		const open = viewCenterPlacement({
+			panX: 0,
+			panY: 0,
+			scale: 1,
+			viewW,
+			viewH,
+			cardW,
+			cardH,
+			existing: [{ x: 0, y: 0, w: 24, h: 24 }],
+			obstacles: blockers
+		});
+		const openCard = { ...open, w: cardW, h: cardH };
+		expect(intersects(openCard, toastArea)).toBe(true);
+		for (const blocker of blockers) expect(intersects(openCard, blocker)).toBe(false);
+
+		const blocked = viewCenterPlacement({
+			panX: 0,
+			panY: 0,
+			scale: 1,
+			viewW,
+			viewH,
+			cardW,
+			cardH,
+			existing: [{ x: 0, y: 0, w: 24, h: 24 }],
+			obstacles: [...blockers, toastArea]
+		});
+		expect(intersects({ ...blocked, w: cardW, h: cardH }, toastArea)).toBe(false);
+	});
+
+	it('gives 10 oversized notes distinct top-lefts at 390×700 zoom 2', () => {
+		const placed: Array<{ x: number; y: number; w: number; h: number }> = [];
+		for (let i = 0; i < 12; i++) {
+			const next = viewCenterPlacement({
+				panX: 0,
+				panY: 0,
+				scale: 2,
+				viewW: 390,
+				viewH: 700,
+				cardW: 280,
+				cardH: 220,
+				existing: placed
+			});
+			placed.push({ ...next, w: 280, h: 220 });
+		}
+		expect(new Set(placed.map((card) => `${card.x},${card.y}`)).size).toBe(12);
+	});
+
+	it('skips taken top-lefts when the card is larger than the view', () => {
+		const origin = viewCenterPlacement({
+			panX: 0,
+			panY: 0,
+			scale: 2,
+			viewW: 390,
+			viewH: 700,
+			cardW: 280,
+			cardH: 220
+		});
+		const existing = Array.from({ length: 10 }, (_, k) => ({
+			x: origin.x + k * GRID,
+			y: origin.y + k * GRID,
+			w: 280,
+			h: 220
+		}));
+		const placed = viewCenterPlacement({
+			panX: 0,
+			panY: 0,
+			scale: 2,
+			viewW: 390,
+			viewH: 700,
+			cardW: 280,
+			cardH: 220,
+			existing
+		});
+		expect(existing.some((card) => card.x === placed.x && card.y === placed.y)).toBe(false);
+	});
+
+	it('converts a measured chrome box into board space with its layout inset', () => {
+		expect(
+			measuredChromeClearance({ top: '12px', right: '12px', bottom: 'auto', left: 'auto' })
+		).toBe(12);
+		expect(
+			screenBoxToBoardRect(
+				{ left: 800, top: 20, width: 200, height: 40, clearance: 12 },
+				{ left: 0, top: 0 },
+				0,
+				0,
+				2
+			)
+		).toEqual({ x: 394, y: 4, w: 112, h: 32 });
 	});
 
 	it('auto-place slots stay on the Snap lattice', () => {

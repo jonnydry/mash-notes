@@ -14,7 +14,7 @@
 		defaultFinishScope,
 		finishCanvasIsEmpty,
 		finishOffCanvasLine,
-		recoveryWindowPhrase,
+		recoveryWindowPhraseCapitalized,
 		finishScopeOptions,
 		finishSectionHeading,
 		finishTakeawayAnnouncement,
@@ -312,12 +312,7 @@
 							bind:group={disposition}
 						/>
 						<Trash2 class="h-4 w-4 shrink-0 text-[var(--mash-danger)]" />
-						<span
-							><strong class="block">Clear now</strong>{recoveryWindowPhrase().replace(
-								/^r/,
-								'R'
-							)}</span
-						>
+						<span><strong class="block">Clear now</strong>{recoveryWindowPhraseCapitalized()}</span>
 					</label>
 				</div>
 			</fieldset>
