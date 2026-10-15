@@ -737,6 +737,32 @@ export function resolveOverlapsKeepingFixed(
 	return out;
 }
 
+/** Non-deleted note ids. The chip and Finish pass this same set into `countNotesOnCanvas`. */
+export function canvasNoteIdSet(
+	notes: Iterable<{ id: string; deletedAt?: number | null }>
+): Set<string> {
+	const ids = new Set<string>();
+	for (const note of notes) {
+		if (note.deletedAt == null) ids.add(note.id);
+	}
+	return ids;
+}
+
+/**
+ * How many canvas placements refer to a note the desk actually has.
+ * The title chip and Finish both use this, so "N on canvas" cannot drift.
+ */
+export function countNotesOnCanvas(
+	items: readonly { noteId: string }[],
+	knownNoteIds: { has(noteId: string): boolean }
+): number {
+	let count = 0;
+	for (const item of items) {
+		if (knownNoteIds.has(item.noteId)) count += 1;
+	}
+	return count;
+}
+
 const SNAP_PREF_KEY = 'mash.canvasSnap';
 
 export function loadSnapPref(): boolean {

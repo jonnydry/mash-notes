@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { canvasNoteIdSet, countNotesOnCanvas } from './canvas-geom';
 import {
 	createFinishSnapshot,
 	defaultFinishScope,
@@ -249,6 +250,48 @@ describe('Finish snapshot', () => {
 
 		expect(deskLabel(['Grocery'])).toBe('Whole desk includes Grocery');
 		expect(deskLabel(['Grocery', 'Spice'])).toBe('Whole desk includes Grocery and Spice');
+	});
+
+	it('matches the canvas chip and names off-canvas notes, marking kept only when they are kept', () => {
+		const onCanvas = [note('a', 1), note('b', 2)];
+		const items = [item('ia', 'a', 0, 0), item('ib', 'b', 40, 0)];
+
+		const keptOff = [note('c', 3), note('d', 4)];
+		for (const row of keptOff) row.scope = 'kept';
+		const keptNotes = [...onCanvas, ...keptOff];
+		const known = canvasNoteIdSet(keptNotes);
+		expect(countNotesOnCanvas(items, known)).toBe(2);
+		const keptSnapshot = createFinishSnapshot({
+			sessionId: 'desk',
+			canvasId: 'canvas',
+			notes: keptNotes,
+			canvasItems: items,
+			selectedNoteIds: [],
+			operations: []
+		});
+		const keptDesk = finishScopeOptions(
+			keptSnapshot,
+			new Map(keptNotes.map((row) => [row.id, row]))
+		).find((option) => option.scope === 'desk');
+		expect(keptSnapshot.onCanvasCount).toBe(countNotesOnCanvas(items, known));
+		expect(keptDesk?.choiceLabel).toBe('Whole desk · 2');
+		expect(keptDesk?.count).toBe(keptSnapshot.onCanvasCount);
+		expect(keptSnapshot.offCanvasLine).toBe('2 on canvas · 2 off canvas (kept)');
+
+		const scratchNotes = [...onCanvas, note('c', 3), note('d', 4)];
+		const scratchSnapshot = createFinishSnapshot({
+			sessionId: 'desk',
+			canvasId: 'canvas',
+			notes: scratchNotes,
+			canvasItems: items,
+			selectedNoteIds: [],
+			operations: []
+		});
+		expect(scratchSnapshot.onCanvasCount).toBe(
+			countNotesOnCanvas(items, canvasNoteIdSet(scratchNotes))
+		);
+		expect(scratchSnapshot.offCanvasLine).toBe('2 on canvas · 2 off canvas');
+		expect(scratchSnapshot.offCanvasLine).not.toContain('(kept)');
 	});
 
 	it('keeps a plain Whole desk count when the desk is not larger after Split by lines', () => {

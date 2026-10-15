@@ -199,6 +199,15 @@
 					</div>
 				</fieldset>
 			{/if}
+			{#if snapshot?.offCanvasLine}
+				<p
+					class="mash-type-caption"
+					data-testid="finish-off-canvas"
+					style="color: var(--mash-ink-muted);"
+				>
+					{snapshot.offCanvasLine}
+				</p>
+			{/if}
 			<p class="sr-only" aria-live="polite" aria-atomic="true">
 				{takeawayAnnouncement}
 			</p>

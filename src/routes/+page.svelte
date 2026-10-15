@@ -68,7 +68,12 @@
 	import { clearDismissedForCanvas } from '$lib/canvas-dismiss';
 	import { findBacklinks, findOutgoingNotes } from '$lib/links';
 	import { readSyncHygiene, recordSyncExport } from '$lib/sync-hygiene';
-	import { loadSnapPref, saveSnapPref } from '$lib/canvas-geom';
+	import {
+		canvasNoteIdSet,
+		countNotesOnCanvas,
+		loadSnapPref,
+		saveSnapPref
+	} from '$lib/canvas-geom';
 	import {
 		COLLAPSED_CARD,
 		EXPANDED_CARD,
@@ -1497,7 +1502,7 @@
 	);
 	let screenplayChipTitle = $derived(peel.canvasTitle);
 	let canvasPlaceCount = $derived(
-		canvas.canvasItems.filter((item) => library.notesById.has(item.noteId)).length
+		countNotesOnCanvas(canvas.canvasItems, canvasNoteIdSet(library.notes))
 	);
 	let selectedCanvasColor = $derived.by(() => {
 		const selected = new Set(library.selectionIds);

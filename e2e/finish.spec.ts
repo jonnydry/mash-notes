@@ -93,7 +93,7 @@ test.describe('Consolidated Finish takeaway', () => {
 		await finish.getByRole('button', { name: /Export PDF/ }).click();
 		const exportSheet = page.getByRole('dialog', { name: 'Export a polished document' });
 		await expect(exportSheet).toBeVisible();
-		await expect(exportSheet).toContainText('Whole desk · 4 cards');
+		await expect(exportSheet).toContainText('Whole desk · 2 cards');
 		await expect(exportSheet.getByRole('button', { name: 'Download PDF' })).toBeVisible();
 		await exportSheet.getByRole('button', { name: 'Close export sheet' }).click();
 

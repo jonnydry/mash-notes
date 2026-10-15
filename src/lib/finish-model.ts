@@ -1,3 +1,4 @@
+import { canvasNoteIdSet, countNotesOnCanvas } from './canvas-geom';
 import type { CanvasItem, Note, Operation } from './types';
 
 export type FinishScope = 'selected' | 'results' | 'desk';
@@ -16,6 +17,16 @@ export type FinishSnapshot = {
 	canvasId: string | null;
 	/** Cards actually placed on the canvas, in spatial order. */
 	canvasNoteIds: string[];
+	/**
+	 * Placement count from `countNotesOnCanvas` — the same number as the desk chip.
+	 */
+	onCanvasCount: number;
+	/**
+	 * Own line under the scope choices when notes exist that are not on the canvas.
+	 * "(kept)" is included only when every one of those notes already has scope kept.
+	 * Clear does not promote the others; it parks the whole desk in recovery.
+	 */
+	offCanvasLine: string | null;
 	selectedNoteIds: string[];
 	resultNoteIds: string[];
 	deskNoteIds: string[];
@@ -76,6 +87,20 @@ export function spatialNoteIds(items: CanvasItem[]): string[] {
 		.map(({ item }) => item.noteId);
 }
 
+/**
+ * Names notes that are not on the canvas. "(kept)" only when Clear would actually
+ * preserve them: every one already has scope `kept`. Scratch notes ride along into
+ * 7-day recovery and are deleted after that, so they are not labeled kept.
+ */
+export function finishOffCanvasLine(
+	onCanvasCount: number,
+	offCanvasNotes: readonly Note[]
+): string | null {
+	if (offCanvasNotes.length === 0) return null;
+	const kept = offCanvasNotes.every((note) => note.scope === 'kept');
+	return `${onCanvasCount} on canvas · ${offCanvasNotes.length} off canvas${kept ? ' (kept)' : ''}`;
+}
+
 export function createFinishSnapshot(input: FinishSnapshotInput): FinishSnapshot {
 	const sessionNotes = input.notes.filter(
 		(note) => note.deletedAt == null && (!note.sessionId || note.sessionId === input.sessionId)
@@ -93,6 +118,7 @@ export function createFinishSnapshot(input: FinishSnapshotInput): FinishSnapshot
 		validIds
 	);
 
+	const onCanvasCount = countNotesOnCanvas(input.canvasItems, canvasNoteIdSet(input.notes));
 	const onCanvas = uniqueValidIds(spatialNoteIds(input.canvasItems), validIds);
 	const placed = new Set(onCanvas);
 	const remaining = sessionNotes
@@ -108,10 +134,17 @@ export function createFinishSnapshot(input: FinishSnapshotInput): FinishSnapshot
 
 	// An empty canvas has no takeaway. Notes that are not placed are not cards to take.
 	const canvasEmpty = onCanvas.length === 0;
+	const offCanvasNotes = canvasEmpty
+		? []
+		: remaining
+				.map((id) => sessionNotes.find((note) => note.id === id))
+				.filter((note): note is Note => Boolean(note));
 	return {
 		sessionId: input.sessionId,
 		canvasId: input.canvasId,
 		canvasNoteIds: onCanvas,
+		onCanvasCount,
+		offCanvasLine: finishOffCanvasLine(onCanvasCount, offCanvasNotes),
 		selectedNoteIds: canvasEmpty ? [] : selectedNoteIds,
 		resultNoteIds: canvasEmpty ? [] : resultNoteIds,
 		deskNoteIds: canvasEmpty ? [] : [...onCanvas, ...remaining],
@@ -186,10 +219,9 @@ export function finishScopeOptions(
 		const label =
 			scope === 'selected' ? 'Selected' : scope === 'results' ? 'Results' : 'Whole desk';
 		const named = scope === 'desk' ? splitLinesDeskChoiceLabel(snapshot, noteIds, notesById) : null;
-		const choiceLabel = named ?? `${label} · ${noteIds.length}`;
-		const countLabel = named
-			? named
-			: `${noteIds.length} ${noteIds.length === 1 ? 'card' : 'cards'}`;
+		const shownCount = scope === 'desk' && !named ? snapshot.onCanvasCount : noteIds.length;
+		const choiceLabel = named ?? `${label} · ${shownCount}`;
+		const countLabel = named ? named : `${shownCount} ${shownCount === 1 ? 'card' : 'cards'}`;
 		return {
 			scope,
 			label,
@@ -197,7 +229,7 @@ export function finishScopeOptions(
 			countLabel,
 			namesExtras: named !== null,
 			noteIds,
-			count: noteIds.length,
+			count: shownCount,
 			enabled: scope === 'desk' || noteIds.length > 0,
 			preview: titles.join(', ') + (noteIds.length > titles.length ? '…' : '')
 		};
