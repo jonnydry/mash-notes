@@ -951,8 +951,7 @@
 		getActiveCanvasId: () => canvas.activeCanvas?.id,
 		getCanvasFolder: () => peel.canvasFolder,
 		activeNoteOwnership,
-		getCanvasItemCount: () => canvas.canvasItems.length,
-		getSpawnPoint: (size, index) => canvas.canvasBoard?.getSpawnPoint(size, index),
+		getSpawnPoint: (size) => canvas.canvasBoard?.getSpawnPoint(size),
 		refreshCanvasItems: () => canvas.refreshCanvasItems(),
 		adoptNotesToLibrary: (notes) => {
 			for (const note of notes) addNoteToSearch(note);
@@ -1223,7 +1222,7 @@
 
 	async function openClippingsOnCanvas(noteIds: string[], close: () => void) {
 		if (noteIds.length === 0) return;
-		const spawn = canvas.canvasBoard?.getSpawnPoint(COLLAPSED_CARD, canvas.canvasItems.length) ?? {
+		const spawn = canvas.canvasBoard?.getSpawnPoint(COLLAPSED_CARD) ?? {
 			x: 80,
 			y: 80
 		};
@@ -1502,7 +1501,10 @@
 	);
 	let screenplayChipTitle = $derived(peel.canvasTitle);
 	let canvasPlaceCount = $derived(
-		countNotesOnCanvas(canvas.canvasItems, canvasNoteIdSet(library.notes))
+		countNotesOnCanvas(
+			canvas.canvasItems,
+			canvasNoteIdSet(library.notes, sessionManager.activeSession?.id)
+		)
 	);
 	let selectedCanvasColor = $derived.by(() => {
 		const selected = new Set(library.selectionIds);
@@ -1614,7 +1616,7 @@
 			// cannot rehydrate its expanded dimensions during the canvas refresh.
 			await canvas.collapseSticky();
 			// Place via drop path (bumps load seq) and expand in-place — stage is for explicit Edit.
-			const spawn = canvas.canvasBoard?.getSpawnPoint(EXPANDED_CARD, canvas.canvasItems.length) ?? {
+			const spawn = canvas.canvasBoard?.getSpawnPoint(EXPANDED_CARD) ?? {
 				x: 80,
 				y: 80
 			};

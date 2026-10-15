@@ -82,7 +82,7 @@ export function spatialNoteIds(items: CanvasItem[]): string[] {
 		.map(({ item }) => item.noteId);
 }
 
-function recoveryWindowPhrase(): string {
+export function recoveryWindowPhrase(): string {
 	const days: number = RECOVERY_DAYS;
 	return `recoverable for ${days} day${days === 1 ? '' : 's'}`;
 }
@@ -104,7 +104,10 @@ export function createFinishSnapshot(input: FinishSnapshotInput): FinishSnapshot
 		validIds
 	);
 
-	const onCanvasCount = countNotesOnCanvas(input.canvasItems, canvasNoteIdSet(input.notes));
+	const onCanvasCount = countNotesOnCanvas(
+		input.canvasItems,
+		canvasNoteIdSet(input.notes, input.sessionId)
+	);
 	const onCanvas = uniqueValidIds(spatialNoteIds(input.canvasItems), validIds);
 	const placed = new Set(onCanvas);
 	const remaining = sessionNotes

@@ -137,7 +137,7 @@ describe('canvas-geom', () => {
 		expect(v.panX).toBeCloseTo(-25);
 	});
 
-	it('places later cards at the view center instead of a 24px diagonal', () => {
+	it('places an empty desk at the view center', () => {
 		const base = viewCenterPlacement({
 			panX: 0,
 			panY: 0,
@@ -145,22 +145,20 @@ describe('canvas-geom', () => {
 			viewW: 800,
 			viewH: 600,
 			cardW: 200,
-			cardH: 100,
-			index: 0
+			cardH: 100
 		});
 		expect(base).toEqual({ x: 312, y: 240 });
 
-		const next = viewCenterPlacement({
+		const again = viewCenterPlacement({
 			panX: 0,
 			panY: 0,
 			scale: 1,
 			viewW: 800,
 			viewH: 600,
 			cardW: 200,
-			cardH: 100,
-			index: 1
+			cardH: 100
 		});
-		expect(next).toEqual(base);
+		expect(again).toEqual(base);
 
 		const zoomed = viewCenterPlacement({
 			panX: 100,
@@ -169,8 +167,7 @@ describe('canvas-geom', () => {
 			viewW: 800,
 			viewH: 600,
 			cardW: 200,
-			cardH: 100,
-			index: 0
+			cardH: 100
 		});
 		// center board = ((400-100)/2, (300-50)/2) = (150, 125); top-left = (50, 75) → snap (48, 72)
 		expect(zoomed).toEqual({ x: 48, y: 72 });
@@ -185,7 +182,6 @@ describe('canvas-geom', () => {
 			viewH: 600,
 			cardW: 200,
 			cardH: 100,
-			index: 0,
 			existing: [{ x: 300, y: 240, w: 200, h: 100 }]
 		});
 		expect(placed).not.toEqual({ x: 300, y: 240 });
@@ -205,6 +201,90 @@ describe('canvas-geom', () => {
 			existing: [{ x: 312, y: 240, w: 120, h: 80 }]
 		});
 		expect(covered).not.toEqual({ x: 312, y: 240 });
+	});
+
+	function placeSequence(
+		count: number,
+		view: { viewW: number; viewH: number; cardW: number; cardH: number }
+	) {
+		const placed: Array<{ x: number; y: number; w: number; h: number }> = [];
+		for (let i = 0; i < count; i++) {
+			const next = viewCenterPlacement({
+				panX: 0,
+				panY: 0,
+				scale: 1,
+				viewW: view.viewW,
+				viewH: view.viewH,
+				cardW: view.cardW,
+				cardH: view.cardH,
+				existing: placed
+			});
+			placed.push({ ...next, w: view.cardW, h: view.cardH });
+		}
+		return placed;
+	}
+
+	it('keeps 10 or more cards off the same spot', () => {
+		const placed = placeSequence(12, { viewW: 1280, viewH: 800, cardW: 220, cardH: 120 });
+		const spots = new Set(placed.map((card) => `${card.x},${card.y}`));
+		expect(placed.length).toBeGreaterThanOrEqual(10);
+		expect(spots.size).toBe(placed.length);
+	});
+
+	it('places 16 new notes inside a 1280×800 view without stacking', () => {
+		const viewW = 1280;
+		const viewH = 800;
+		const cardW = 280;
+		const cardH = 220;
+		const placed = placeSequence(16, { viewW, viewH, cardW, cardH });
+		const spots = new Set(placed.map((card) => `${card.x},${card.y}`));
+		expect(spots.size).toBe(16);
+		for (const card of placed) {
+			expect(card.x).toBeGreaterThanOrEqual(0);
+			expect(card.y).toBeGreaterThanOrEqual(0);
+			expect(card.x + cardW).toBeLessThanOrEqual(viewW);
+			expect(card.y + cardH).toBeLessThanOrEqual(viewH);
+		}
+	});
+
+	it('stays inside a packed view and off every occupied spot', () => {
+		const viewW = 1280;
+		const viewH = 800;
+		const cardW = 280;
+		const cardH = 220;
+		const origin = viewCenterPlacement({
+			panX: 0,
+			panY: 0,
+			scale: 1,
+			viewW,
+			viewH,
+			cardW,
+			cardH
+		});
+		const existing = [
+			{ x: -2000, y: -2000, w: 8000, h: 8000 },
+			...Array.from({ length: 8 }, (_, k) => ({
+				x: origin.x + k * GRID,
+				y: origin.y + k * GRID,
+				w: cardW,
+				h: cardH
+			}))
+		];
+		const placed = viewCenterPlacement({
+			panX: 0,
+			panY: 0,
+			scale: 1,
+			viewW,
+			viewH,
+			cardW,
+			cardH,
+			existing
+		});
+		expect(placed.x).toBeGreaterThanOrEqual(0);
+		expect(placed.y).toBeGreaterThanOrEqual(0);
+		expect(placed.x + cardW).toBeLessThanOrEqual(viewW);
+		expect(placed.y + cardH).toBeLessThanOrEqual(viewH);
+		expect(existing.some((card) => card.x === placed.x && card.y === placed.y)).toBe(false);
 	});
 
 	it('auto-place slots stay on the Snap lattice', () => {

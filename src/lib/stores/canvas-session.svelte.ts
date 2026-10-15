@@ -141,10 +141,7 @@ export function computeExpandBumps(
 }
 
 export type CanvasBoardApi = {
-	getSpawnPoint: (
-		size: { w: number; h: number },
-		cascadeIndex?: number
-	) => { x: number; y: number };
+	getSpawnPoint: (size: { w: number; h: number }) => { x: number; y: number };
 	ensureNoteVisible: (noteId: string) => void;
 	frameNoteForEditing?: (noteId: string, maxScale?: number) => void;
 	applyAlign: (mode: AlignMode) => void;
@@ -1623,7 +1620,7 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		canvasLoadSeq++;
 		const existing = canvasItems.find((i) => i.noteId === noteId);
 		if (!existing) {
-			const spawn = canvasBoard?.getSpawnPoint(COLLAPSED_CARD, canvasItems.length) ?? {
+			const spawn = canvasBoard?.getSpawnPoint(COLLAPSED_CARD) ?? {
 				x: 80,
 				y: 80
 			};

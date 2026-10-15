@@ -14,6 +14,7 @@
 		defaultFinishScope,
 		finishCanvasIsEmpty,
 		finishOffCanvasLine,
+		recoveryWindowPhrase,
 		finishScopeOptions,
 		finishSectionHeading,
 		finishTakeawayAnnouncement,
@@ -311,7 +312,12 @@
 							bind:group={disposition}
 						/>
 						<Trash2 class="h-4 w-4 shrink-0 text-[var(--mash-danger)]" />
-						<span><strong class="block">Clear now</strong>Recoverable 7 days</span>
+						<span
+							><strong class="block">Clear now</strong>{recoveryWindowPhrase().replace(
+								/^r/,
+								'R'
+							)}</span
+						>
 					</label>
 				</div>
 			</fieldset>

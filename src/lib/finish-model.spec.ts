@@ -416,4 +416,38 @@ describe('Finish snapshot', () => {
 		expect(desk?.choiceLabel).toBe('Whole desk · 2');
 		expect(desk?.namesExtras).toBe(false);
 	});
+
+	it('ignores another desk cards so on canvas plus off canvas equals the action total', () => {
+		const notes = [
+			note('a', 1),
+			note('b', 2),
+			note('c', 3),
+			note('d', 4),
+			note('foreign', 5, 'other-desk')
+		];
+		const items = [item('ia', 'a', 0, 0), item('ib', 'b', 40, 0), item('if', 'foreign', 80, 0)];
+		const snapshot = createFinishSnapshot({
+			sessionId: 'desk',
+			canvasId: 'canvas',
+			notes,
+			canvasItems: items,
+			selectedNoteIds: [],
+			operations: []
+		});
+		const offCanvas = snapshot.deskNoteIds.length - snapshot.canvasNoteIds.length;
+
+		expect(snapshot.deskNoteIds).not.toContain('foreign');
+		expect(snapshot.onCanvasCount).toBe(2);
+		expect(offCanvas).toBe(2);
+		expect(snapshot.onCanvasCount + offCanvas).toBe(snapshot.deskNoteIds.length);
+		expect(
+			finishOffCanvasLine(snapshot, new Map(notes.map((row) => [row.id, row])), {
+				scope: 'desk',
+				keepTakeaway: false,
+				disposition: 'leave'
+			})
+		).toBe('2 on canvas · 2 off canvas');
+		expect(countNotesOnCanvas(items, canvasNoteIdSet(notes))).toBe(3);
+		expect(countNotesOnCanvas(items, canvasNoteIdSet(notes, 'desk'))).toBe(2);
+	});
 });

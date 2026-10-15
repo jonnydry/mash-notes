@@ -6,6 +6,7 @@ import {
 	createFinishSnapshot,
 	finishExportSourceLabel,
 	noteIdsForFinishScope,
+	recoveryWindowPhrase,
 	notesForFinishScope,
 	type FinishDraft,
 	type FinishExportKind,
@@ -178,8 +179,11 @@ export function createFinishSessionUi(deps: FinishSessionUiDeps) {
 			deps.setSessionPanelOpen(false);
 			const keptPart =
 				promotedCount > 0 ? `Kept ${promotedCount} card${promotedCount === 1 ? '' : 's'} · ` : '';
-			deps.flashToast(`${keptPart}“${title}” moved to Recently cleared for 7 days`, 4600);
-			return { ok: true, message: `${keptPart}${title} is recoverable for 7 days.` };
+			deps.flashToast(
+				`${keptPart}“${title}” moved to Recently cleared, ${recoveryWindowPhrase()}`,
+				4600
+			);
+			return { ok: true, message: `${keptPart}${title} is ${recoveryWindowPhrase()}.` };
 		}
 
 		deps.setSessionPanelOpen(false);
@@ -209,7 +213,7 @@ export function createFinishSessionUi(deps: FinishSessionUiDeps) {
 			: '';
 		deps.askConfirm({
 			title: 'Clear this desk?',
-			message: `“${title}” will leave your active desks.${keepMessage} You can restore the desk from Recently cleared for 7 days.`,
+			message: `“${title}” will leave your active desks.${keepMessage} You can restore the desk from Recently cleared, ${recoveryWindowPhrase()}.`,
 			confirmLabel: draft.keepTakeaway ? 'Keep takeaway and clear' : 'Clear desk',
 			danger: true,
 			action: async () => {

@@ -1764,10 +1764,7 @@
 	}
 
 	/** Board-space top-left for a new card in the current viewport. */
-	export function getSpawnPoint(
-		size: { w: number; h: number },
-		cascadeIndex = 0
-	): { x: number; y: number } {
+	export function getSpawnPoint(size: { w: number; h: number }): { x: number; y: number } {
 		const view = boardEl?.getBoundingClientRect();
 		const viewW = view?.width ?? 800;
 		const viewH = view?.height ?? 600;
@@ -1783,7 +1780,6 @@
 			viewH,
 			cardW: size.w,
 			cardH: size.h,
-			index: cascadeIndex,
 			existing
 		});
 	}
