@@ -270,7 +270,9 @@ function rectOverlapRatio(
 	const y2 = Math.min(ay + ah, by + bh);
 	const iw = Math.max(0, x2 - x1);
 	const ih = Math.max(0, y2 - y1);
-	const area = aw * ah;
+	// Use the smaller card. A larger new card can cover an existing one while
+	// overlapping only a modest share of its own area.
+	const area = Math.min(aw * ah, bw * bh);
 	if (area <= 0) return 0;
 	return (iw * ih) / area;
 }

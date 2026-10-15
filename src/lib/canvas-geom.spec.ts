@@ -193,6 +193,20 @@ describe('canvas-geom', () => {
 		expect(placed.y % GRID).toBe(0);
 	});
 
+	it('steps aside when a larger card would cover a smaller one', () => {
+		const covered = viewCenterPlacement({
+			panX: 0,
+			panY: 0,
+			scale: 1,
+			viewW: 800,
+			viewH: 600,
+			cardW: 200,
+			cardH: 100,
+			existing: [{ x: 312, y: 240, w: 120, h: 80 }]
+		});
+		expect(covered).not.toEqual({ x: 312, y: 240 });
+	});
+
 	it('auto-place slots stay on the Snap lattice', () => {
 		expect(GRID_ORIGIN % GRID).toBe(0);
 		expect(GRID_SLOT_W % GRID).toBe(0);
