@@ -202,3 +202,21 @@ test('collapse returns a bumped neighbor after a jiggle that ends where it start
 	await expect.poll(async () => boardPosition(neighbor)).toEqual(original);
 	await expectOriginalAfterReload(page, original);
 });
+
+test('New note leaves a bumped neighbor where undo put it after collapse', async ({ page }) => {
+	test.setTimeout(60_000);
+	const { neighbor, bumped } = await bumpNeighborAgainstAnchor(page);
+	await dragCard(page, neighbor, 0, 240);
+	await collapseExpanded(page);
+	await expect(page.getByRole('group', { name: 'Anchor' })).not.toHaveAttribute(
+		'data-expanded',
+		'true'
+	);
+	await expect.poll(async () => boardPosition(neighbor)).not.toEqual(bumped);
+	await page.keyboard.press('Control+z');
+	await expect.poll(async () => boardPosition(neighbor)).toEqual(bumped);
+	await page.getByRole('button', { name: 'New note' }).click();
+	await expect(page.getByRole('group', { name: 'Untitled' })).toBeVisible();
+	await expect.poll(async () => boardPosition(neighbor)).toEqual(bumped);
+	await expectOriginalAfterReload(page, bumped);
+});

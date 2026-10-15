@@ -192,6 +192,14 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 	let expandedNoteId = $state<string | null>(null);
 	let expandFocus = $state<'title' | 'body' | null>(null);
 	let bumpRestore: Map<string, { x: number; y: number }> | null = $state(null);
+	/** Bumps whenever the expanded note changes, including collapse and re-expand. */
+	let bumpExpandSession = 0;
+
+	function assignExpandedNoteId(next: string | null) {
+		if (next === expandedNoteId) return;
+		expandedNoteId = next;
+		bumpExpandSession++;
+	}
 	/** Bump, restore, drag, organize, compact, undo, and redo writes must not pass each other. */
 	let layoutWrite: Promise<unknown> = Promise.resolve();
 	let settlingIds = $state<Set<string>>(new Set());
@@ -359,7 +367,7 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 				selectedCanvasElementId = null;
 			}
 			if (expandedNoteId && !items.some((i) => i.noteId === expandedNoteId)) {
-				expandedNoteId = null;
+				assignExpandedNoteId(null);
 				expandFocus = null;
 				bumpRestore = null;
 			}
@@ -742,7 +750,7 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		const entry = canvasUndo.undo();
 		canvasUndoTick++;
 		if (!entry) return;
-		rememberClearedBumpSpots(entry.clearedBumpRestore);
+		if (clearedBumpSpotsStillOpen(entry)) rememberClearedBumpSpots(entry.clearedBumpRestore);
 		await opts.applyNoteReceipt?.(entry.notesBefore, entry.notesAfter, 'before');
 		await applyCanvasItemReceipt(entry.itemsBefore, entry.itemsAfter, 'before');
 		if (entry.before.length > 0) {
@@ -767,7 +775,7 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		const entry = canvasUndo.redo();
 		canvasUndoTick++;
 		if (!entry) return;
-		forgetClearedBumpSpots(entry.clearedBumpRestore);
+		if (clearedBumpSpotsStillOpen(entry)) forgetClearedBumpSpots(entry.clearedBumpRestore);
 		await opts.applyNoteReceipt?.(entry.notesBefore, entry.notesAfter, 'after');
 		await applyCanvasItemReceipt(entry.itemsBefore, entry.itemsAfter, 'after');
 		if (entry.after.length > 0) {
@@ -857,7 +865,8 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 				affectedNoteIds: moveOpts?.affectedNoteIds,
 				before: beforeSnaps,
 				after: afterSnaps,
-				clearedBumpRestore: clearedBumpRestore.length > 0 ? clearedBumpRestore : undefined
+				clearedBumpRestore: clearedBumpRestore.length > 0 ? clearedBumpRestore : undefined,
+				bumpExpandSession: clearedBumpRestore.length > 0 ? bumpExpandSession : undefined
 			});
 			canvasUndoTick++;
 		}
@@ -1505,7 +1514,7 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		pruneCanvasUndo([itemId]);
 
 		if (item && expandedNoteId === item.noteId) {
-			expandedNoteId = null;
+			assignExpandedNoteId(null);
 			expandFocus = null;
 			restoreBumpLayout();
 		}
@@ -1598,6 +1607,15 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		return removed;
 	}
 
+	/** Undo and redo touch put-back spots only for the expand that cleared them. */
+	function clearedBumpSpotsStillOpen(entry: { bumpExpandSession?: number }): boolean {
+		return (
+			entry.bumpExpandSession !== undefined &&
+			entry.bumpExpandSession === bumpExpandSession &&
+			expandedNoteId !== null
+		);
+	}
+
 	function rememberClearedBumpSpots(
 		spots: Array<{ itemId: string; x: number; y: number }> | undefined
 	) {
@@ -1670,7 +1688,7 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 		}
 		opts.selectNote(noteId, { keepSelection: true });
 		expandFocus = focus;
-		expandedNoteId = noteId;
+		assignExpandedNoteId(noteId);
 		const item = canvasItems.find((i) => i.noteId === noteId);
 		if (!item) return;
 		// The display layer supplies expanded minimums without persisting a transient
@@ -1682,7 +1700,7 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 
 	async function collapseSticky() {
 		const noteId = expandedNoteId;
-		expandedNoteId = null;
+		assignExpandedNoteId(null);
 		expandFocus = null;
 		// Collapse returns each neighbor to the position saved when it was bumped.
 		const restore = restoreBumpLayout();
@@ -1847,7 +1865,7 @@ export function createCanvasSession(opts: CreateCanvasSessionOpts) {
 			return expandedNoteId;
 		},
 		set expandedNoteId(v: string | null) {
-			expandedNoteId = v;
+			assignExpandedNoteId(v);
 		},
 		get expandFocus() {
 			return expandFocus;

@@ -336,4 +336,43 @@ describe('layout write queue', () => {
 		expect(stored?.x).toBe(bumped.x + 24);
 		expect(stored?.y).toBe(bumped.y);
 	});
+
+	it('undo after collapse does not restore a put-back spot for a closed expand', async () => {
+		const { anchorNote, neighbor, session } = await setup();
+		session.expandSticky(anchorNote.id);
+		const bumped = session.canvasItems.find((item) => item.id === neighbor.id)!;
+		await session.handleCanvasMoveEnd(
+			[{ itemId: neighbor.id, x: 600, y: 48 }],
+			[{ itemId: neighbor.id, x: bumped.x, y: bumped.y }]
+		);
+		await session.collapseSticky();
+		const parked = session.canvasItems.find((item) => item.id === neighbor.id);
+		expect(parked?.x).toBe(600);
+		expect(parked?.y).toBe(48);
+
+		await session.undoCanvasLayout();
+		const afterUndo = session.canvasItems.find((item) => item.id === neighbor.id);
+		expect(afterUndo?.x).toBe(bumped.x);
+		expect(afterUndo?.y).toBe(bumped.y);
+		expect(session.bumpRestore).toBeNull();
+
+		// New note collapses even when nothing is expanded.
+		await session.collapseSticky();
+		const ui = session.canvasItems.find((item) => item.id === neighbor.id);
+		const stored = await db.canvasItems.get(neighbor.id);
+		expect(ui?.x).toBe(bumped.x);
+		expect(ui?.y).toBe(bumped.y);
+		expect(stored?.x).toBe(bumped.x);
+		expect(stored?.y).toBe(bumped.y);
+
+		await session.redoCanvasLayout();
+		expect(session.bumpRestore).toBeNull();
+		await session.collapseSticky();
+		const afterRedo = session.canvasItems.find((item) => item.id === neighbor.id);
+		const storedRedo = await db.canvasItems.get(neighbor.id);
+		expect(afterRedo?.x).toBe(600);
+		expect(afterRedo?.y).toBe(48);
+		expect(storedRedo?.x).toBe(600);
+		expect(storedRedo?.y).toBe(48);
+	});
 });
