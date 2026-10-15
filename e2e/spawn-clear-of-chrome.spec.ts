@@ -48,7 +48,12 @@ type FloatingOffender = {
 };
 
 /**
- * Controls that paint above the cards, accept clicks, and overlap the canvas.
+ * Controls that paint above the cards and overlap the canvas.
+ * A container with pointer-events: none still counts when it or any descendant
+ * takes clicks (the top chrome is pointer-events: none and its Undo button is not).
+ * A position:fixed layer counts even when nothing inside it takes a click: the
+ * toast is pointer-events: none and has no child control, and placement only
+ * sees it while it is showing.
  * The element or an ancestor must carry data-floating-chrome. Scans the whole
  * document, because the Ingredients and Settings panels are mounted outside
  * the canvas overlay.
@@ -114,6 +119,22 @@ async function unmarkedFloatingChrome(page: Page): Promise<FloatingOffender[]> {
 			);
 		}
 
+		function takesClicks(el: HTMLElement): boolean {
+			const computed = getComputedStyle(el);
+			if (computed.pointerEvents === 'none') return false;
+			if (computed.visibility === 'hidden' || computed.display === 'none') return false;
+			return true;
+		}
+
+		/** The node itself, or a descendant such as an Undo button inside a pass-through container. */
+		function subtreeTakesClicks(el: HTMLElement): boolean {
+			if (takesClicks(el)) return true;
+			for (const node of el.querySelectorAll('*')) {
+				if (node instanceof HTMLElement && takesClicks(node)) return true;
+			}
+			return false;
+		}
+
 		function selectorFor(el: HTMLElement): string {
 			if (el.id) return `#${CSS.escape(el.id)}`;
 			const testid = el.getAttribute('data-testid');
@@ -137,12 +158,13 @@ async function unmarkedFloatingChrome(page: Page): Promise<FloatingOffender[]> {
 			) {
 				continue;
 			}
-			if (style.pointerEvents === 'none') continue;
 			if (style.visibility === 'hidden' || style.display === 'none' || style.opacity === '0')
 				continue;
 			const rect = node.getBoundingClientRect();
 			if (!intersectsCanvas(rect)) continue;
 			if (!stacksAboveCardLayer(node)) continue;
+			// Fixed layers such as the toast sit over the cards even with pointer-events: none.
+			if (!subtreeTakesClicks(node) && style.position !== 'fixed') continue;
 			offenders.push({
 				selector: selectorFor(node),
 				zIndex: style.zIndex,
@@ -351,7 +373,15 @@ test('floating controls over the canvas carry data-floating-chrome', async ({ pa
 	test.setTimeout(120_000);
 	await page.setViewportSize({ width: 1280, height: 800 });
 
+	async function raiseToast() {
+		const toast = page.getByTestId('action-status');
+		if (await toast.isVisible().catch(() => false)) return;
+		await page.getByRole('button', { name: 'New note' }).click();
+		await expect(toast).toBeVisible();
+	}
+
 	async function scan(state: string) {
+		await raiseToast();
 		const offenders = await unmarkedFloatingChrome(page);
 		const detail = formatOffenders(offenders);
 		if (detail) console.log(`${state}\n${detail}`);

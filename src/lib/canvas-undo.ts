@@ -40,6 +40,14 @@ export type CanvasUndoEntry = {
 	/** Full cosmetic element list before/after a visual annotation action. */
 	elementsBefore?: CanvasElement[];
 	elementsAfter?: CanvasElement[];
+	/**
+	 * Put-back spots this move dropped. Undo restores them and redo drops them
+	 * again only while `bumpExpandSession` is still the open expand.
+	 * A drag that ends on the bumped spot does not record any.
+	 */
+	clearedBumpRestore?: Array<{ itemId: string; x: number; y: number }>;
+	/** Expand generation that owned `clearedBumpRestore`. */
+	bumpExpandSession?: number;
 };
 
 const MAX_ENTRIES = 40;
@@ -172,7 +180,8 @@ export class CanvasUndoStack {
 				return {
 					...entry,
 					before: entry.before.filter((s) => !drop.has(s.itemId)),
-					after: entry.after.filter((s) => !drop.has(s.itemId))
+					after: entry.after.filter((s) => !drop.has(s.itemId)),
+					clearedBumpRestore: entry.clearedBumpRestore?.filter((s) => !drop.has(s.itemId))
 				};
 			}
 			for (const s of entry.before) {
