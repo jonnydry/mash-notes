@@ -11,6 +11,7 @@ import {
 	DEFAULT_SCRATCH_RETENTION_DAYS,
 	SCRATCH_RETENTION_OPTIONS,
 	expireScratchSession,
+	recoveryDeadline,
 	scratchExpiry,
 	shouldPermanentlyDeleteSession,
 	withMeaningfulActivity
@@ -222,7 +223,7 @@ export function createSessionManager() {
 			status: 'recovering',
 			modified: now,
 			expiresAt: now,
-			recoveryUntil: now + 7 * 24 * 60 * 60 * 1000
+			recoveryUntil: recoveryDeadline(now)
 		};
 		await db.sessions.put(recovering);
 		replaceSession(recovering);
