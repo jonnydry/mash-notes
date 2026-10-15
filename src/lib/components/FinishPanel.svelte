@@ -13,6 +13,7 @@
 	import {
 		defaultFinishScope,
 		finishCanvasIsEmpty,
+		finishOffCanvasLine,
 		finishScopeOptions,
 		finishSectionHeading,
 		finishTakeawayAnnouncement,
@@ -51,6 +52,9 @@
 	let commitStatus = $state<FinishCommitResult | null>(null);
 	let options = $derived(snapshot ? finishScopeOptions(snapshot, notesById) : []);
 	let activeOption = $derived(options.find((option) => option.scope === scope) ?? options[0]);
+	let offCanvasLine = $derived(
+		snapshot ? finishOffCanvasLine(snapshot, notesById, { scope, keepTakeaway, disposition }) : null
+	);
 	let hasTakeaway = $derived((activeOption?.count ?? 0) > 0);
 	let canvasEmpty = $derived(snapshot ? finishCanvasIsEmpty(snapshot) : false);
 	let takeawayPreview = $derived(
@@ -199,13 +203,9 @@
 					</div>
 				</fieldset>
 			{/if}
-			{#if snapshot?.offCanvasLine}
-				<p
-					class="mash-type-caption"
-					data-testid="finish-off-canvas"
-					style="color: var(--mash-ink-muted);"
-				>
-					{snapshot.offCanvasLine}
+			{#if offCanvasLine}
+				<p class="mash-finish-off-canvas mash-type-caption" data-testid="finish-off-canvas">
+					{offCanvasLine}
 				</p>
 			{/if}
 			<p class="sr-only" aria-live="polite" aria-atomic="true">
