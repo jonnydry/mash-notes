@@ -108,6 +108,10 @@ export default defineConfig({
 					]
 				},
 				generateSW: {
+					// vite-plugin-pwa 1 defaulted this to true. Workbox 8 defaults it to false.
+					cleanupOutdatedCaches: true,
+					// Hashed immutable files used to be precached with revision null.
+					dontCacheBustURLsMatching: /^_app\/immutable\//,
 					// Workbox 8 defaults this to true. The previous worker did not rewrite
 					// extensionless URLs to .html files.
 					cleanURLs: false,

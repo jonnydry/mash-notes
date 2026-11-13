@@ -39,7 +39,7 @@
 		"perf:budget": "node scripts/check-performance-budget.mjs",
 		"check:deploy": "node scripts/check-deployment-contract.mjs",
 		"audit:security": "npm audit --audit-level=high",
-		"ci": "npm run lint && npm run check && npm run audit:security && npm run build && npm run perf:budget && npm run check:deploy && npm run test && npm run test:e2e && npm run test:e2e:cross-browser"
+		"ci": "npm run lint && npm run check && npm run audit:security && npm run build && node scripts/check-boot-precache.mjs && npm run perf:budget && npm run check:deploy && npm run test && npm run test:e2e && npm run test:e2e:cross-browser"
 	},
 	"devDependencies": {
 		"@eslint/compat": "^2.1.1",

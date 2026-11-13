@@ -47,6 +47,9 @@ jobs:
       - name: Production build
         run: npm run build
 
+      - name: Boot precache
+        run: node scripts/check-boot-precache.mjs
+
       - name: Performance budgets
         run: npm run perf:budget
 
