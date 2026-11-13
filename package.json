@@ -80,7 +80,7 @@
 		"vitest": "^5.1.0"
 	},
 	"dependencies": {
-		"@lucide/svelte": "^1.70.0",
+		"@lucide/svelte": "^1.71.0",
 		"@pdf-lib/fontkit": "^1.1.1",
 		"dexie": "^4.4.7",
 		"docx": "^9.15.2",
