@@ -2,13 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import 'fake-indexeddb/auto';
 import { webcrypto } from 'node:crypto';
 
-vi.mock('$lib/sync-file', () => {
+vi.mock('#lib/sync-file.js', () => {
 	throw new Error('Failed to fetch dynamically imported module');
 });
 
-import { createNote, db } from '$lib/db';
-import { DESK_BUNDLE_IMPORT_OFFLINE_MESSAGE } from '$lib/desk-bundle-import';
-import { createNoteLibrary } from '$lib/stores/note-library.svelte';
+import { createNote, db } from '#lib/db.js';
+import { DESK_BUNDLE_IMPORT_OFFLINE_MESSAGE } from '#lib/desk-bundle-import.js';
+import { createNoteLibrary } from '#lib/stores/note-library.svelte.js';
 
 if (!globalThis.crypto?.randomUUID) {
 	Object.defineProperty(globalThis.crypto, 'randomUUID', {

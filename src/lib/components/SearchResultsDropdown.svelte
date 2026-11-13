@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { GripVertical, Pin } from '@lucide/svelte';
-	import type { Note } from '$lib/types';
-	import type { SearchResult } from '$lib/search';
-	import { formatNoteTimestamp, notePreview } from '$lib/format';
+	import type { Note } from '#lib/types.js';
+	import type { SearchResult } from '#lib/search.js';
+	import { formatNoteTimestamp, notePreview } from '#lib/format.js';
 
 	interface Props {
 		open: boolean;

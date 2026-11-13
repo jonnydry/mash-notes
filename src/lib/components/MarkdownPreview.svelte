@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { MarkdownNode } from '$lib/markdown-nodes';
+	import type { MarkdownNode } from '#lib/markdown-nodes.js';
 
 	interface Props {
 		nodes: MarkdownNode[];

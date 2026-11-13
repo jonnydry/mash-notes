@@ -32,7 +32,7 @@ import {
 	readStoredTypography,
 	suiteById
 } from './typography.svelte';
-import type { Note } from '$lib/types';
+import type { Note } from '#lib/types.js';
 
 const memory = new Map<string, string>();
 Object.defineProperty(globalThis, 'localStorage', {

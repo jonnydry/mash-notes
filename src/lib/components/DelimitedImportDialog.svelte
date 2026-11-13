@@ -5,8 +5,8 @@
 		delimitedTableBody,
 		type DelimitedAnalysis,
 		type DelimitedImportMode
-	} from '$lib/delimited-import';
-	import { focusTrap } from '$lib/focus-trap';
+	} from '#lib/delimited-import.js';
+	import { focusTrap } from '#lib/focus-trap.js';
 
 	interface Props {
 		open: boolean;

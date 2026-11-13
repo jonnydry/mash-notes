@@ -1,19 +1,19 @@
 <script lang="ts">
 	import { X } from '@lucide/svelte';
-	import { theme } from '$lib/stores/theme.svelte';
+	import { theme } from '#lib/stores/theme.svelte.js';
 	import {
 		typography,
 		type TextSizeId,
 		type TypographySuiteId
-	} from '$lib/stores/typography.svelte';
-	import { flatShortcutRows } from '$lib/keyboard-shortcuts';
-	import { formatNoteTimestamp } from '$lib/format';
-	import { syncBackupHint } from '$lib/sync-hygiene';
+	} from '#lib/stores/typography.svelte.js';
+	import { flatShortcutRows } from '#lib/keyboard-shortcuts.js';
+	import { formatNoteTimestamp } from '#lib/format.js';
+	import { syncBackupHint } from '#lib/sync-hygiene.js';
 	import {
 		DESK_BUNDLE_IMPORT_BUSY_LABEL,
 		DESK_BUNDLE_IMPORT_IDLE_LABEL
-	} from '$lib/desk-bundle-import';
-	import { MASH_APP_VERSION } from '$lib/app-version';
+	} from '#lib/desk-bundle-import.js';
+	import { MASH_APP_VERSION } from '#lib/app-version.js';
 
 	interface Props {
 		snapEnabled: boolean;

@@ -2,15 +2,15 @@
  * Peel / dock navigation state (filter + scanner mode).
  */
 import { tick } from 'svelte';
-import type { DockAction } from '$lib/dock';
-import type { PeelMode } from '$lib/components/PeelScanner.svelte';
-import type { NavFilter } from '$lib/note-ui';
+import type { DockAction } from '#lib/dock.js';
+import type { PeelMode } from '#lib/components/PeelScanner.svelte';
+import type { NavFilter } from '#lib/note-ui.js';
 import {
 	canvasFolderFromFilter,
 	canvasKeyFromFilter,
 	canvasTitleFromFilter,
 	PINNED_CANVAS_KEY
-} from '$lib/stores/note-library.svelte';
+} from '#lib/stores/note-library.svelte.js';
 
 export type PeelNavState = {
 	peelOpen: boolean;

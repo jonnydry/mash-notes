@@ -2,7 +2,7 @@
  * Session-only queue of sync field conflicts for the Conflicts peel.
  * Cleared on reload; not persisted to IndexedDB.
  */
-import type { SyncConflict } from '$lib/sync-model';
+import type { SyncConflict } from '#lib/sync-model.js';
 
 export type PendingSyncConflict = SyncConflict & {
 	id: string;

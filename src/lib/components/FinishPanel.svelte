@@ -24,9 +24,9 @@
 		type FinishExportKind,
 		type FinishScope,
 		type FinishSnapshot
-	} from '$lib/finish-model';
-	import { sessionLifecycleLabel } from '$lib/session-lifecycle';
-	import type { Note, Session } from '$lib/types';
+	} from '#lib/finish-model.js';
+	import { sessionLifecycleLabel } from '#lib/session-lifecycle.js';
+	import type { Note, Session } from '#lib/types.js';
 
 	export type FinishExportResult = { ok: boolean; message: string };
 	export type FinishCommitResult = { ok: boolean; message: string };

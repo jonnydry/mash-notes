@@ -43,7 +43,7 @@ export async function prepareImageIntakeFromFiles(
 	let compacted = 0;
 	let failed = 0;
 
-	const { inspectGif } = await import('$lib/gif-explode');
+	const { inspectGif } = await import('#lib/gif-explode.js');
 	for (const file of capped) {
 		if (isGifFile(file)) {
 			const inspected = await inspectGif(file);

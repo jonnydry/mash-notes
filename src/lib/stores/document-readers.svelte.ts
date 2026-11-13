@@ -3,10 +3,10 @@
  * Note creation on clip stays with the page (library ownership).
  */
 import type { Component } from 'svelte';
-import type { DocxClipping } from '$lib/docx-clipping';
-import type { HtmlClipping } from '$lib/html-clipping';
-import type { PdfClipping } from '$lib/pdf-clipping';
-import { FILE_FORMAT_LIMITS } from '$lib/file-intake';
+import type { DocxClipping } from '#lib/docx-clipping.js';
+import type { HtmlClipping } from '#lib/html-clipping.js';
+import type { PdfClipping } from '#lib/pdf-clipping.js';
+import { FILE_FORMAT_LIMITS } from '#lib/file-intake.js';
 
 const MAX_PDF_BYTES = FILE_FORMAT_LIMITS.pdfBytes;
 const MAX_DOCX_BYTES = FILE_FORMAT_LIMITS.docxBytes;
@@ -48,7 +48,7 @@ export function createDocumentReaders(opts: DocumentReadersOpts) {
 		if (LazyPdfReader || pdfReaderModuleLoading) return;
 		pdfReaderModuleLoading = true;
 		try {
-			const { loadPdfReader } = await import('$lib/lazy-pdf-reader');
+			const { loadPdfReader } = await import('#lib/lazy-pdf-reader.js');
 			LazyPdfReader = (await loadPdfReader()) as Component;
 		} catch (error) {
 			console.error('Failed to load PDF tools', error);
@@ -64,7 +64,7 @@ export function createDocumentReaders(opts: DocumentReadersOpts) {
 		if (docxReaderModulePromise) return docxReaderModulePromise;
 		docxReaderModulePromise = (async () => {
 			try {
-				const { loadDocxReader } = await import('$lib/lazy-docx-reader');
+				const { loadDocxReader } = await import('#lib/lazy-docx-reader.js');
 				LazyDocxReader = (await loadDocxReader()) as Component;
 			} catch (error) {
 				console.error('Failed to load Word document tools', error);
@@ -81,7 +81,7 @@ export function createDocumentReaders(opts: DocumentReadersOpts) {
 		if (LazyHtmlReader || htmlReaderModuleLoading) return;
 		htmlReaderModuleLoading = true;
 		try {
-			const { loadHtmlReader } = await import('$lib/lazy-html-reader');
+			const { loadHtmlReader } = await import('#lib/lazy-html-reader.js');
 			LazyHtmlReader = (await loadHtmlReader()) as Component;
 		} catch (error) {
 			console.error('Failed to load HTML document tools', error);

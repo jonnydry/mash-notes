@@ -7,7 +7,7 @@ import {
 	db,
 	getOrCreateFolderCanvas,
 	removeCanvasItem
-} from '$lib/db';
+} from '#lib/db.js';
 import { createNoteLibrary } from './note-library.svelte';
 
 if (!globalThis.crypto?.randomUUID) {

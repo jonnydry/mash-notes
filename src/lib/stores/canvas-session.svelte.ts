@@ -26,7 +26,7 @@ import {
 	updateCanvasBowls,
 	updateCanvasElement,
 	updateCanvasItemPosition
-} from '$lib/db';
+} from '#lib/db.js';
 import type {
 	Canvas,
 	CanvasArrowElement,
@@ -37,39 +37,39 @@ import type {
 	CanvasElement,
 	CanvasItem,
 	Note
-} from '$lib/types';
-import { isBlankUntitledNote, notePreview } from '$lib/format';
+} from '#lib/types.js';
+import { isBlankUntitledNote, notePreview } from '#lib/format.js';
 import {
 	dismissNoteFromCanvas,
 	getDismissedNoteIds,
 	undismissNotesFromCanvas
-} from '$lib/canvas-dismiss';
+} from '#lib/canvas-dismiss.js';
 import {
 	CanvasUndoStack,
 	rangeBetween,
 	spatialNoteOrder,
 	type CanvasLayoutSnapshot
-} from '$lib/canvas-undo';
-import { deduplicateSet, spatialSetItems } from '$lib/set-operators';
+} from '#lib/canvas-undo.js';
+import { deduplicateSet, spatialSetItems } from '#lib/set-operators.js';
 import {
 	bumpOverlappingRects,
 	gridSlotPosition,
 	resolveOverlapsKeepingFixed,
 	type AlignMode
-} from '$lib/canvas-geom';
-import { isPinnedCanvasKey } from '$lib/stores/note-library.svelte';
+} from '#lib/canvas-geom.js';
+import { isPinnedCanvasKey } from '#lib/stores/note-library.svelte.js';
 import {
 	canLinkAsNextPage,
 	edgesInSequence,
 	findClearFlowOrigin,
 	layoutFlowSequence,
 	listFlowSequences
-} from '$lib/canvas-flow';
-import { cleanCanvasBowls, createBowlMembership, removeItemsFromBowls } from '$lib/canvas-bowls';
-import { COLLAPSED_CARD, EXPANDED_CARD } from '$lib/canvas-card-sizing';
-import { cloneCanvasElement, canvasElementBindsItem } from '$lib/canvas-elements';
+} from '#lib/canvas-flow.js';
+import { cleanCanvasBowls, createBowlMembership, removeItemsFromBowls } from '#lib/canvas-bowls.js';
+import { COLLAPSED_CARD, EXPANDED_CARD } from '#lib/canvas-card-sizing.js';
+import { cloneCanvasElement, canvasElementBindsItem } from '#lib/canvas-elements.js';
 
-export { COLLAPSED_CARD, EXPANDED_CARD } from '$lib/canvas-card-sizing';
+export { COLLAPSED_CARD, EXPANDED_CARD } from '#lib/canvas-card-sizing.js';
 export const BUMP_GAP = 24;
 export const NOTE_MIME = 'application/x-mash-notes';
 

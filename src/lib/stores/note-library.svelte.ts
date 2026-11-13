@@ -10,45 +10,45 @@ import {
 	KEPT_COLLECTION_SESSION_ID,
 	replaceNoteSubset,
 	syncNoteUpdateAsync
-} from '$lib/db';
+} from '#lib/db.js';
 import {
 	initSearchIndex,
 	updateNoteInSearch,
 	addNoteToSearch,
 	removeNoteFromSearch,
 	searchNotes
-} from '$lib/search';
-import type { Note } from '$lib/types';
-import type { NavFilter } from '$lib/note-ui';
-import { extractWikilinks } from '$lib/markdown';
-import { NOTES_IMPORT_MAX_CHARS, parseNotesJson } from '$lib/import-notes';
-import { filesFromFileList, parseMarkdownVault } from '$lib/import-markdown';
+} from '#lib/search.js';
+import type { Note } from '#lib/types.js';
+import type { NavFilter } from '#lib/note-ui.js';
+import { extractWikilinks } from '#lib/markdown.js';
+import { NOTES_IMPORT_MAX_CHARS, parseNotesJson } from '#lib/import-notes.js';
+import { filesFromFileList, parseMarkdownVault } from '#lib/import-markdown.js';
 import {
 	combineNotes,
 	copyText,
 	exportNotesJson,
 	exportNotesMarkdown,
 	notesFromSelection
-} from '$lib/mash';
-import { SYNC_BUNDLE_MAX_CHARS } from '$lib/sync-limits';
-import type { SyncConflict } from '$lib/sync-model';
-import { isStaleSyncBundle, recordSyncImport } from '$lib/sync-hygiene';
+} from '#lib/mash.js';
+import { SYNC_BUNDLE_MAX_CHARS } from '#lib/sync-limits.js';
+import type { SyncConflict } from '#lib/sync-model.js';
+import { isStaleSyncBundle, recordSyncImport } from '#lib/sync-hygiene.js';
 import {
 	ensureMashTeamWelcomeNote,
 	isMashTeamWelcomeCandidate,
 	isMashTeamWelcomeNote
-} from '$lib/system-notes';
+} from '#lib/system-notes.js';
 
 /** Same wording as DESK_BUNDLE_IMPORT_OFFLINE_MESSAGE. Kept here so the string stays in the shell. */
 const DESK_BUNDLE_IMPORT_OFFLINE_MESSAGE = 'Import needs a connection the first time';
 
-type SyncFileModule = typeof import('$lib/sync-file');
+type SyncFileModule = typeof import('#lib/sync-file.js');
 type ConflictFormatter = SyncFileModule['formatConflictSummary'];
 
 let syncFileModule: Promise<SyncFileModule> | undefined;
 
 function loadSyncFile(): Promise<SyncFileModule> {
-	return (syncFileModule ??= import('$lib/sync-file'));
+	return (syncFileModule ??= import('#lib/sync-file.js'));
 }
 
 export function filterNotes(notes: Note[], currentFilter: NavFilter, searchQuery: string): Note[] {
@@ -558,7 +558,8 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 			// One-shot: move legacy data-URL image bodies into noteBlobs, then
 			// reclaim any orphans left by prior rotate/purge gaps.
 			try {
-				const { migrateDataUrlBodiesToBlobs, gcOrphanNoteBlobs } = await import('$lib/note-blobs');
+				const { migrateDataUrlBodiesToBlobs, gcOrphanNoteBlobs } =
+					await import('#lib/note-blobs.js');
 				await migrateDataUrlBodiesToBlobs();
 				await gcOrphanNoteBlobs();
 			} catch (e) {
@@ -712,7 +713,8 @@ export function createNoteLibrary(opts: CreateNoteLibraryOpts) {
 			);
 			// Older bundles may still carry data-URL images — migrate after import.
 			try {
-				const { migrateDataUrlBodiesToBlobs, gcOrphanNoteBlobs } = await import('$lib/note-blobs');
+				const { migrateDataUrlBodiesToBlobs, gcOrphanNoteBlobs } =
+					await import('#lib/note-blobs.js');
 				await migrateDataUrlBodiesToBlobs();
 				await gcOrphanNoteBlobs();
 			} catch {

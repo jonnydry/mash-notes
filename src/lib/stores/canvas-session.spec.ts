@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { webcrypto } from 'node:crypto';
-import { addNoteToCanvas, createNote, db, getOrCreateFolderCanvas } from '$lib/db';
+import { addNoteToCanvas, createNote, db, getOrCreateFolderCanvas } from '#lib/db.js';
 import { createCanvasSession } from './canvas-session.svelte';
 
 if (!globalThis.crypto?.randomUUID) {

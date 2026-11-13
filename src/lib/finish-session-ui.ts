@@ -102,7 +102,7 @@ export function createFinishSessionUi(deps: FinishSessionUiDeps) {
 				};
 			}
 			if (kind === 'board-image') {
-				const { loadBoardImageExporter } = await import('$lib/lazy-board-image');
+				const { loadBoardImageExporter } = await import('#lib/lazy-board-image.js');
 				const { downloadBoardImage } = await loadBoardImageExporter();
 				const result = await downloadBoardImage({
 					noteIds: notes.map((note) => note.id),

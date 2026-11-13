@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { syncConflicts } from './sync-conflicts.svelte';
-import type { SyncConflict } from '$lib/sync-model';
+import type { SyncConflict } from '#lib/sync-model.js';
 
 describe('syncConflicts session', () => {
 	beforeEach(() => {

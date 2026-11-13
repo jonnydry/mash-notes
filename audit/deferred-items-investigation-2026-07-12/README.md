@@ -250,7 +250,7 @@ Not SvelteKit multi-route SPA navigation (app is single-page canvas). Means:
 
 ```ts
 // when settingsOpen becomes true
-const SettingsPanel = (await import('$lib/components/SettingsPanel.svelte')).default;
+const SettingsPanel = (await import('#lib/components/SettingsPanel.svelte')).default;
 ```
 
 or Svelte:

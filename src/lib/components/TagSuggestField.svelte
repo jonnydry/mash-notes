@@ -7,13 +7,13 @@
 	import { Plus, Tag } from '@lucide/svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { fly } from 'svelte/transition';
-	import { portal } from '$lib/portal';
+	import { portal } from '#lib/portal.js';
 	import {
 		computeSuggestMenuPos,
 		suggestMenuStyle,
 		trackSuggestAnchor,
 		type SuggestMenuPos
-	} from '$lib/suggest-menu';
+	} from '#lib/suggest-menu.js';
 
 	interface Props {
 		value: string[];

@@ -4,18 +4,18 @@
 	 */
 	import { Minimize2, X, Pin } from '@lucide/svelte';
 	import { onDestroy } from 'svelte';
-	import type { Note } from '$lib/types';
-	import StickyEditor from '$lib/components/StickyEditor.svelte';
-	import FolderSuggestField from '$lib/components/FolderSuggestField.svelte';
-	import TagSuggestField from '$lib/components/TagSuggestField.svelte';
-	import { notePreview } from '$lib/format';
-	import { isPermanentMashWelcomeNote, MASH_SPOON_LOGO } from '$lib/canvas-empty-state';
+	import type { Note } from '#lib/types.js';
+	import StickyEditor from '#lib/components/StickyEditor.svelte';
+	import FolderSuggestField from '#lib/components/FolderSuggestField.svelte';
+	import TagSuggestField from '#lib/components/TagSuggestField.svelte';
+	import { notePreview } from '#lib/format.js';
+	import { isPermanentMashWelcomeNote, MASH_SPOON_LOGO } from '#lib/canvas-empty-state.js';
 	import {
 		detectFillOrSnapZone,
 		type EditorPane,
 		type EditorStageStore,
 		type SnapZone
-	} from '$lib/stores/editor-stage.svelte';
+	} from '#lib/stores/editor-stage.svelte.js';
 
 	interface Props {
 		stage: EditorStageStore;

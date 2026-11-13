@@ -1,10 +1,16 @@
 // @ts-check
 
-/** @typedef {{ name?: string, file: string, imports?: string[], css?: string[], assets?: string[] }} ViteManifestEntry */
+/** @typedef {{ name?: string, file: string, imports?: string[], dynamicImports?: string[], css?: string[], assets?: string[] }} ViteManifestEntry */
 /** @typedef {Record<string, ViteManifestEntry>} ViteManifest */
 /** @typedef {{ url: string, revision: string | null, size: number }} PrecacheEntry */
 
 export const INITIAL_ENTRY_NAMES = new Set(['entry/start', 'entry/app', 'nodes/0', 'nodes/2']);
+
+/**
+ * Kit 3 loads these with dynamic import() during startup. They are part of the
+ * shell, not deferred features. `_app/version.json` is added separately with a content hash.
+ */
+const BOOT_DYNAMIC_TARGET = /^(?:client-entry|error-template|entry\/.*|nodes\/.*)$/;
 
 const OPTIONAL_BRAND_ASSETS = new Set([
 	'icons/mash-monochrome-white.svg',
@@ -37,7 +43,28 @@ export function isExcludedFromPrecache(/** @type {string} */ url) {
 	);
 }
 
-/** Follow only static imports. Dynamic imports remain network/runtime-cache features. */
+/**
+ * Follow static imports, plus the dynamic imports Kit uses to boot.
+ * Feature dynamic imports (readers, export, settings) stay out of the shell.
+ * @param {ViteManifestEntry} source
+ * @param {ViteManifestEntry} target
+ * @param {string} targetKey
+ */
+function followDynamicImport(source, target, targetKey) {
+	const sourceName = source.name ?? '';
+	const targetName = target.name ?? '';
+	if (sourceName.startsWith('entry/') && BOOT_DYNAMIC_TARGET.test(targetName)) return true;
+	// The root layout registers the worker while the shell is starting.
+	if (
+		sourceName === 'nodes/0' &&
+		(targetName.includes('pwa-register') || targetKey.includes('pwa-register'))
+	) {
+		return true;
+	}
+	return false;
+}
+
+/** Shell files: static imports, Kit's boot dynamic imports, and the route nodes those load. */
 export function collectInitialManifestKeys(
 	/** @type {ViteManifest} */ manifest,
 	entryNames = INITIAL_ENTRY_NAMES
@@ -55,6 +82,11 @@ export function collectInitialManifestKeys(
 		if (!entry) throw new Error(`Build manifest is missing imported entry ${key}`);
 		keys.add(key);
 		for (const importedKey of entry.imports ?? []) visit(importedKey);
+		for (const importedKey of entry.dynamicImports ?? []) {
+			const target = manifest[importedKey];
+			if (!target) throw new Error(`Build manifest is missing imported entry ${importedKey}`);
+			if (followDynamicImport(entry, target, importedKey)) visit(importedKey);
+		}
 	}
 
 	for (const name of entryNames) {
@@ -63,6 +95,31 @@ export function collectInitialManifestKeys(
 		visit(key);
 	}
 	return keys;
+}
+
+/** `_app/immutable` files the built shell actually requests. Never includes version.json. */
+export function filesReferencedByIndexHtml(/** @type {string} */ html) {
+	/** @type {Set<string>} */
+	const files = new Set();
+	for (const match of html.matchAll(/(?:href|src)=["']([^"']+)["']/g)) {
+		const file = normalizePrecacheUrl(match[1]);
+		if (!file.startsWith('_app/immutable/') || file === '_app/version.json') continue;
+		files.add(file);
+	}
+	return files;
+}
+
+/**
+ * Every immutable file the shell loads: index.html references, their static
+ * imports, and the boot dynamic imports (client runtime, error page, fallback).
+ * @param {ViteManifest} manifest
+ * @param {string} [html]
+ */
+export function requiredBootPrecacheFiles(manifest, html = '') {
+	const files = collectInitialManifestFiles(manifest);
+	for (const file of filesReferencedByIndexHtml(html)) files.add(file);
+	files.add('_app/version.json');
+	return files;
 }
 
 export function collectInitialManifestFiles(/** @type {ViteManifest} */ manifest) {
@@ -166,9 +223,11 @@ export function prunePrecacheEntries(
 	]);
 	return entries.filter((entry) => {
 		const file = normalizePrecacheUrl(entry.url);
-		// The PWA plugin appends its generated manifest after transforms. Remove the
-		// globbed copy here so the final service worker has one canonical revision.
-		if (file === 'manifest.webmanifest') return false;
+		// Replaced after this transform with a content-hash revision. A globbed
+		// copy would not change when the URL stays `_app/version.json`.
+		if (file === '_app/version.json') return false;
+		// @vite-pwa/sveltekit 2 turns includeManifest off and does not append a
+		// manifest after this transform, so the globbed web manifest stays.
 		if (isExcludedFromPrecache(file)) return false;
 		if (file.startsWith('_app/immutable/') && !initialFiles.has(file) && !keptLazyFiles.has(file)) {
 			return false;

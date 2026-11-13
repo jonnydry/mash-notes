@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Undo2 } from '@lucide/svelte';
-	import type { OperationReceiptView } from '$lib/operator-kitchen';
+	import type { OperationReceiptView } from '#lib/operator-kitchen.js';
 
 	interface Props {
 		receipt: OperationReceiptView | null;

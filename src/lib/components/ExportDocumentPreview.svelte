@@ -1,8 +1,8 @@
 <script lang="ts">
-	import MarkdownPreview from '$lib/components/MarkdownPreview.svelte';
-	import type { ExportDocument, PresentationExportOptions } from '$lib/export-document';
-	import { exportDocumentWordCount } from '$lib/export-document';
-	import { exportTemplate } from '$lib/export-templates';
+	import MarkdownPreview from '#lib/components/MarkdownPreview.svelte';
+	import type { ExportDocument, PresentationExportOptions } from '#lib/export-document.js';
+	import { exportDocumentWordCount } from '#lib/export-document.js';
+	import { exportTemplate } from '#lib/export-templates.js';
 
 	interface Props {
 		document: ExportDocument;

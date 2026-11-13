@@ -10,8 +10,8 @@ import {
 	getActiveNotes,
 	getOrCreateFolderCanvas,
 	setOperationReverted
-} from '$lib/db';
-import { DAY_MS } from '$lib/session-lifecycle';
+} from '#lib/db.js';
+import { DAY_MS } from '#lib/session-lifecycle.js';
 import { createSessionManager } from './sessions.svelte';
 
 if (!globalThis.crypto?.randomUUID) {
