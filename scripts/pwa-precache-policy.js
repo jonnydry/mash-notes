@@ -8,7 +8,7 @@ export const INITIAL_ENTRY_NAMES = new Set(['entry/start', 'entry/app', 'nodes/0
 
 /**
  * Kit 3 loads these with dynamic import() during startup. They are part of the
- * shell, not deferred features. `_app/version.json` is intentionally absent.
+ * shell, not deferred features. `_app/version.json` is added separately with a content hash.
  */
 const BOOT_DYNAMIC_TARGET = /^(?:client-entry|error-template|entry\/.*|nodes\/.*)$/;
 
@@ -118,7 +118,7 @@ export function filesReferencedByIndexHtml(/** @type {string} */ html) {
 export function requiredBootPrecacheFiles(manifest, html = '') {
 	const files = collectInitialManifestFiles(manifest);
 	for (const file of filesReferencedByIndexHtml(html)) files.add(file);
-	files.delete('_app/version.json');
+	files.add('_app/version.json');
 	return files;
 }
 
@@ -223,7 +223,8 @@ export function prunePrecacheEntries(
 	]);
 	return entries.filter((entry) => {
 		const file = normalizePrecacheUrl(entry.url);
-		// Focus checks fetch this with no-cache. Leave that decision alone.
+		// Replaced after this transform with a content-hash revision. A globbed
+		// copy would not change when the URL stays `_app/version.json`.
 		if (file === '_app/version.json') return false;
 		// @vite-pwa/sveltekit 2 turns includeManifest off and does not append a
 		// manifest after this transform, so the globbed web manifest stays.

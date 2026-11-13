@@ -129,9 +129,11 @@ try {
 	await context.setOffline(true);
 	pageErrors.length = 0;
 	const reloaded = [];
+	const trackAppFile = (url) =>
+		url.includes('/_app/immutable/') || url.endsWith('/_app/version.json');
 	page.on('response', (response) => {
 		const url = response.url();
-		if (url.includes('/_app/immutable/')) {
+		if (trackAppFile(url)) {
 			reloaded.push({
 				url: url.replace(origin, ''),
 				status: response.status(),
@@ -140,7 +142,7 @@ try {
 		}
 	});
 	page.on('requestfailed', (request) => {
-		if (request.url().includes('/_app/immutable/')) {
+		if (trackAppFile(request.url())) {
 			reloaded.push({
 				url: request.url().replace(origin, ''),
 				failed: request.failure()?.errorText ?? 'failed',
@@ -171,7 +173,9 @@ try {
 	async function fetchOffline(relativePath) {
 		if (!relativePath)
 			return { path: relativePath, ok: false, status: 0, fromServiceWorker: false };
-		const absolute = new URL(relativePath, `${origin}/_app/immutable/`).href;
+		const absolute = relativePath.startsWith('/')
+			? new URL(relativePath, origin).href
+			: new URL(relativePath, `${origin}/_app/immutable/`).href;
 		const response = await page.evaluate(async (url) => {
 			try {
 				const result = await fetch(url);
@@ -191,7 +195,8 @@ try {
 	const fetched = {
 		nodes1: await fetchOffline(nodes1),
 		nodes3: await fetchOffline(nodes3),
-		clientEntry: await fetchOffline(clientEntry)
+		clientEntry: await fetchOffline(clientEntry),
+		version: await fetchOffline('/_app/version.json')
 	};
 	const reloadBoot = {
 		nodes1: reloaded.find((entry) => nodes1 && entry.url.includes(nodes1)) ?? null,
@@ -233,7 +238,9 @@ try {
 		pageErrors.length > 0 ||
 		!fetched.nodes1.ok ||
 		!fetched.nodes3.ok ||
-		!fetched.clientEntry.ok
+		!fetched.clientEntry.ok ||
+		!fetched.version.ok ||
+		fetched.version.fromServiceWorker !== true
 	) {
 		process.exitCode = 1;
 	}

@@ -26,11 +26,21 @@ async function preparePwaPrecache(
 	// Add the SPA shell explicitly so navigation requests can be answered offline.
 	try {
 		const versionFile = await readFile('.svelte-kit/output/client/_app/version.json');
-		manifest = manifest.filter((entry) => entry.url !== 'index.html');
+		const versionRevision = createHash('sha256').update(versionFile).digest('hex');
+		manifest = manifest.filter(
+			(entry) => entry.url !== 'index.html' && entry.url !== '_app/version.json'
+		);
 		manifest.push({
 			url: 'index.html',
-			revision: createHash('sha256').update(versionFile).digest('hex'),
+			revision: versionRevision,
 			size: 0
+		});
+		// The URL does not change between deploys, so revision:null would keep the
+		// old file forever. A content hash makes the next service worker fetch it.
+		manifest.push({
+			url: '_app/version.json',
+			revision: versionRevision,
+			size: versionFile.byteLength
 		});
 	} catch (error) {
 		throw new Error('Could not version the offline application shell', { cause: error });

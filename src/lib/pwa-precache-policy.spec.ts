@@ -153,7 +153,7 @@ describe('PWA precache policy', () => {
 		]);
 	});
 
-	it('requires every shell file index.html loads and never version.json', () => {
+	it('requires every shell file index.html loads, including version.json', () => {
 		const html = `
 			<link rel="modulepreload" href="/_app/immutable/entry/start.js">
 			<link rel="modulepreload" href="/_app/immutable/chunks/client-entry.js">
@@ -164,7 +164,7 @@ describe('PWA precache policy', () => {
 		expect(required.has('_app/immutable/chunks/client-entry.js')).toBe(true);
 		expect(required.has('_app/immutable/nodes/1.js')).toBe(true);
 		expect(required.has('_app/immutable/assets/page.css')).toBe(true);
-		expect(required.has('_app/version.json')).toBe(false);
+		expect(required.has('_app/version.json')).toBe(true);
 		expect(filesReferencedByIndexHtml(html).has('_app/immutable/entry/start.js')).toBe(true);
 
 		const precache = new Set(required);
