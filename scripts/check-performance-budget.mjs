@@ -102,8 +102,9 @@ const deferredPrecacheFiles = new Set([
 	...collectPrecachedLazyFiles(manifest)
 ]);
 const serviceWorker = await readFile('build/sw.js', 'utf8');
-const listedPrecacheFiles = [...serviceWorker.matchAll(/\burl:"([^"]+)"/g)].map((match) =>
-	normalizePrecacheUrl(match[1])
+// Workbox 8 emits precache entries as template literals (`url:`...``). Older output used double quotes.
+const listedPrecacheFiles = [...serviceWorker.matchAll(/\burl:(?:"([^"]+)"|`([^`]+)`)/g)].map(
+	(match) => normalizePrecacheUrl(match[1] ?? match[2])
 );
 const precacheFiles = [...new Set(listedPrecacheFiles)];
 let precache = 0;

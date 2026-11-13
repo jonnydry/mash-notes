@@ -12,9 +12,9 @@
 		MoreHorizontal,
 		Clock3
 	} from '@lucide/svelte';
-	import type { NavFilter } from '$lib/note-ui';
-	import { isNavActive } from '$lib/note-ui';
-	import type { DockAction } from '$lib/dock';
+	import type { NavFilter } from '#lib/note-ui.js';
+	import { isNavActive } from '#lib/note-ui.js';
+	import type { DockAction } from '#lib/dock.js';
 
 	interface Props {
 		currentFilter: NavFilter;

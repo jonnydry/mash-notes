@@ -1,20 +1,20 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { Check, Clock3, Plus, RotateCcw, X } from '@lucide/svelte';
-	import { SCRATCH_RETENTION_OPTIONS, sessionLifecycleLabel } from '$lib/session-lifecycle';
-	import type { Note, Session } from '$lib/types';
-	import { focusTrap } from '$lib/focus-trap';
-	import { formatStorageBytes, type StorageHealth } from '$lib/storage-health';
+	import { SCRATCH_RETENTION_OPTIONS, sessionLifecycleLabel } from '#lib/session-lifecycle.js';
+	import type { Note, Session } from '#lib/types.js';
+	import { focusTrap } from '#lib/focus-trap.js';
+	import { formatStorageBytes, type StorageHealth } from '#lib/storage-health.js';
 	import FinishPanel, {
 		type FinishCommitResult,
 		type FinishExportResult
-	} from '$lib/components/FinishPanel.svelte';
+	} from '#lib/components/FinishPanel.svelte';
 	import type {
 		FinishDraft,
 		FinishExportKind,
 		FinishScope,
 		FinishSnapshot
-	} from '$lib/finish-model';
+	} from '#lib/finish-model.js';
 
 	interface Props {
 		open: boolean;

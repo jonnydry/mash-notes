@@ -1,13 +1,13 @@
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
-	import { createNote, db, deleteNote, listOperationRecords } from '$lib/db';
+	import { createNote, db, deleteNote, listOperationRecords } from '#lib/db.js';
 	import {
 		addNoteToSearch,
 		rebuildSearchIndex,
 		removeNoteFromSearch,
 		searchNotes
-	} from '$lib/search';
-	import type { CanvasColor, Note, Operation } from '$lib/types';
+	} from '#lib/search.js';
+	import type { CanvasColor, Note, Operation } from '#lib/types.js';
 	import {
 		Search,
 		Command,
@@ -36,16 +36,16 @@
 		MoreHorizontal,
 		IceCreamBowl
 	} from '@lucide/svelte';
-	import MashDock from '$lib/components/MashDock.svelte';
-	import PeelScanner from '$lib/components/PeelScanner.svelte';
-	import SearchResultsDropdown from '$lib/components/SearchResultsDropdown.svelte';
-	import CanvasBoard from '$lib/components/CanvasBoard.svelte';
-	import EditorStage from '$lib/components/EditorStage.svelte';
-	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+	import MashDock from '#lib/components/MashDock.svelte';
+	import PeelScanner from '#lib/components/PeelScanner.svelte';
+	import SearchResultsDropdown from '#lib/components/SearchResultsDropdown.svelte';
+	import CanvasBoard from '#lib/components/CanvasBoard.svelte';
+	import EditorStage from '#lib/components/EditorStage.svelte';
+	import ConfirmDialog from '#lib/components/ConfirmDialog.svelte';
 	// Settings / Shortcuts / Spaces / Session+Finish / Paste / GIF dialogs are
 	// dynamic-imported below so they stay off the initial JS graph.
-	import { focusTrap } from '$lib/focus-trap';
-	import { actionsForSurface } from '$lib/action-registry';
+	import { focusTrap } from '#lib/focus-trap.js';
+	import { actionsForSurface } from '#lib/action-registry.js';
 	import {
 		KITCHEN_GROUPS,
 		kitchenActionSubtitle,
@@ -53,38 +53,38 @@
 		kitchenGroupForActionId,
 		latestActiveOperation,
 		operationReceiptView
-	} from '$lib/operator-kitchen';
-	import OperatorReceiptStrip from '$lib/components/OperatorReceiptStrip.svelte';
+	} from '#lib/operator-kitchen.js';
+	import OperatorReceiptStrip from '#lib/components/OperatorReceiptStrip.svelte';
 
-	import { exportNotesJson, printSequenceAsPdf } from '$lib/mash';
-	import { preloadMarked } from '$lib/markdown-nodes';
+	import { exportNotesJson, printSequenceAsPdf } from '#lib/mash.js';
+	import { preloadMarked } from '#lib/markdown-nodes.js';
 	import type {
 		FinishDraft,
 		FinishExportKind,
 		FinishScope,
 		FinishSnapshot
-	} from '$lib/finish-model';
-	import { clearCanvasViewport } from '$lib/viewport';
-	import { clearDismissedForCanvas } from '$lib/canvas-dismiss';
-	import { findBacklinks, findOutgoingNotes } from '$lib/links';
-	import { readSyncHygiene, recordSyncExport } from '$lib/sync-hygiene';
+	} from '#lib/finish-model.js';
+	import { clearCanvasViewport } from '#lib/viewport.js';
+	import { clearDismissedForCanvas } from '#lib/canvas-dismiss.js';
+	import { findBacklinks, findOutgoingNotes } from '#lib/links.js';
+	import { readSyncHygiene, recordSyncExport } from '#lib/sync-hygiene.js';
 	import {
 		canvasNoteIdSet,
 		countNotesOnCanvas,
 		loadSnapPref,
 		saveSnapPref
-	} from '$lib/canvas-geom';
+	} from '#lib/canvas-geom.js';
 	import {
 		COLLAPSED_CARD,
 		EXPANDED_CARD,
 		createCanvasSession
-	} from '$lib/stores/canvas-session.svelte';
+	} from '#lib/stores/canvas-session.svelte.js';
 	import {
 		createNoteLibrary,
 		filterNotes,
 		filterPeelNotes,
 		peelSearchText
-	} from '$lib/stores/note-library.svelte';
+	} from '#lib/stores/note-library.svelte.js';
 	import {
 		filterNotesByPeelScope,
 		peelScopeCounts,
@@ -92,65 +92,65 @@
 		rankSearchIdsForPeel,
 		sortNotesForPeel,
 		type PeelScopeFilter
-	} from '$lib/peel-hygiene';
+	} from '#lib/peel-hygiene.js';
 	import {
 		dismissTryAMash,
 		isTryAMashDismissed,
 		shouldOfferTryAMash,
 		tryAMashDrafts,
 		tryAMashSuccessToast
-	} from '$lib/try-a-mash';
-	import { createPeelNav, windowPeelNotes } from '$lib/stores/peel-nav.svelte';
-	import { createOpenSpaces } from '$lib/stores/spaces.svelte';
-	import { theme } from '$lib/stores/theme.svelte';
-	import { syncConflicts } from '$lib/stores/sync-conflicts.svelte';
-	import { createEditorStage, type SnapZone } from '$lib/stores/editor-stage.svelte';
-	import { createSessionManager } from '$lib/stores/sessions.svelte';
-	import { createDocumentReaders } from '$lib/stores/document-readers.svelte';
-	import { createSelectionOperators } from '$lib/selection-operators';
+	} from '#lib/try-a-mash.js';
+	import { createPeelNav, windowPeelNotes } from '#lib/stores/peel-nav.svelte.js';
+	import { createOpenSpaces } from '#lib/stores/spaces.svelte.js';
+	import { theme } from '#lib/stores/theme.svelte.js';
+	import { syncConflicts } from '#lib/stores/sync-conflicts.svelte.js';
+	import { createEditorStage, type SnapZone } from '#lib/stores/editor-stage.svelte.js';
+	import { createSessionManager } from '#lib/stores/sessions.svelte.js';
+	import { createDocumentReaders } from '#lib/stores/document-readers.svelte.js';
+	import { createSelectionOperators } from '#lib/selection-operators.js';
 	import {
 		buildDocxClippingDraft,
 		buildHtmlClippingDraft,
 		buildPdfClippingDraft,
 		withNoteId
-	} from '$lib/document-clipping';
-	import type { FinishSessionUi } from '$lib/finish-session-ui';
-	import { buildBasePaletteActions, buildOperatorActions } from '$lib/command-palette';
-	import { createContentOperators } from '$lib/content-operators';
-	import { createAppKeydown } from '$lib/app-keyboard';
-	import { createGlobalPasteHandler } from '$lib/global-paste';
-	import { createDeskPlacement } from '$lib/desk-placement';
-	import type { PeelConflictRow } from '$lib/components/PeelScanner.svelte';
-	import { shouldShowCanvasEmptyState } from '$lib/canvas-empty-state';
-	import { chooseEmptyCanvasMascotForVisit } from '$lib/empty-canvas-mascot';
+	} from '#lib/document-clipping.js';
+	import type { FinishSessionUi } from '#lib/finish-session-ui.js';
+	import { buildBasePaletteActions, buildOperatorActions } from '#lib/command-palette.js';
+	import { createContentOperators } from '#lib/content-operators.js';
+	import { createAppKeydown } from '#lib/app-keyboard.js';
+	import { createGlobalPasteHandler } from '#lib/global-paste.js';
+	import { createDeskPlacement } from '#lib/desk-placement.js';
+	import type { PeelConflictRow } from '#lib/components/PeelScanner.svelte';
+	import { shouldShowCanvasEmptyState } from '#lib/canvas-empty-state.js';
+	import { chooseEmptyCanvasMascotForVisit } from '#lib/empty-canvas-mascot.js';
 	import {
 		DROP_FORMAT_ERROR_HINT,
 		DROP_FORMAT_HINT,
 		FILE_ACCEPT,
 		FILE_FORMAT_LIMITS
-	} from '$lib/file-intake';
-	import type { DelimitedAnalysis, DelimitedImportMode } from '$lib/delimited-import';
-	import { type PdfClipPayload } from '$lib/pdf-clipping';
-	import { type DocxClipPayload } from '$lib/docx-clipping';
-	import { type HtmlClipPayload } from '$lib/html-clipping';
-	import { type PasteAnalysis } from '$lib/paste-cards';
-	import { DESK_IMAGE_MAX_PER_ACTION } from '$lib/desk-image';
-	import type { GifExplodeMode } from '$lib/gif-explode';
-	import { keepableNoteIds } from '$lib/keep-selection';
+	} from '#lib/file-intake.js';
+	import type { DelimitedAnalysis, DelimitedImportMode } from '#lib/delimited-import.js';
+	import { type PdfClipPayload } from '#lib/pdf-clipping.js';
+	import { type DocxClipPayload } from '#lib/docx-clipping.js';
+	import { type HtmlClipPayload } from '#lib/html-clipping.js';
+	import { type PasteAnalysis } from '#lib/paste-cards.js';
+	import { DESK_IMAGE_MAX_PER_ACTION } from '#lib/desk-image.js';
+	import type { GifExplodeMode } from '#lib/gif-explode.js';
+	import { keepableNoteIds } from '#lib/keep-selection.js';
 	import {
 		inspectStorage,
 		PERSISTENCE_PROMPTED_KEY,
 		requestPersistentStorage,
 		type StorageHealth
-	} from '$lib/storage-health';
+	} from '#lib/storage-health.js';
 	import {
 		deriveBackupHealth,
 		readWorkspaceBackupRecord,
 		recordWorkspaceBackup
-	} from '$lib/backup-health';
-	import type { WorkspaceBackup, WorkspaceRestorePlan } from '$lib/workspace-backup';
-	import { CANVAS_COLORS, canvasElementBindsItem } from '$lib/canvas-elements';
-	import type { PresentationExportRequest, PresentationFormat } from '$lib/export-document';
+	} from '#lib/backup-health.js';
+	import type { WorkspaceBackup, WorkspaceRestorePlan } from '#lib/workspace-backup.js';
+	import { CANVAS_COLORS, canvasElementBindsItem } from '#lib/canvas-elements.js';
+	import type { PresentationExportRequest, PresentationFormat } from '#lib/export-document.js';
 
 	let actionToast = $state('');
 	let srAnnouncement = $state('');
@@ -228,7 +228,7 @@
 	}
 
 	async function exportSyncBundle() {
-		const { downloadSyncBundle } = await import('$lib/sync-file');
+		const { downloadSyncBundle } = await import('#lib/sync-file.js');
 		await downloadSyncBundle(
 			library.notes,
 			'mash-sync-bundle.json',
@@ -267,7 +267,7 @@
 		if (deskImportBusy) return;
 		deskImportBusy = true;
 		try {
-			await import('$lib/sync-file');
+			await import('#lib/sync-file.js');
 			syncInputEl?.click();
 		} catch {
 			flashToast('Import needs a connection the first time');
@@ -310,7 +310,7 @@
 
 	async function refreshWorkspaceBackupHealth() {
 		try {
-			const { inspectWorkspaceChangedAt } = await import('$lib/workspace-inspection');
+			const { inspectWorkspaceChangedAt } = await import('#lib/workspace-inspection.js');
 			const state = await inspectWorkspaceChangedAt();
 			workspaceChangedAt = state.changedAt;
 			workspaceHasContent = state.hasContent;
@@ -325,7 +325,7 @@
 		workspaceBackupBusy = true;
 		try {
 			await library.flushPendingSaveAsync();
-			const { downloadWorkspaceBackup } = await import('$lib/workspace-backup');
+			const { downloadWorkspaceBackup } = await import('#lib/workspace-backup.js');
 			const record = await downloadWorkspaceBackup();
 			recordWorkspaceBackup(record);
 			workspaceBackupRecord = record;
@@ -349,7 +349,7 @@
 		input.value = '';
 		if (!file) return;
 		try {
-			const { WORKSPACE_BACKUP_MAX_CHARS } = await import('$lib/workspace-backup');
+			const { WORKSPACE_BACKUP_MAX_CHARS } = await import('#lib/workspace-backup.js');
 			if (file.size > WORKSPACE_BACKUP_MAX_CHARS) {
 				flashToast('Workspace backup is too large to open safely.', 4200);
 				return;
@@ -365,7 +365,7 @@
 		workspaceRestoreError = '';
 		workspaceBackupBusy = true;
 		try {
-			const { inspectAndPlanWorkspaceRestore } = await import('$lib/workspace-backup');
+			const { inspectAndPlanWorkspaceRestore } = await import('#lib/workspace-backup.js');
 			const inspected = await inspectAndPlanWorkspaceRestore(text);
 			if (!inspected.ok || !inspected.plan) {
 				flashToast(
@@ -390,7 +390,7 @@
 		workspaceRestoreError = '';
 		try {
 			await library.flushPendingSaveAsync();
-			const { applyWorkspaceRestore } = await import('$lib/workspace-backup');
+			const { applyWorkspaceRestore } = await import('#lib/workspace-backup.js');
 			const receipt = await applyWorkspaceRestore(pending.backup);
 			await sessionManager.bootstrap();
 			const preferred = [...pending.backup.sessions]
@@ -667,8 +667,8 @@
 
 	/** Warm Session/Finish chunk before click (header hover). */
 	function preloadSessionPanel() {
-		void import('$lib/components/SessionPanel.svelte');
-		void import('$lib/finish-session-ui');
+		void import('#lib/components/SessionPanel.svelte');
+		void import('#lib/finish-session-ui.js');
 	}
 
 	async function openSessionPanel(view: 'desks' | 'finish' = 'desks') {
@@ -819,46 +819,47 @@
 
 	async function loadFinishSessionUi(): Promise<FinishSessionUi> {
 		if (finishSessionUi) return finishSessionUi;
-		finishSessionUiPromise ??= import('$lib/finish-session-ui').then(({ createFinishSessionUi }) =>
-			createFinishSessionUi({
-				getFinishSnapshot: () => finishSnapshot,
-				setFinishSnapshot: (s) => {
-					finishSnapshot = s;
-				},
-				getActiveSession: () => sessionManager.activeSession,
-				getNotes: () => library.notes,
-				getNotesById: () => library.notesById,
-				getCanvasItems: () => canvas.canvasItems,
-				getCanvasEdges: () => canvas.canvasEdges,
-				getCanvasElements: () => canvas.canvasElements,
-				getSelectionIds: () => library.selectionIds,
-				getOperations: () => operationHistory,
-				flushPendingSaveAsync: () => library.flushPendingSaveAsync(),
-				getWriteError: () => library.writeError,
-				exportSyncBundle: () => exportSyncBundle(),
-				keepTakeaway: (ids) => sessionManager.keepTakeaway(ids),
-				keepActive: (now) => sessionManager.keepActive(now),
-				clearActive: () => sessionManager.clearActive(),
-				switchTo: (id) => sessionManager.switchTo(id),
-				restore: (id) => sessionManager.restore(id),
-				createScratch: () => sessionManager.createScratch(),
-				applyPromotedNotes: (notes) => library.applyPromotedNotes(notes),
-				setNotes: (notes) => {
-					library.notes = notes;
-				},
-				loadNotes: () => library.loadNotes(),
-				loadContextCanvas: (key, sessionId) => canvas.loadContextCanvas(key, sessionId),
-				getCanvasKey: () => peel.canvasKey,
-				prepareSessionSwitch,
-				setSessionPanelOpen: (open) => {
-					sessionPanelOpen = open;
-				},
-				flashToast,
-				askConfirm,
-				offerPersistentStorageOnce: () => offerPersistentStorageOnce(),
-				getTheme: () => (document.documentElement.dataset.theme === 'light' ? 'light' : 'dark'),
-				openPresentationExport
-			})
+		finishSessionUiPromise ??= import('#lib/finish-session-ui.js').then(
+			({ createFinishSessionUi }) =>
+				createFinishSessionUi({
+					getFinishSnapshot: () => finishSnapshot,
+					setFinishSnapshot: (s) => {
+						finishSnapshot = s;
+					},
+					getActiveSession: () => sessionManager.activeSession,
+					getNotes: () => library.notes,
+					getNotesById: () => library.notesById,
+					getCanvasItems: () => canvas.canvasItems,
+					getCanvasEdges: () => canvas.canvasEdges,
+					getCanvasElements: () => canvas.canvasElements,
+					getSelectionIds: () => library.selectionIds,
+					getOperations: () => operationHistory,
+					flushPendingSaveAsync: () => library.flushPendingSaveAsync(),
+					getWriteError: () => library.writeError,
+					exportSyncBundle: () => exportSyncBundle(),
+					keepTakeaway: (ids) => sessionManager.keepTakeaway(ids),
+					keepActive: (now) => sessionManager.keepActive(now),
+					clearActive: () => sessionManager.clearActive(),
+					switchTo: (id) => sessionManager.switchTo(id),
+					restore: (id) => sessionManager.restore(id),
+					createScratch: () => sessionManager.createScratch(),
+					applyPromotedNotes: (notes) => library.applyPromotedNotes(notes),
+					setNotes: (notes) => {
+						library.notes = notes;
+					},
+					loadNotes: () => library.loadNotes(),
+					loadContextCanvas: (key, sessionId) => canvas.loadContextCanvas(key, sessionId),
+					getCanvasKey: () => peel.canvasKey,
+					prepareSessionSwitch,
+					setSessionPanelOpen: (open) => {
+						sessionPanelOpen = open;
+					},
+					flashToast,
+					askConfirm,
+					offerPersistentStorageOnce: () => offerPersistentStorageOnce(),
+					getTheme: () => (document.documentElement.dataset.theme === 'light' ? 'light' : 'dark'),
+					openPresentationExport
+				})
 		);
 		try {
 			finishSessionUi = await finishSessionUiPromise;
@@ -990,7 +991,7 @@
 		}
 		try {
 			const text = await file.text();
-			const { parseDelimitedText } = await import('$lib/delimited-import');
+			const { parseDelimitedText } = await import('#lib/delimited-import.js');
 			const result = parseDelimitedText(text, file.name);
 			if (!result.ok) {
 				flashToast(result.error, 3600);
@@ -1008,7 +1009,7 @@
 	async function importDelimitedChoice(mode: DelimitedImportMode, titleColumn: number) {
 		const pending = delimitedPending;
 		if (!pending) return;
-		const { draftsFromDelimited } = await import('$lib/delimited-import');
+		const { draftsFromDelimited } = await import('#lib/delimited-import.js');
 		const result = draftsFromDelimited(pending.analysis, mode, titleColumn);
 		if (typeof result === 'string') {
 			flashToast(result, 4200);
@@ -1189,7 +1190,7 @@
 		if (!adopted) return;
 		documentReaders.pdfClippings = [
 			...documentReaders.pdfClippings,
-			adopted.clipping as import('$lib/pdf-clipping').PdfClipping
+			adopted.clipping as import('#lib/pdf-clipping.js').PdfClipping
 		];
 		flashToast(adopted.toast);
 	}
@@ -1202,7 +1203,7 @@
 		if (!adopted) return;
 		documentReaders.docxClippings = [
 			...documentReaders.docxClippings,
-			adopted.clipping as import('$lib/docx-clipping').DocxClipping
+			adopted.clipping as import('#lib/docx-clipping.js').DocxClipping
 		];
 		flashToast(adopted.toast);
 	}
@@ -1215,7 +1216,7 @@
 		if (!adopted) return;
 		documentReaders.htmlClippings = [
 			...documentReaders.htmlClippings,
-			adopted.clipping as import('$lib/html-clipping').HtmlClipping
+			adopted.clipping as import('#lib/html-clipping.js').HtmlClipping
 		];
 		flashToast(adopted.toast);
 	}
@@ -1252,7 +1253,7 @@
 
 	async function handleDroppedFiles(files: File[], x: number, y: number) {
 		const { detectJsonImportKind, splitExternalImportFiles } =
-			await import('$lib/external-file-drop');
+			await import('#lib/external-file-drop.js');
 		const batch = splitExternalImportFiles(files);
 		const supportedCount =
 			batch.noteTextFiles.length +
@@ -2504,7 +2505,7 @@
 				data-floating-chrome
 				class="mash-peel-slot pointer-events-auto absolute top-1/2 left-[4.75rem] z-30 -translate-y-1/2"
 			>
-				{#await import('$lib/components/SettingsPanel.svelte') then mod}
+				{#await import('#lib/components/SettingsPanel.svelte') then mod}
 					<mod.default
 						{snapEnabled}
 						lastExportAt={syncHygiene.lastExportAt}
@@ -3427,12 +3428,12 @@
 	/>
 
 	{#if shortcutsOpen}
-		{#await import('$lib/components/ShortcutsModal.svelte') then mod}
+		{#await import('#lib/components/ShortcutsModal.svelte') then mod}
 			<mod.default open={shortcutsOpen} onClose={() => (shortcutsOpen = false)} />
 		{/await}
 	{/if}
 	{#if spacesOverviewOpen}
-		{#await import('$lib/components/SpacesOverview.svelte') then mod}
+		{#await import('#lib/components/SpacesOverview.svelte') then mod}
 			<mod.default
 				sessionId={sessionManager.activeSession?.id}
 				openKeys={spaces.openKeys}
@@ -3445,7 +3446,7 @@
 		{/await}
 	{/if}
 	{#if sessionPanelOpen}
-		{#await import('$lib/components/SessionPanel.svelte') then mod}
+		{#await import('#lib/components/SessionPanel.svelte') then mod}
 			<mod.default
 				open={sessionPanelOpen}
 				initialView={sessionPanelView}
@@ -3473,7 +3474,7 @@
 		{/await}
 	{/if}
 	{#if pasteDialogOpen}
-		{#await import('$lib/components/PasteChoiceDialog.svelte') then mod}
+		{#await import('#lib/components/PasteChoiceDialog.svelte') then mod}
 			<mod.default
 				open={pasteDialogOpen}
 				analysis={pasteAnalysis}
@@ -3488,7 +3489,7 @@
 		{/await}
 	{/if}
 	{#if presentationExportRequest}
-		{#await Promise.all([import('$lib/components/ExportSheet.svelte'), preloadMarked()]) then [mod]}
+		{#await Promise.all([import('#lib/components/ExportSheet.svelte'), preloadMarked()]) then [mod]}
 			<mod.default
 				request={presentationExportRequest}
 				onClose={() => {
@@ -3498,7 +3499,7 @@
 		{/await}
 	{/if}
 	{#if gifExplodeDialogOpen}
-		{#await import('$lib/components/GifExplodeDialog.svelte') then mod}
+		{#await import('#lib/components/GifExplodeDialog.svelte') then mod}
 			<mod.default
 				open={gifExplodeDialogOpen}
 				fileName={gifExplodePending?.fileName ?? ''}
@@ -3511,7 +3512,7 @@
 		{/await}
 	{/if}
 	{#if delimitedPending}
-		{#await import('$lib/components/DelimitedImportDialog.svelte') then mod}
+		{#await import('#lib/components/DelimitedImportDialog.svelte') then mod}
 			<mod.default
 				open={Boolean(delimitedPending)}
 				analysis={delimitedPending.analysis}
@@ -3523,7 +3524,7 @@
 		{/await}
 	{/if}
 	{#if workspaceRestorePending}
-		{#await import('$lib/components/WorkspaceRestoreDialog.svelte') then mod}
+		{#await import('#lib/components/WorkspaceRestoreDialog.svelte') then mod}
 			<mod.default
 				open={Boolean(workspaceRestorePending)}
 				backup={workspaceRestorePending.backup}

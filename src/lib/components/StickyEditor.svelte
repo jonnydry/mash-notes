@@ -21,18 +21,18 @@
 		ZoomIn,
 		ZoomOut
 	} from '@lucide/svelte';
-	import MarkdownPreview from '$lib/components/MarkdownPreview.svelte';
-	import { focusTrap } from '$lib/focus-trap';
-	import { composeEmbeddedNoteImage, parseEmbeddedNoteImage } from '$lib/markdown';
+	import MarkdownPreview from '#lib/components/MarkdownPreview.svelte';
+	import { focusTrap } from '#lib/focus-trap.js';
+	import { composeEmbeddedNoteImage, parseEmbeddedNoteImage } from '#lib/markdown.js';
 	import {
 		isMarkedReady,
 		markdownNodes,
 		preloadMarked,
 		selectPreviewNodes
-	} from '$lib/markdown-nodes';
-	import { isMashBlobRef, releaseDisplayUrl, resolveDisplayUrl } from '$lib/note-blobs';
-	import { portal } from '$lib/portal';
-	import type { TextAlign } from '$lib/types';
+	} from '#lib/markdown-nodes.js';
+	import { isMashBlobRef, releaseDisplayUrl, resolveDisplayUrl } from '#lib/note-blobs.js';
+	import { portal } from '#lib/portal.js';
+	import type { TextAlign } from '#lib/types.js';
 
 	const CLIP_ZOOM_MIN = 1;
 	const CLIP_ZOOM_MAX = 4;
@@ -209,7 +209,7 @@
 		if (!embeddedImage || rotating || readOnly) return;
 		rotating = true;
 		try {
-			const { rotateImageToBlobRef, releaseRotatedBlob } = await import('$lib/image-rotate');
+			const { rotateImageToBlobRef, releaseRotatedBlob } = await import('#lib/image-rotate.js');
 			const { src: nextSrc, previousBlobId } = await rotateImageToBlobRef(
 				embeddedImage.src,
 				quarterTurns

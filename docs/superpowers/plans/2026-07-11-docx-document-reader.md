@@ -632,7 +632,7 @@ git commit -m "refactor: extract shared document reader shell"
 ```ts
 /** Keep mammoth + reader UI behind a lazy boundary. */
 export async function loadDocxReader() {
-	return (await import('$lib/components/DocxReader.svelte')).default;
+	return (await import('#lib/components/DocxReader.svelte')).default;
 }
 ```
 
@@ -644,10 +644,10 @@ Create `src/lib/components/DocxReader.svelte` with this behavior:
 // Props
 interface Props {
 	file: File;
-	clippings: import('$lib/docx-clipping').DocxClipping[];
+	clippings: import('#lib/docx-clipping.js').DocxClipping[];
 	open?: boolean;
 	onClose: () => void;
-	onClip: (excerpt: import('$lib/docx-clipping').DocxClipPayload) => void | Promise<void>;
+	onClip: (excerpt: import('#lib/docx-clipping.js').DocxClipPayload) => void | Promise<void>;
 	onOpenClippings: (noteIds: string[]) => void | Promise<void>;
 }
 ```
@@ -726,18 +726,18 @@ Near PDF state (~lines 186–193), add:
 ```ts
 let docxReaderFile: File | null = $state(null);
 let docxReaderOpen = $state(false);
-let LazyDocxReader = $state<(typeof import('$lib/components/DocxReader.svelte'))['default'] | null>(
+let LazyDocxReader = $state<(typeof import('#lib/components/DocxReader.svelte'))['default'] | null>(
 	null
 );
 let docxReaderModuleLoading = $state(false);
-let docxClippings = $state<import('$lib/docx-clipping').DocxClipping[]>([]);
+let docxClippings = $state<import('#lib/docx-clipping.js').DocxClipping[]>([]);
 let docxInputEl: HTMLInputElement | undefined = $state();
 ```
 
 Import helpers:
 
 ```ts
-import { docxClippingTitle, normalizeDocxExcerpt } from '$lib/docx-clipping';
+import { docxClippingTitle, normalizeDocxExcerpt } from '#lib/docx-clipping.js';
 ```
 
 Functions (mirror PDF block ~848–960):
@@ -747,7 +747,7 @@ async function ensureDocxReaderModule() {
 	if (LazyDocxReader || docxReaderModuleLoading) return;
 	docxReaderModuleLoading = true;
 	try {
-		const { loadDocxReader } = await import('$lib/lazy-docx-reader');
+		const { loadDocxReader } = await import('#lib/lazy-docx-reader.js');
 		LazyDocxReader = await loadDocxReader();
 	} catch (e) {
 		console.error(e);

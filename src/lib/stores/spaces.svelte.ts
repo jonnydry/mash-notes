@@ -7,8 +7,8 @@ import {
 	PINNED_CANVAS_KEY,
 	isPinnedCanvasKey,
 	canvasTitleFromFilter
-} from '$lib/stores/note-library.svelte';
-import type { NavFilter } from '$lib/note-ui';
+} from '#lib/stores/note-library.svelte.js';
+import type { NavFilter } from '#lib/note-ui.js';
 
 export const OPEN_SPACES_STORAGE_KEY = 'mash.openSpaces';
 

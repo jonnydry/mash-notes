@@ -1,11 +1,11 @@
 <script lang="ts">
-	import { focusTrap } from '$lib/focus-trap';
+	import { focusTrap } from '#lib/focus-trap.js';
 	import { untrack } from 'svelte';
 	import { X } from '@lucide/svelte';
-	import { getCanvasItems, getOrCreateFolderCanvas } from '$lib/db';
-	import type { CanvasItem } from '$lib/types';
-	import { COLLAPSED_CARD } from '$lib/stores/canvas-session.svelte';
-	import { DESK_SPACE_KEY, spaceTitleForKey } from '$lib/stores/spaces.svelte';
+	import { getCanvasItems, getOrCreateFolderCanvas } from '#lib/db.js';
+	import type { CanvasItem } from '#lib/types.js';
+	import { COLLAPSED_CARD } from '#lib/stores/canvas-session.svelte.js';
+	import { DESK_SPACE_KEY, spaceTitleForKey } from '#lib/stores/spaces.svelte.js';
 
 	export type SpacePreviewRect = {
 		x: number;

@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { ClipboardPaste, FileText, Pilcrow, Rows3, X } from '@lucide/svelte';
-	import { pasteChoiceCopy } from '$lib/paste-choice-copy';
-	import type { PasteAnalysis, PasteSplitMode } from '$lib/paste-cards';
-	import { focusTrap } from '$lib/focus-trap';
+	import { pasteChoiceCopy } from '#lib/paste-choice-copy.js';
+	import type { PasteAnalysis, PasteSplitMode } from '#lib/paste-cards.js';
+	import { focusTrap } from '#lib/focus-trap.js';
 
 	interface Props {
 		open: boolean;

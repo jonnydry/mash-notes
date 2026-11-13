@@ -3,16 +3,20 @@
 	import { ChevronLeft, ChevronRight, Crop, FileText, Minus, Plus } from '@lucide/svelte';
 	import type { PDFDocumentLoadingTask, PDFDocumentProxy, RenderTask } from 'pdfjs-dist';
 	import pdfWorkerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
-	import type { CssRect, PdfClipPayload, PdfClipping } from '$lib/pdf-clipping';
-	import { cropPdfCanvasRegion, normalizePdfExcerpt, normalizeRegionRect } from '$lib/pdf-clipping';
+	import type { CssRect, PdfClipPayload, PdfClipping } from '#lib/pdf-clipping.js';
+	import {
+		cropPdfCanvasRegion,
+		normalizePdfExcerpt,
+		normalizeRegionRect
+	} from '#lib/pdf-clipping.js';
 	import {
 		PDFJS_CMAP_URL,
 		PDFJS_ICC_URL,
 		PDFJS_STANDARD_FONT_URL,
 		PDFJS_WASM_URL
-	} from '$lib/pdfjs-assets';
-	import { ensurePdfJsMapPolyfills } from '$lib/pdfjs-polyfills';
-	import { FILE_FORMAT_LIMITS } from '$lib/file-intake';
+	} from '#lib/pdfjs-assets.js';
+	import { ensurePdfJsMapPolyfills } from '#lib/pdfjs-polyfills.js';
+	import { FILE_FORMAT_LIMITS } from '#lib/file-intake.js';
 	import DocumentReaderShell from './DocumentReaderShell.svelte';
 
 	/** Stay under common browser canvas limits (Safari is especially strict). */

@@ -72,6 +72,7 @@ describe('PWA precache policy', () => {
 			'_app/immutable/chunks/shared.js',
 			'_app/immutable/chunks/marked-runtime.js',
 			'_app/immutable/chunks/marked-lib.js',
+			'manifest.webmanifest',
 			'icons/mash-logo-sprouts.png',
 			'fonts/Excalifont-Regular.woff2'
 		]);

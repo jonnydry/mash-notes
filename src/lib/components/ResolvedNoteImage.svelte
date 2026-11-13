@@ -3,7 +3,7 @@
 	 * Renders a note image from mash-blob: or legacy data: URL.
 	 * Manages object-URL lifecycle for blob refs.
 	 */
-	import { isMashBlobRef, releaseDisplayUrl, resolveDisplayUrl } from '$lib/note-blobs';
+	import { isMashBlobRef, releaseDisplayUrl, resolveDisplayUrl } from '#lib/note-blobs.js';
 
 	interface Props {
 		src: string;

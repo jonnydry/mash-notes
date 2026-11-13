@@ -1,10 +1,10 @@
 <script lang="ts">
-	import type { Note } from '$lib/types';
-	import VirtualList from '$lib/components/VirtualList.svelte';
-	import { formatNoteTimestamp, notePreview } from '$lib/format';
-	import { buildFolderTree, flattenFolderTree } from '$lib/folder-tree';
-	import { isPermanentMashWelcomeNote, MASH_SPOON_LOGO } from '$lib/canvas-empty-state';
-	import type { PeelScopeFilter } from '$lib/peel-hygiene';
+	import type { Note } from '#lib/types.js';
+	import VirtualList from '#lib/components/VirtualList.svelte';
+	import { formatNoteTimestamp, notePreview } from '#lib/format.js';
+	import { buildFolderTree, flattenFolderTree } from '#lib/folder-tree.js';
+	import { isPermanentMashWelcomeNote, MASH_SPOON_LOGO } from '#lib/canvas-empty-state.js';
+	import type { PeelScopeFilter } from '#lib/peel-hygiene.js';
 	import {
 		GripVertical,
 		Pin,

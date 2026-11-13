@@ -166,9 +166,8 @@ export function prunePrecacheEntries(
 	]);
 	return entries.filter((entry) => {
 		const file = normalizePrecacheUrl(entry.url);
-		// The PWA plugin appends its generated manifest after transforms. Remove the
-		// globbed copy here so the final service worker has one canonical revision.
-		if (file === 'manifest.webmanifest') return false;
+		// @vite-pwa/sveltekit 2 turns includeManifest off and does not append a
+		// manifest after this transform, so the globbed web manifest stays.
 		if (isExcludedFromPrecache(file)) return false;
 		if (file.startsWith('_app/immutable/') && !initialFiles.has(file) && !keptLazyFiles.has(file)) {
 			return false;

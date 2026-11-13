@@ -8,17 +8,17 @@
 		CanvasElement,
 		CanvasItem,
 		Note
-	} from '$lib/types';
+	} from '#lib/types.js';
 	import { SvelteSet } from 'svelte/reactivity';
-	import { notePreview } from '$lib/format';
-	import { parseEmbeddedNoteImage } from '$lib/markdown';
-	import { DROP_FORMAT_HINT } from '$lib/file-intake';
+	import { notePreview } from '#lib/format.js';
+	import { parseEmbeddedNoteImage } from '#lib/markdown.js';
+	import { DROP_FORMAT_HINT } from '#lib/file-intake.js';
 	import {
 		loadCanvasViewport,
 		saveCanvasViewport,
 		clearCanvasViewport,
 		mobileAutoFitKey
-	} from '$lib/viewport';
+	} from '#lib/viewport.js';
 	import {
 		GRID,
 		type AlignMode,
@@ -35,7 +35,7 @@
 		snapRectsWithoutOverlap,
 		snapSize,
 		viewCenterPlacement
-	} from '$lib/canvas-geom';
+	} from '#lib/canvas-geom.js';
 	import {
 		Pin,
 		Minimize2,
@@ -46,19 +46,19 @@
 		IceCreamBowl,
 		GripVertical
 	} from '@lucide/svelte';
-	import { focusTrap } from '$lib/focus-trap';
-	import StickyEditor from '$lib/components/StickyEditor.svelte';
-	import CanvasChrome from '$lib/components/CanvasChrome.svelte';
-	import ResolvedNoteImage from '$lib/components/ResolvedNoteImage.svelte';
-	import FolderSuggestField from '$lib/components/FolderSuggestField.svelte';
-	import TagSuggestField from '$lib/components/TagSuggestField.svelte';
-	import { buildLinkSummaryMap } from '$lib/links';
-	import { isPermanentMashWelcomeNote, MASH_SPOON_LOGO } from '$lib/canvas-empty-state';
+	import { focusTrap } from '#lib/focus-trap.js';
+	import StickyEditor from '#lib/components/StickyEditor.svelte';
+	import CanvasChrome from '#lib/components/CanvasChrome.svelte';
+	import ResolvedNoteImage from '#lib/components/ResolvedNoteImage.svelte';
+	import FolderSuggestField from '#lib/components/FolderSuggestField.svelte';
+	import TagSuggestField from '#lib/components/TagSuggestField.svelte';
+	import { buildLinkSummaryMap } from '#lib/links.js';
+	import { isPermanentMashWelcomeNote, MASH_SPOON_LOGO } from '#lib/canvas-empty-state.js';
 	import {
 		acknowledgeEmptyCanvasMascotDisplay,
 		DEFAULT_EMPTY_CANVAS_MASCOT,
 		type EmptyCanvasMascot
-	} from '$lib/empty-canvas-mascot';
+	} from '#lib/empty-canvas-mascot.js';
 	import {
 		canLinkAsNextPage,
 		flowEdgePath,
@@ -66,18 +66,18 @@
 		flowPageBadges,
 		invalidSequenceEdgeIds,
 		listFlowSequences
-	} from '$lib/canvas-flow';
-	import { sequenceGuidance } from '$lib/sequence-guidance';
-	import { printSequenceAsPdf } from '$lib/mash';
+	} from '#lib/canvas-flow.js';
+	import { sequenceGuidance } from '#lib/sequence-guidance.js';
+	import { printSequenceAsPdf } from '#lib/mash.js';
 	import {
 		detectFillOrSnapZone,
 		stageContentRect,
 		type EditorPane,
 		type SnapZone
-	} from '$lib/stores/editor-stage.svelte';
-	import { canvasBowlBounds } from '$lib/canvas-bowls';
-	import { autoExpandedCardSize, COLLAPSED_CARD, EXPANDED_CARD } from '$lib/canvas-card-sizing';
-	import { canvasArrowPath, canvasItemRects } from '$lib/canvas-element-geometry';
+	} from '#lib/stores/editor-stage.svelte.js';
+	import { canvasBowlBounds } from '#lib/canvas-bowls.js';
+	import { autoExpandedCardSize, COLLAPSED_CARD, EXPANDED_CARD } from '#lib/canvas-card-sizing.js';
+	import { canvasArrowPath, canvasItemRects } from '#lib/canvas-element-geometry.js';
 
 	const NOTE_MIME = 'application/x-mash-notes';
 	const MASH_OVERLAP = 0.28;

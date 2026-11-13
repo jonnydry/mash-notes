@@ -1,9 +1,9 @@
+import adapter from '@sveltejs/adapter-static';
 import { defineConfig } from 'vitest/config';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import tailwindcss from '@tailwindcss/vite';
-import { sveltekit } from '@sveltejs/kit/vite';
-import { SvelteKitPWA } from '@vite-pwa/sveltekit';
+import { withPwa } from '@vite-pwa/sveltekit';
 import { prunePrecacheEntries } from './scripts/pwa-precache-policy.js';
 
 async function preparePwaPrecache(
@@ -46,69 +46,108 @@ export default defineConfig({
 	},
 	plugins: [
 		tailwindcss(),
-		sveltekit(),
-		SvelteKitPWA({
-			registerType: 'autoUpdate',
-			kit: {
-				adapterFallback: 'index.html',
-				spa: true
-			},
-			manifest: {
-				name: 'Mash',
-				short_name: 'Mash',
-				description:
-					'A fast, local-first scratch workbench for turning messy text and files into useful, portable results.',
-				theme_color: '#0e0c0a',
-				background_color: '#0e0c0a',
-				display: 'standalone',
-				icons: [
-					{ src: '/icons/mash-icon-192.png', sizes: '192x192', type: 'image/png' },
-					{ src: '/icons/mash-icon-512.png', sizes: '512x512', type: 'image/png' },
-					{
-						src: '/icons/mash-icon-512.png',
-						sizes: '512x512',
-						type: 'image/png',
-						purpose: 'maskable'
+		withPwa(
+			{
+				compilerOptions: {
+					// Force runes mode for the project, except for libraries. Can be removed in svelte 6.
+					runes: ({ filename }) =>
+						filename.split(/[/\\]/).includes('node_modules') ? undefined : true
+				},
+				csp: {
+					mode: 'hash',
+					directives: {
+						'default-src': ['self'],
+						'script-src': ['self'],
+						'style-src': ['self', 'unsafe-inline'],
+						'connect-src': ['self'],
+						'font-src': ['self'],
+						'img-src': ['self', 'data:', 'blob:'],
+						'manifest-src': ['self'],
+						'media-src': ['self', 'data:', 'blob:'],
+						'worker-src': ['self', 'blob:'],
+						'object-src': ['none'],
+						'base-uri': ['none'],
+						'form-action': ['none'],
+						'frame-ancestors': ['none']
 					}
-				]
+				},
+				// Static adapter for pure client-side PWA (per plan: easy self-host, static deploy)
+				adapter: adapter({
+					fallback: 'index.html' // SPA fallback for client routing / PWA
+				}),
+				// Kit 2 did not poll. Kit 3 polls hourly unless this is 0.
+				version: { pollInterval: 0 }
 			},
-			workbox: {
-				globPatterns: ['client/**/*.{js,mjs,css,html,ico,png,svg,webp,webmanifest,woff,woff2}'],
-				manifestTransforms: [preparePwaPrecache],
-				runtimeCaching: [
-					{
-						// Immutable, hashed assets that are intentionally absent from the precache
-						// are cached after their feature is first used.
-						urlPattern: /\/_app\/immutable\//,
-						handler: 'CacheFirst',
-						options: {
-							cacheName: 'mash-deferred-assets-v2',
-							expiration: { maxEntries: 64, maxAgeSeconds: 30 * 24 * 60 * 60 }
+			{
+				registerType: 'autoUpdate',
+				// The layout registers the worker through virtual:pwa-register.
+				// Kit 3 does not run Vite's transformIndexHtml hook, so the injected
+				// registerSW.js script would be precached and never loaded.
+				injectRegister: false,
+				kit: {
+					adapterFallback: 'index.html',
+					spa: true
+				},
+				manifest: {
+					name: 'Mash',
+					short_name: 'Mash',
+					description:
+						'A fast, local-first scratch workbench for turning messy text and files into useful, portable results.',
+					theme_color: '#0e0c0a',
+					background_color: '#0e0c0a',
+					display: 'standalone',
+					icons: [
+						{ src: '/icons/mash-icon-192.png', sizes: '192x192', type: 'image/png' },
+						{ src: '/icons/mash-icon-512.png', sizes: '512x512', type: 'image/png' },
+						{
+							src: '/icons/mash-icon-512.png',
+							sizes: '512x512',
+							type: 'image/png',
+							purpose: 'maskable'
 						}
-					},
-					{
-						// The empty-desk cast is decorative. Cache characters as they appear and
-						// fall back to the core precached mascot when a visit starts offline.
-						urlPattern: /\/icons\/Rotating(?:%20| )Icons\//,
-						handler: 'CacheFirst',
-						options: {
-							cacheName: 'mash-rotating-mascots-v1',
-							expiration: { maxEntries: 24, maxAgeSeconds: 90 * 24 * 60 * 60 }
+					]
+				},
+				generateSW: {
+					// Workbox 8 defaults this to true. The previous worker did not rewrite
+					// extensionless URLs to .html files.
+					cleanURLs: false,
+					globPatterns: ['client/**/*.{js,mjs,css,html,ico,png,svg,webp,webmanifest,woff,woff2}'],
+					manifestTransforms: [preparePwaPrecache],
+					runtimeCaching: [
+						{
+							// Immutable, hashed assets that are intentionally absent from the precache
+							// are cached after their feature is first used.
+							urlPattern: /\/_app\/immutable\//,
+							handler: 'CacheFirst',
+							options: {
+								cacheName: 'mash-deferred-assets-v2',
+								expiration: { maxEntries: 64, maxAgeSeconds: 30 * 24 * 60 * 60 }
+							}
+						},
+						{
+							// The empty-desk cast is decorative. Cache characters as they appear and
+							// fall back to the core precached mascot when a visit starts offline.
+							urlPattern: /\/icons\/Rotating(?:%20| )Icons\//,
+							handler: 'CacheFirst',
+							options: {
+								cacheName: 'mash-rotating-mascots-v1',
+								expiration: { maxEntries: 24, maxAgeSeconds: 90 * 24 * 60 * 60 }
+							}
+						},
+						{
+							// PDF.js language/font/WASM support is only fetched after opening a PDF.
+							urlPattern: /\/pdfjs\//,
+							handler: 'CacheFirst',
+							options: {
+								cacheName: 'mash-pdf-support-v1',
+								expiration: { maxEntries: 96, maxAgeSeconds: 30 * 24 * 60 * 60 }
+							}
 						}
-					},
-					{
-						// PDF.js language/font/WASM support is only fetched after opening a PDF.
-						urlPattern: /\/pdfjs\//,
-						handler: 'CacheFirst',
-						options: {
-							cacheName: 'mash-pdf-support-v1',
-							expiration: { maxEntries: 96, maxAgeSeconds: 30 * 24 * 60 * 60 }
-						}
-					}
-				],
-				modifyURLPrefix: { 'client/': '' }
+					],
+					modifyURLPrefix: { 'client/': '' }
+				}
 			}
-		})
+		)
 	],
 	test: {
 		expect: { requireAssertions: true },

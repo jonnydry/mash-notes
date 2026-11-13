@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
 	import { FileText } from '@lucide/svelte';
-	import type { HtmlClipPayload, HtmlClipping } from '$lib/html-clipping';
-	import { normalizeHtmlExcerpt } from '$lib/html-clipping';
-	import { convertHtmlFile } from '$lib/html-import';
+	import type { HtmlClipPayload, HtmlClipping } from '#lib/html-clipping.js';
+	import { normalizeHtmlExcerpt } from '#lib/html-clipping.js';
+	import { convertHtmlFile } from '#lib/html-import.js';
 	import DocumentReaderShell from './DocumentReaderShell.svelte';
 
 	interface Props {

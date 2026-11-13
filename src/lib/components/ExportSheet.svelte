@@ -2,20 +2,20 @@
 	import { FileDown, FileText, X } from '@lucide/svelte';
 	import { untrack } from 'svelte';
 	import './export-sheet.css';
-	import { focusTrap } from '$lib/focus-trap';
-	import ExportDocumentPreview from '$lib/components/ExportDocumentPreview.svelte';
+	import { focusTrap } from '#lib/focus-trap.js';
+	import ExportDocumentPreview from '#lib/components/ExportDocumentPreview.svelte';
 	import {
 		buildExportDocument,
 		type PresentationExportOptions,
 		type PresentationExportRequest,
 		type PresentationFormat
-	} from '$lib/export-document';
+	} from '#lib/export-document.js';
 	import {
 		EXPORT_PAGE_SIZES,
 		EXPORT_TEMPLATES,
 		loadPresentationExportOptions,
 		savePresentationExportOptions
-	} from '$lib/export-templates';
+	} from '#lib/export-templates.js';
 
 	interface Props {
 		request: PresentationExportRequest;
@@ -49,7 +49,7 @@
 		exporting = true;
 		status = null;
 		try {
-			const { exportPresentationDocument } = await import('$lib/presentation-export');
+			const { exportPresentationDocument } = await import('#lib/presentation-export.js');
 			const result = await exportPresentationDocument(document, options);
 			savePresentationExportOptions(options);
 			status = { ok: true, message: `${result.filename} downloaded.` };

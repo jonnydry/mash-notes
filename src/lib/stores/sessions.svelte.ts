@@ -6,7 +6,7 @@ import {
 	deleteSessionPermanently,
 	listSessionRecords,
 	promoteNotesToKept
-} from '$lib/db';
+} from '#lib/db.js';
 import {
 	DEFAULT_SCRATCH_RETENTION_DAYS,
 	SCRATCH_RETENTION_OPTIONS,
@@ -15,8 +15,8 @@ import {
 	scratchExpiry,
 	shouldPermanentlyDeleteSession,
 	withMeaningfulActivity
-} from '$lib/session-lifecycle';
-import type { Session } from '$lib/types';
+} from '#lib/session-lifecycle.js';
+import type { Session } from '#lib/types.js';
 
 export const ACTIVE_SESSION_STORAGE_KEY = 'mash.activeSessionId';
 export const RETENTION_STORAGE_KEY = 'mash.scratchRetentionDays';

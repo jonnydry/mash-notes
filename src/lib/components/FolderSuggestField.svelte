@@ -6,13 +6,13 @@
 	 */
 	import { Folder } from '@lucide/svelte';
 	import { fly } from 'svelte/transition';
-	import { portal } from '$lib/portal';
+	import { portal } from '#lib/portal.js';
 	import {
 		computeSuggestMenuPos,
 		suggestMenuStyle,
 		trackSuggestAnchor,
 		type SuggestMenuPos
-	} from '$lib/suggest-menu';
+	} from '#lib/suggest-menu.js';
 
 	interface Props {
 		value: string;

@@ -3,10 +3,10 @@
 	import { pwaInfo } from 'virtual:pwa-info';
 	import './fonts.css';
 	import './layout.css';
-	import { preloadMarkedAfterPaint } from '$lib/markdown-nodes';
-	import { theme } from '$lib/stores/theme.svelte';
-	import { typography } from '$lib/stores/typography.svelte';
-	import MobileDesktopNotice from '$lib/components/MobileDesktopNotice.svelte';
+	import { preloadMarkedAfterPaint } from '#lib/markdown-nodes.js';
+	import { theme } from '#lib/stores/theme.svelte.js';
+	import { typography } from '#lib/stores/typography.svelte.js';
+	import MobileDesktopNotice from '#lib/components/MobileDesktopNotice.svelte';
 
 	let { children } = $props();
 	const mobileOnly =
