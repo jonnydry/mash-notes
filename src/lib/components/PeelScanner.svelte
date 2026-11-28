@@ -344,9 +344,9 @@
 							class="mash-type-micro px-2.5 py-1.5 font-medium tracking-wide uppercase"
 							style="color: var(--mash-accent-bright);"
 						>
-							<span class="inline-flex items-center gap-1"
-								><ArrowUpRight class="h-3 w-3" /> Outgoing</span
-							>
+							<span class="inline-flex items-center gap-1">
+								<ArrowUpRight class="h-3 w-3" /> Outgoing
+							</span>
 						</div>
 						{#if outgoingNotes.length === 0}
 							<div class="mash-peel-empty py-2">No outgoing links</div>
@@ -366,9 +366,9 @@
 							class="mash-type-micro mt-2 px-2.5 py-1.5 font-medium tracking-wide uppercase"
 							style="color: var(--mash-accent-bright);"
 						>
-							<span class="inline-flex items-center gap-1"
-								><ArrowDownLeft class="h-3 w-3" /> Backlinks</span
-							>
+							<span class="inline-flex items-center gap-1">
+								<ArrowDownLeft class="h-3 w-3" /> Backlinks
+							</span>
 						</div>
 						{#if backlinkNotes.length === 0}
 							<div class="mash-peel-empty py-2">No backlinks</div>

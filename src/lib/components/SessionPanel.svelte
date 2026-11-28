@@ -180,13 +180,13 @@
 								</span>
 								<span class="min-w-0 flex-1">
 									<strong class="mash-type-body block truncate">{session.title}</strong>
-									<small style="color: var(--mash-ink-muted);"
-										>{sessionLifecycleLabel(session, Date.now())}</small
-									>
+									<small style="color: var(--mash-ink-muted);">
+										{sessionLifecycleLabel(session, Date.now())}
+									</small>
 								</span>
-								{#if session.id === activeSession?.id}<span class="mash-session-row-badge"
-										>Open</span
-									>{/if}
+								{#if session.id === activeSession?.id}<span class="mash-session-row-badge">
+										Open
+									</span>{/if}
 							</button>
 						{/each}
 					</div>
@@ -200,15 +200,17 @@
 										<RotateCcw class="h-4 w-4 shrink-0" style="color: var(--mash-ink-muted);" />
 										<span class="min-w-0 flex-1">
 											<strong class="mash-type-body block truncate">{session.title}</strong>
-											<small style="color: var(--mash-ink-muted);"
-												>{sessionLifecycleLabel(session, Date.now())}</small
-											>
+											<small style="color: var(--mash-ink-muted);">
+												{sessionLifecycleLabel(session, Date.now())}
+											</small>
 										</span>
 										<button
 											type="button"
 											class="mash-btn-ghost mash-type-caption rounded-[9px] px-3 py-1.5"
-											onclick={() => onRestore(session.id)}>Restore</button
+											onclick={() => onRestore(session.id)}
 										>
+											Restore
+										</button>
 									</div>
 								{/each}
 							</div>
@@ -218,9 +220,9 @@
 					<div class="mash-session-retention">
 						<div>
 							<strong class="mash-type-caption block">Scratch retention</strong>
-							<small style="color: var(--mash-ink-muted);"
-								>Meaningful activity resets the timer.</small
-							>
+							<small style="color: var(--mash-ink-muted);">
+								Meaningful activity resets the timer.
+							</small>
 						</div>
 						<select
 							class="mash-focus mash-type-caption rounded-[9px] border bg-transparent px-2.5 py-1.5"
@@ -238,9 +240,9 @@
 			{#if view === 'desks' && workspaceBackupStatus}
 				<div class="mash-session-storage" data-testid="workspace-backup-health">
 					<span class="min-w-0 flex-1">
-						<strong class="mash-type-caption block" style="color: var(--mash-ink);"
-							>Workspace backup</strong
-						>
+						<strong class="mash-type-caption block" style="color: var(--mash-ink);">
+							Workspace backup
+						</strong>
 						{workspaceBackupStatus}
 					</span>
 					{#if onBackupWorkspace}
@@ -258,9 +260,9 @@
 			{#if storageHealth?.supported && view === 'desks'}
 				<div class="mash-session-storage">
 					<span class="min-w-0 flex-1">
-						<strong class="mash-type-caption block" style="color: var(--mash-ink);"
-							>Local storage</strong
-						>
+						<strong class="mash-type-caption block" style="color: var(--mash-ink);">
+							Local storage
+						</strong>
 						{formatStorageBytes(storageHealth.usage)} used of {formatStorageBytes(
 							storageHealth.quota
 						)}
