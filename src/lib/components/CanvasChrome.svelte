@@ -134,9 +134,9 @@
 			aria-busy={connectSaving}
 			data-testid="board-arrow-tool"
 		>
-			<span class:animate-pulse={connectSaving} class="text-base leading-none" aria-hidden="true"
-				>↗</span
-			>
+			<span class:animate-pulse={connectSaving} class="text-base leading-none" aria-hidden="true">
+				↗
+			</span>
 		</button>
 		{#if flowMode}
 			<div
@@ -370,63 +370,79 @@
 				onclick={() => {
 					if (snapEnabled) toggleSnap();
 					setMobileToolsOpen(false);
-				}}>Free placement</button
+				}}
 			>
+				Free placement
+			</button>
 			<button
 				type="button"
 				class:active={snapEnabled}
 				onclick={() => {
 					if (!snapEnabled) toggleSnap();
 					setMobileToolsOpen(false);
-				}}>Snap to grid</button
+				}}
 			>
+				Snap to grid
+			</button>
 			<button
 				type="button"
 				disabled={itemCount === 0}
 				onclick={() => {
 					toggleSelectAllOnBoard();
 					setMobileToolsOpen(false);
-				}}>{allBoardNotesSelected ? 'Deselect all' : 'Select all'}</button
+				}}
 			>
+				{allBoardNotesSelected ? 'Deselect all' : 'Select all'}
+			</button>
 			<button
 				type="button"
 				class:active={flowMode}
 				onclick={() => {
 					toggleFlowMode();
 					setMobileToolsOpen(false);
-				}}>{flowMode ? 'Finish page order' : 'Set page order'}</button
+				}}
 			>
+				{flowMode ? 'Finish page order' : 'Set page order'}
+			</button>
 			<button
 				type="button"
 				disabled={!canUndo}
 				onclick={() => {
 					onUndo?.();
 					setMobileToolsOpen(false);
-				}}>Undo</button
+				}}
 			>
+				Undo
+			</button>
 			<button
 				type="button"
 				disabled={!canRedo}
 				onclick={() => {
 					onRedo?.();
 					setMobileToolsOpen(false);
-				}}>Redo</button
+				}}
 			>
+				Redo
+			</button>
 			<button
 				type="button"
 				onclick={() => {
 					resetView();
 					setMobileToolsOpen(false);
-				}}>Reset view</button
+				}}
 			>
+				Reset view
+			</button>
 			{#if onOpenShortcuts}
 				<button
 					type="button"
 					onclick={() => {
 						onOpenShortcuts();
 						setMobileToolsOpen(false);
-					}}>Shortcuts</button
+					}}
 				>
+					Shortcuts
+				</button>
 			{/if}
 		</div>
 	{/if}

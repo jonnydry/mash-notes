@@ -281,11 +281,11 @@
 							bind:group={disposition}
 						/>
 						<Clock3 class="h-4 w-4 shrink-0" />
-						<span
-							><strong class="block"
-								>{activeSession?.mode === 'kept' ? 'Keep as is' : 'Leave as scratch'}</strong
-							>Return to desk</span
-						>
+						<span>
+							<strong class="block">
+								{activeSession?.mode === 'kept' ? 'Keep as is' : 'Leave as scratch'}
+							</strong>Return to desk
+						</span>
 					</label>
 					{#if activeSession?.mode === 'scratch'}
 						<label class="mash-finish-disposition" class:is-selected={disposition === 'keep-desk'}>
@@ -336,9 +336,9 @@
 	</div>
 
 	<div data-testid="finish-footer" class="mash-finish-footer">
-		<button type="button" class="mash-btn-ghost mash-finish-footer-secondary" onclick={onLeave}
-			>Back to desk</button
-		>
+		<button type="button" class="mash-btn-ghost mash-finish-footer-secondary" onclick={onLeave}>
+			Back to desk
+		</button>
 		<button
 			type="button"
 			class="mash-btn mash-finish-footer-primary"

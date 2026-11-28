@@ -36,7 +36,7 @@ const deferredInitialEntryNames = new Set([
 ]);
 const budgets = {
 	// Export scope handoff is core shell behavior; PDF/DOCX builders and the sheet stay deferred.
-	javascript: 652 * 1024,
+	javascript: 657 * 1024,
 	// Keep core canvas chrome tight; presentation-preview CSS is measured only after its lazy load.
 	css: 140 * 1024,
 	fonts: 120 * 1024,

@@ -60,9 +60,9 @@
 				<span>{fileName}</span>
 			</div>
 			{@render children?.()}
-			<button type="button" class="mash-pdf-close" onclick={onClose} aria-label={closeAriaLabel}
-				><X size={18} /></button
-			>
+			<button type="button" class="mash-pdf-close" onclick={onClose} aria-label={closeAriaLabel}>
+				<X size={18} />
+			</button>
 		</header>
 
 		{@render stage()}
@@ -104,8 +104,9 @@
 						{:else}
 							<p>{clipping.text}</p>
 						{/if}
-						{#if index === clippings.length - 1}<span class="mash-pdf-new-badge">Just added</span
-							>{/if}
+						{#if index === clippings.length - 1}<span class="mash-pdf-new-badge">
+								Just added
+							</span>{/if}
 					</article>
 				{/each}
 			{/if}
@@ -119,9 +120,9 @@
 			>
 				Open {clippings.length || ''} on canvas
 			</button>
-			<button type="button" class="mash-pdf-keep-reading" onclick={scrollToStage}
-				>Keep reading</button
-			>
+			<button type="button" class="mash-pdf-keep-reading" onclick={scrollToStage}>
+				Keep reading
+			</button>
 			<p>Saved clippings are already available in your note library.</p>
 		</div>
 	</aside>
