@@ -166,14 +166,15 @@
 							</label>
 						</div>
 						<div class="mash-export-checks">
-							<label><input type="checkbox" bind:checked={options.includeCover} /> Cover page</label
-							>
-							<label
-								><input type="checkbox" bind:checked={options.includeMetadata} /> Folders, tags, and source</label
-							>
-							<label
-								><input type="checkbox" bind:checked={options.includePageNumbers} /> Page numbers</label
-							>
+							<label>
+								<input type="checkbox" bind:checked={options.includeCover} /> Cover page
+							</label>
+							<label>
+								<input type="checkbox" bind:checked={options.includeMetadata} /> Folders, tags, and source
+							</label>
+							<label>
+								<input type="checkbox" bind:checked={options.includePageNumbers} /> Page numbers
+							</label>
 						</div>
 					</fieldset>
 				</div>
@@ -254,8 +255,10 @@
 					type="button"
 					class="mash-btn-ghost mash-export-footer-button mash-export-footer-cancel"
 					onclick={onClose}
-					disabled={exporting}>Cancel</button
+					disabled={exporting}
 				>
+					Cancel
+				</button>
 				<button
 					type="button"
 					class="mash-btn mash-export-footer-button mash-export-footer-download"

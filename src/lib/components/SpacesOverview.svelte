@@ -204,9 +204,9 @@
 						</div>
 						<div class="mash-spaces-card-meta">
 							<span class="mash-spaces-card-title mash-display">{title}</span>
-							<span class="mash-spaces-card-count"
-								>{rects.length} note{rects.length === 1 ? '' : 's'}</span
-							>
+							<span class="mash-spaces-card-count">
+								{rects.length} note{rects.length === 1 ? '' : 's'}
+							</span>
 						</div>
 					</button>
 					{#if canClose}

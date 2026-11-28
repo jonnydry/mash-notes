@@ -533,13 +533,13 @@
 		</button>
 	</div>
 	<div class="mash-pdf-zoom" aria-label="PDF zoom controls">
-		<button type="button" onclick={() => changeZoom(-0.1)} aria-label="Zoom out"
-			><Minus size={15} /></button
-		>
+		<button type="button" onclick={() => changeZoom(-0.1)} aria-label="Zoom out">
+			<Minus size={15} />
+		</button>
 		<span>{Math.round(zoom * 100)}%</span>
-		<button type="button" onclick={() => changeZoom(0.1)} aria-label="Zoom in"
-			><Plus size={15} /></button
-		>
+		<button type="button" onclick={() => changeZoom(0.1)} aria-label="Zoom in">
+			<Plus size={15} />
+		</button>
 	</div>
 	<button
 		type="button"

@@ -24,8 +24,10 @@
 				type="button"
 				class="mash-wikilink"
 				data-wikilink={node.target}
-				onclick={(event) => openWikilink(event, node.target)}>{node.label}</button
+				onclick={(event) => openWikilink(event, node.target)}
 			>
+				{node.label}
+			</button>
 		{:else if node.type === 'paragraph'}
 			<p>{@render renderNodes(node.children)}</p>
 		{:else if node.type === 'heading'}
@@ -50,9 +52,9 @@
 			<del>{@render renderNodes(node.children)}</del>
 		{:else if node.type === 'link'}
 			<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- User-authored links may be external or relative. -->
-			<a href={node.href} title={node.title} rel="noopener noreferrer" target="_blank"
-				>{@render renderNodes(node.children)}</a
-			>
+			<a href={node.href} title={node.title} rel="noopener noreferrer" target="_blank">
+				{@render renderNodes(node.children)}
+			</a>
 		{:else if node.type === 'image'}
 			<img src={node.src} alt={node.alt} title={node.title} loading="lazy" />
 		{:else if node.type === 'code'}
@@ -95,9 +97,9 @@
 				</thead>
 				<tbody>
 					{#each node.rows as row (row)}
-						<tr
-							>{#each row as cell (cell)}<td>{@render renderNodes(cell)}</td>{/each}</tr
-						>
+						<tr>
+							{#each row as cell (cell)}<td>{@render renderNodes(cell)}</td>{/each}
+						</tr>
 					{/each}
 				</tbody>
 			</table>

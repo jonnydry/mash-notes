@@ -2828,14 +2828,18 @@
 									<span
 										class="mash-card-scope mash-type-micro shrink-0 rounded px-1 py-px font-semibold tracking-wide uppercase"
 										style="background: color-mix(in srgb, var(--mash-accent) 16%, transparent); color: var(--mash-accent);"
-										title="Kept on this device">Kept</span
+										title="Kept on this device"
 									>
+										Kept
+									</span>
 								{:else if note.scope === 'session' && !isPermanentWelcome}
 									<span
 										class="mash-card-scope mash-type-micro shrink-0 rounded px-1 py-px font-semibold tracking-wide uppercase"
 										style="background: color-mix(in srgb, var(--mash-card-muted) 18%, transparent); color: var(--mash-card-muted);"
-										title="Scratch desk ingredient — clear with the desk unless you Keep">Desk</span
+										title="Scratch desk ingredient — clear with the desk unless you Keep"
 									>
+										Desk
+									</span>
 								{/if}
 							</span>
 							<button

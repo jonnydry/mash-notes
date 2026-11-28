@@ -2261,9 +2261,9 @@
 						}
 					}}
 				>
-					<span class="mash-display font-medium" style="color: var(--mash-chrome-ink);"
-						>{screenplayChipTitle}</span
-					>
+					<span class="mash-display font-medium" style="color: var(--mash-chrome-ink);">
+						{screenplayChipTitle}
+					</span>
 					<span class="mx-1.5 opacity-40">·</span>
 					{canvasPlaceCount} on canvas
 					{#if spaces.openKeys.length > 1}
@@ -2760,9 +2760,9 @@
 							class="mash-btn-ghost mash-type-caption rounded-lg px-3 py-2 text-left"
 							onclick={() => (library.bulkMenu = 'folder')}
 						>
-							<strong class="flex items-center gap-1.5"
-								><Folder class="h-3.5 w-3.5" /> Folder…</strong
-							>
+							<strong class="flex items-center gap-1.5">
+								<Folder class="h-3.5 w-3.5" /> Folder…
+							</strong>
 							<small style="color: var(--mash-ink-muted);">Move to a folder</small>
 						</button>
 						<button
@@ -2781,9 +2781,9 @@
 							class="mash-btn-ghost mash-type-caption rounded-lg px-3 py-2 text-left"
 							onclick={downloadSelectionMarkdown}
 						>
-							<strong class="flex items-center gap-1.5"
-								><Download class="h-3.5 w-3.5" /> Download Markdown</strong
-							>
+							<strong class="flex items-center gap-1.5">
+								<Download class="h-3.5 w-3.5" /> Download Markdown
+							</strong>
 							<small style="color: var(--mash-ink-muted);">Save as a .md file</small>
 						</button>
 						<button
@@ -2791,9 +2791,9 @@
 							class="mash-btn-ghost mash-type-caption rounded-lg px-3 py-2 text-left"
 							onclick={exportSelectionPdf}
 						>
-							<strong class="flex items-center gap-1.5"
-								><Download class="h-3.5 w-3.5" /> Export PDF</strong
-							>
+							<strong class="flex items-center gap-1.5">
+								<Download class="h-3.5 w-3.5" /> Export PDF
+							</strong>
 							<small style="color: var(--mash-ink-muted);">Templates and live preview</small>
 						</button>
 						<button
@@ -2801,9 +2801,9 @@
 							class="mash-btn-ghost mash-type-caption rounded-lg px-3 py-2 text-left"
 							onclick={exportSelectionDocx}
 						>
-							<strong class="flex items-center gap-1.5"
-								><BookOpen class="h-3.5 w-3.5" /> Export Word</strong
-							>
+							<strong class="flex items-center gap-1.5">
+								<BookOpen class="h-3.5 w-3.5" /> Export Word
+							</strong>
 							<small style="color: var(--mash-ink-muted);">Editable .docx with named styles</small>
 						</button>
 						<button
@@ -2811,9 +2811,9 @@
 							class="mash-btn-ghost mash-type-caption rounded-lg px-3 py-2 text-left"
 							onclick={printSelection}
 						>
-							<strong class="flex items-center gap-1.5"
-								><Printer class="h-3.5 w-3.5" /> Print</strong
-							>
+							<strong class="flex items-center gap-1.5">
+								<Printer class="h-3.5 w-3.5" /> Print
+							</strong>
 							<small style="color: var(--mash-ink-muted);">System print dialog</small>
 						</button>
 					</div>
@@ -2829,11 +2829,13 @@
 								<div class="mb-1 flex items-baseline justify-between gap-2 px-1">
 									<span
 										class="mash-type-micro font-semibold tracking-wide uppercase"
-										style="color: var(--mash-accent-bright);">{section.label}</span
+										style="color: var(--mash-accent-bright);"
 									>
-									<span class="mash-type-micro truncate" style="color: var(--mash-ink-muted);"
-										>{section.hint}</span
-									>
+										{section.label}
+									</span>
+									<span class="mash-type-micro truncate" style="color: var(--mash-ink-muted);">
+										{section.hint}
+									</span>
 								</div>
 								<div class="grid grid-cols-1 gap-1 sm:grid-cols-2">
 									{#each section.actions as operator (operator.id)}
@@ -2846,12 +2848,12 @@
 												void operator.action();
 											}}
 										>
-											<strong class="block"
-												>{kitchenActionTitle(operator.id, operator.label)}</strong
-											>
-											<small style="color: var(--mash-ink-muted);"
-												>{kitchenActionSubtitle(operator.id)}</small
-											>
+											<strong class="block">
+												{kitchenActionTitle(operator.id, operator.label)}
+											</strong>
+											<small style="color: var(--mash-ink-muted);">
+												{kitchenActionSubtitle(operator.id)}
+											</small>
 										</button>
 									{/each}
 								</div>
@@ -3252,9 +3254,9 @@
 										: ''}"
 								>
 									<span>{row.action.label}</span>
-									<span class="mash-type-caption" style="color: var(--mash-ink-muted);"
-										>{row.action.shortcut}</span
-									>
+									<span class="mash-type-caption" style="color: var(--mash-ink-muted);">
+										{row.action.shortcut}
+									</span>
 								</button>
 							{:else}
 								<button
@@ -3271,9 +3273,9 @@
 										: ''}"
 								>
 									<span class="truncate">{row.note.title}</span>
-									<span class="mash-type-micro" style="color: var(--mash-ink-muted);"
-										>{row.note.folder}</span
-									>
+									<span class="mash-type-micro" style="color: var(--mash-ink-muted);">
+										{row.note.folder}
+									</span>
 								</button>
 							{/if}
 						{/each}

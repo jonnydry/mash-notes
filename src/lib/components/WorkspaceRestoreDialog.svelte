@@ -115,8 +115,10 @@
 						type="button"
 						class="mash-btn-ghost mash-type-caption rounded-[9px] px-3 py-2"
 						disabled={busy}
-						onclick={onClose}>Cancel</button
+						onclick={onClose}
 					>
+						Cancel
+					</button>
 					<button
 						type="button"
 						class="mash-btn mash-type-caption rounded-[9px] px-3 py-2 font-semibold"
